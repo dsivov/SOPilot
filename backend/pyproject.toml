@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 sopilot-supervisor = "sopilot.supervisor:main"
+sopilot-bench = "sopilot.bench.runner:main"
 
 [project.optional-dependencies]
 dev = [

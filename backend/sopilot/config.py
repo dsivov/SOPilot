@@ -1,6 +1,23 @@
+import os
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _load_env_file() -> None:
+    """Export .env entries (notably OPENAI_API_KEY) into the process environment.
+    pydantic-settings only consumes SOPILOT_* keys; the OpenAI SDK reads os.environ."""
+    env_path = Path(".env")
+    if not env_path.exists():
+        env_path = Path(__file__).resolve().parents[1] / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
 
 
 class Settings(BaseSettings):
@@ -42,4 +59,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    _load_env_file()
     return Settings()

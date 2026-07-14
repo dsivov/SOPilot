@@ -33,8 +33,12 @@ results — design guidance, not production claims).
 | one small AI call drafts queries | `{user_text}` query-slot LLM call |
 | pre-drafted instruction | instruction-kind `PoolItem` (Milestone B) |
 
-**Status:** P0 substrate verified (29 unit tests, 14-check two-tenant smoke test).
-Benchmark-parity rerun vs the POC is pending (bench harness, P1).
+**Status:** P0 substrate verified (43 unit tests, 14-check two-tenant smoke test,
+17-check live e2e). **P0 exit criterion closed:** POC parity reproduced on this
+stack — speculative hit 90.7→96.3% (POC ~91%), live-fallback 9.3→3.7% (POC ~9%);
+see [`bench/BENCH_P0_PARITY.md`](bench/BENCH_P0_PARITY.md). Open item from the
+bench: plan-turn p95 890ms vs the 500ms voice target (cause + P2 remediations in
+the report).
 
 ---
 
