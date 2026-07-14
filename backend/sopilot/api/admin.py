@@ -11,7 +11,7 @@ from ..config import get_settings
 from ..db import get_db
 from ..models import ApiKey, Project, Tenant
 from ..schemas import ProjectCreateRequest, TenantCreateRequest, TenantCreateResponse
-from ..tenancy import generate_api_key, resolve_tenant
+from ..tenancy import VALID_SUBSYSTEMS, generate_api_key, resolve_tenant
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -47,13 +47,20 @@ async def create_project(
     ).scalar_one_or_none()
     if existing is not None:
         raise HTTPException(status_code=409, detail=f"project '{req.slug}' already exists")
-    project = Project(tenant_id=tenant.id, slug=req.slug, name=req.name or req.slug)
+    if req.subsystems and req.subsystems not in VALID_SUBSYSTEMS:
+        raise HTTPException(status_code=422, detail=f"subsystems must be one of {VALID_SUBSYSTEMS}")
+    project = Project(
+        tenant_id=tenant.id, slug=req.slug, name=req.name or req.slug, subsystems=req.subsystems
+    )
     db.add(project)
     await db.commit()
-    return {"project_id": project.id, "slug": project.slug}
+    return {"project_id": project.id, "slug": project.slug, "subsystems": project.subsystems or "default"}
 
 
 @router.get("/projects")
 async def list_projects(tenant: Tenant = Depends(resolve_tenant), db: AsyncSession = Depends(get_db)) -> list[dict]:
     rows = (await db.execute(select(Project).where(Project.tenant_id == tenant.id))).scalars().all()
-    return [{"project_id": p.id, "slug": p.slug, "name": p.name} for p in rows]
+    return [
+        {"project_id": p.id, "slug": p.slug, "name": p.name, "subsystems": p.subsystems or "default"}
+        for p in rows
+    ]

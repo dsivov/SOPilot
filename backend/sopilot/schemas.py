@@ -106,6 +106,8 @@ class TenantCreateResponse(BaseModel):
 class ProjectCreateRequest(BaseModel):
     slug: str
     name: str = ""
+    # D-9: "sop" | "retrieval" | "both"; empty = deployment default.
+    subsystems: str = ""
 
 
 class SopSaveRequest(BaseModel):

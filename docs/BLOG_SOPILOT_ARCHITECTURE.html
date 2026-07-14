@@ -726,6 +726,10 @@ b.hl{color:#8fd9c9}
       <tr><td>D-6</td><td>Linting is a publish blocker, growing from structural to semantic checks</td><td>the one benchmark failure we ever had was an authoring bug the linter now catches (§6)</td></tr>
       <tr><td>D-7</td><td>Prompt blocks versioned separately from SOP structure; bindings pinned at session start</td><td>legal and flow-design change on different clocks (§6)</td></tr>
       <tr><td>D-8</td><td>Extra speculative planning during long user pauses ships behind a flag, off by default</td><td>only pays off when callers actually pause; per-tenant data decides (measured 0.6%→86% hit rate depending on pause time)</td></tr>
+      <tr><td>D-9</td><td>Each project chooses which half of the system it runs: procedure management only, predicted
+        retrieval only, or both (the default)</td><td>the two subsystems are sellable separately — a customer with its
+        own prompting stack can still buy the prefetch pool, and a compliance-focused customer can run procedure
+        management with plain live lookups; the position tracker runs in every mode because both halves key off it</td></tr>
     </tbody>
   </table></div>
   <div class="callout key"><div class="clabel">◆ The one-paragraph summary for the busy reviewer</div>

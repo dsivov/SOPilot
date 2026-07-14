@@ -18,6 +18,9 @@ dependencies = [
     "numpy>=1.26",
 ]
 
+[project.scripts]
+sopilot-supervisor = "sopilot.supervisor:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2",

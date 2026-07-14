@@ -56,6 +56,9 @@ class Project(Base):
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     slug: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(200))
+    # D-9: which subsystems this project runs — "sop" | "retrieval" | "both".
+    # Empty string means "use the deployment default" (settings.subsystems).
+    subsystems: Mapped[str] = mapped_column(String(16), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

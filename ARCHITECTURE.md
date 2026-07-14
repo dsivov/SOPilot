@@ -228,15 +228,35 @@ sessions/turns per tenant contract.
 | D-6 | Lint is a publish blocker (structural → semantic over time) | credit-card SOP post-mortem |
 | D-7 | Prompt blocks versioned separately from SOPs; bindings pinned at session start | governance requirement |
 | D-8 | Pondering behind a flag, off by default, pause-aware | mistested at zero-pause (86% with think-time) |
+| D-9 | Per-project subsystem modes: `sop` \| `retrieval` \| `both` (`projects.subsystems`, deployment default `SOPILOT_SUBSYSTEMS`) | customers can buy either half alone; `sop` = prompt/instruction management with live data resolution (no speculation, no pool); `retrieval` = prediction + prefetch + context selection only (customer owns prompting); position tracking always on — both halves key off it |
 
 Conventions: online migrations follow **expand → migrate → contract** (never
 destructive in one step); embedding model changes require corpus re-embed (vector
 search breaks silently otherwise).
 
-## 8. Build order (P1 starts here)
+## 8. Runtime entrypoints & modes
 
-1. **D-1 implementation** — turn-event stream, `sopilot-supervisor` entrypoint,
-   embedded-dev flag (replaces P0's fire-and-forget tasks).
+- **API (online lane):** `uvicorn sopilot.api.app:app` — plan-turn
+  (`POST /sessions/{id}/plan-turn`), outcome back-propagation
+  (`POST /sessions/{id}/outcome`), SOP/session/admin routes.
+- **Supervisor (background lane):** `sopilot-supervisor` console script, N
+  replicas; consumer group over `sopilot:events:turns` (XREADGROUP / XACK /
+  XAUTOCLAIM; poison events are logged + dropped — live fallback covers them).
+- **Dev single-process:** `SOPILOT_EMBEDDED_SUPERVISOR=true` runs one consumer
+  inside the API process. Same code path, same stream.
+- **Subsystem modes (D-9):** per project via
+  `POST /admin/projects {"slug": ..., "subsystems": "sop"|"retrieval"|"both"}`;
+  empty = deployment default (`SOPILOT_SUBSYSTEMS`, default `both`). Gating:
+  plan-turn assembles the stage prompt only when SOP management is on, returns
+  the speculative context block only when retrieval is on; the supervisor skips
+  prediction/prefetch for `sop`-mode projects (events still flow for audit).
+- **E2E check:** `scripts/e2e_check.py` (train precedents → supervisor prefetch →
+  speculative consume; verifies all three modes over HTTP).
+
+## 9. Build order (P1 continues)
+
+1. ~~**D-1 implementation** — turn-event stream, `sopilot-supervisor` entrypoint,
+   embedded-dev flag~~ ✅ done, with D-9 subsystem modes.
 2. **Bench harness + POC parity run** — closes P0's exit criterion (N≥20).
 3. **CI** — ruff + unit + compose-based integration on push.
 4. **Prompt-block model + stage bindings** (D-7).

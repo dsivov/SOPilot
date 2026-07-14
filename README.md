@@ -8,8 +8,9 @@ multi-project, realtime-voice-first.
 - Architecture discussion (II): `docs/BLOG_SOPILOT_ARCHITECTURE.html`
 - Engineer reference: [`ARCHITECTURE.md`](ARCHITECTURE.md) — topology, per-turn
   contract, data model (Mermaid), SLIs, decision log D-1…D-8
-- Current phase: **P0 — substrate done** (verified); next: D-1 two-deployable
-  split (`sopilot-api` / `sopilot-supervisor` over a Redis Streams turn-event bus)
+- Current phase: **P1** — D-1 done: two deployables (`sopilot-api` /
+  `sopilot-supervisor`) over the `sopilot:events:turns` Redis Stream, plus D-9
+  per-project subsystem modes (`sop` | `retrieval` | `both`)
 
 ## Dev setup
 
@@ -20,8 +21,18 @@ python3.12 -m venv .venv
 .venv/bin/pip install -e '.[dev]'
 cp .env.example .env                      # fill OPENAI_API_KEY + SOPILOT_ADMIN_TOKEN
 .venv/bin/alembic upgrade head
-.venv/bin/uvicorn sopilot.api.app:app --host 127.0.0.1 --port 8100 --reload
+
+# online lane (dev: embedded supervisor in-process)
+SOPILOT_EMBEDDED_SUPERVISOR=true .venv/bin/uvicorn sopilot.api.app:app --port 8100 --reload
+# production shape: run the background lane separately (N replicas)
+.venv/bin/sopilot-supervisor
 ```
+
+Subsystem modes (D-9): create a project with
+`{"slug": "x", "subsystems": "sop"|"retrieval"|"both"}` — `sop` = prompt and
+instruction management with live data resolution; `retrieval` = prediction +
+prefetch + per-turn context block only; `both` (default) = full system.
+End-to-end check: `.venv/bin/python ../scripts/e2e_check.py` (needs the API up).
 
 ## Tests
 

@@ -18,13 +18,26 @@ from .db import get_db
 from .models import ApiKey, Project, Tenant
 
 
+VALID_SUBSYSTEMS = ("sop", "retrieval", "both")
+
+
 @dataclass(frozen=True)
 class Scope:
     tenant_id: str
     project_id: str
+    # D-9 subsystem mode for this project: "sop" | "retrieval" | "both".
+    subsystems: str = "both"
 
     def redis_prefix(self) -> str:
         return f"sop:{self.tenant_id}:{self.project_id}"
+
+    @property
+    def sop_enabled(self) -> bool:
+        return self.subsystems in ("sop", "both")
+
+    @property
+    def retrieval_enabled(self) -> bool:
+        return self.subsystems in ("retrieval", "both")
 
 
 def generate_api_key() -> tuple[str, str]:
@@ -70,4 +83,9 @@ async def resolve_scope(
     ).scalar_one_or_none()
     if project is None:
         raise HTTPException(status_code=404, detail=f"project '{x_project}' not found in tenant")
-    return Scope(tenant_id=tenant.id, project_id=project.id)
+    from .config import get_settings
+
+    subsystems = project.subsystems or get_settings().subsystems
+    if subsystems not in VALID_SUBSYSTEMS:
+        subsystems = "both"
+    return Scope(tenant_id=tenant.id, project_id=project.id, subsystems=subsystems)
