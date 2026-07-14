@@ -1,0 +1,325 @@
+"""Prefetch manager — schedules speculative fetches from a plan and serves the
+consume path. Stateless across workers: pool contents and in-flight dedup markers
+live in Redis; every fetch lifecycle is audited to Postgres.
+
+Invariants carried over from the research:
+  - only idempotent dependencies fire speculatively (enforced here);
+  - a completed fetch always lands in the pool, whoever predicted it —
+    mispredictions stay reusable candidates (the whole point of the pool);
+  - audit rows never break a fetch (best-effort, logged).
+"""
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import logging
+import time
+from datetime import timedelta
+
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from .embeddings import EmbeddingProvider
+from .fetchers.base import get_fetcher
+from .models import DataFetchAudit
+from .pool import PoolItem, SessionPool, utcnow
+from .predictor import PrefetchPlanItem
+from .schemas import TaskDefinition
+from .tenancy import Scope
+
+log = logging.getLogger(__name__)
+
+
+def fetch_key(dep_name: str, action_name: str, query_hash: str = "") -> str:
+    return hashlib.sha1(f"{dep_name}|{action_name}|{query_hash}".encode()).hexdigest()[:24]
+
+
+def query_hash(query: str | None) -> str:
+    if not query:
+        return ""
+    return hashlib.sha1(query.strip().lower().encode()).hexdigest()[:12]
+
+
+class PrefetchManager:
+    def __init__(
+        self,
+        pool: SessionPool,
+        sessionmaker: async_sessionmaker,
+        embedder: EmbeddingProvider,
+    ):
+        self.pool = pool
+        self.sessionmaker = sessionmaker
+        self.embedder = embedder
+        self._tasks: set[asyncio.Task] = set()
+
+    # ----- scheduling -----
+
+    async def schedule(
+        self,
+        *,
+        scope: Scope,
+        session_id: str,
+        task_def: TaskDefinition,
+        plan: list[PrefetchPlanItem],
+        current_turn_index: int,
+        min_confidence: float = 0.05,
+    ) -> int:
+        """Launch background fetches for plan items above the confidence floor.
+        Returns how many were launched (dedup + idempotency filtered)."""
+        dep_by_name = {d.name: d for d in task_def.data_dependencies}
+        launched = 0
+        for item in plan:
+            if item.confidence < min_confidence:
+                continue
+            dep = dep_by_name.get(item.dependency_name)
+            if dep is None or not dep.idempotent:
+                continue  # non-idempotent deps NEVER fire speculatively
+            qh = query_hash(item.rendered_query)
+            key = fetch_key(dep.name, item.action_name, qh)
+            if not await self.pool.try_claim_fetch(scope, session_id, key, ttl_s=max(30, dep.cache_ttl_s)):
+                continue  # already in flight or recently claimed (any worker)
+            task = asyncio.create_task(
+                self._run_fetch(
+                    scope=scope,
+                    session_id=session_id,
+                    dep=dep,
+                    key=key,
+                    action_name=item.action_name,
+                    confidence=item.confidence,
+                    issued_at_turn=current_turn_index,
+                    predicted_turn=current_turn_index + item.predicted_turn_offset,
+                    speculative=True,
+                    predictor_source=item.predictor_source,
+                    predicted_user_state=item.predicted_user_state,
+                    rendered_query=item.rendered_query,
+                    qh=qh,
+                )
+            )
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
+            launched += 1
+        return launched
+
+    async def _run_fetch(
+        self,
+        *,
+        scope: Scope,
+        session_id: str,
+        dep,
+        key: str,
+        action_name: str,
+        confidence: float,
+        issued_at_turn: int,
+        predicted_turn: int,
+        speculative: bool,
+        predictor_source: str,
+        predicted_user_state: str | None = None,
+        rendered_query: str | None = None,
+        qh: str = "",
+    ) -> PoolItem | None:
+        started_at = utcnow()
+        t0 = time.perf_counter()
+        payload = None
+        summary = ""
+        err: str | None = None
+        try:
+            fetcher = get_fetcher(dep.kind)
+            outcome = await fetcher.fetch(
+                dep, scope=scope, session_id=session_id, action_name=action_name, query=rendered_query
+            )
+            payload, summary = outcome.payload, outcome.summary
+        except Exception as e:  # noqa: BLE001 — a failed fetch must not kill the lane
+            err = f"{type(e).__name__}: {e}"
+        finally:
+            if speculative:
+                await self.pool.release_fetch(scope, session_id, key)
+        duration_ms = int((time.perf_counter() - t0) * 1000)
+        completed_at = utcnow()
+
+        fetch_id = ""
+        try:
+            async with self.sessionmaker() as db:
+                row = DataFetchAudit(
+                    tenant_id=scope.tenant_id,
+                    project_id=scope.project_id,
+                    session_id=session_id,
+                    dependency_name=dep.name,
+                    action_name=action_name,
+                    kind=dep.kind,
+                    speculative=speculative,
+                    predictor_source=predictor_source,
+                    confidence=confidence,
+                    issued_at_turn=issued_at_turn,
+                    predicted_turn=predicted_turn,
+                    query_text=rendered_query,
+                    query_hash=qh or None,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    fetch_duration_ms=duration_ms,
+                    payload_summary=(summary or "")[:500],
+                    fetch_error=err,
+                )
+                db.add(row)
+                await db.commit()
+                fetch_id = row.id
+        except Exception:
+            log.exception("data_fetches audit write failed (fetch continues)")
+
+        if err is not None or payload is None:
+            return None
+
+        summary_emb = None
+        short_summary = (summary or "")[:200]
+        if short_summary:
+            try:
+                summary_emb = await self.embedder.embed(short_summary)
+            except Exception:
+                summary_emb = None
+        item = PoolItem(
+            fetch_id=fetch_id,
+            fetched_at=completed_at,
+            expires_at=completed_at + timedelta(seconds=dep.cache_ttl_s),
+            dependency_name=dep.name,
+            source_action=action_name,
+            payload=payload,
+            payload_summary=short_summary,
+            confidence=confidence,
+            predictor_source=predictor_source,
+            source_query=rendered_query,
+            predicted_user_state=predicted_user_state,
+            summary_embedding=summary_emb,
+        )
+        await self.pool.insert(scope, session_id, item)
+        return item
+
+    # ----- consumption -----
+
+    async def consume(
+        self,
+        *,
+        scope: Scope,
+        session_id: str,
+        task_def: TaskDefinition,
+        action_name: str,
+        current_turn_index: int,
+        await_inflight_ms: int = 2000,
+        live_fallback: bool = True,
+    ) -> tuple[dict[str, str], dict[str, int]]:
+        """Resolve the chosen action's declared deps from the pool; poll briefly for
+        in-flight fetches; optionally live-fetch misses (audited as such)."""
+        action_obj = next((a for a in task_def.agent_actions if a.name == action_name), None)
+        stats = {"consumed": 0, "live": 0, "latency_hidden_ms": 0, "live_latency_ms": 0}
+        if action_obj is None or not action_obj.data_dependencies:
+            return {}, stats
+        dep_by_name = {d.name: d for d in task_def.data_dependencies}
+        payloads: dict[str, str] = {}
+
+        for dep_name in action_obj.data_dependencies:
+            dep = dep_by_name.get(dep_name)
+            if dep is None:
+                continue
+            item = await self._pool_lookup(scope, session_id, dep_name)
+            if item is None and await_inflight_ms > 0:
+                key = fetch_key(dep_name, action_name)
+                deadline = time.perf_counter() + await_inflight_ms / 1000.0
+                while time.perf_counter() < deadline:
+                    if not await self.pool.is_inflight(scope, session_id, key):
+                        item = await self._pool_lookup(scope, session_id, dep_name)
+                        break
+                    await asyncio.sleep(0.1)
+                else:
+                    item = await self._pool_lookup(scope, session_id, dep_name)
+            if item is not None:
+                stats["consumed"] += 1
+                payloads[dep_name] = item.payload_summary or str(item.payload)[:200]
+                await self._mark_consumed(scope, item.fetch_id, current_turn_index)
+                continue
+            if live_fallback:
+                t0 = time.perf_counter()
+                live_item = await self._run_fetch(
+                    scope=scope,
+                    session_id=session_id,
+                    dep=dep,
+                    key=fetch_key(dep_name, action_name),
+                    action_name=action_name,
+                    confidence=0.0,
+                    issued_at_turn=current_turn_index,
+                    predicted_turn=current_turn_index,
+                    speculative=False,
+                    predictor_source="live",
+                )
+                stats["live"] += 1
+                stats["live_latency_ms"] += int((time.perf_counter() - t0) * 1000)
+                if live_item is not None:
+                    payloads[dep_name] = live_item.payload_summary or str(live_item.payload)[:200]
+
+        # latency_hidden = what the consumed fetches originally cost off-path
+        if stats["consumed"]:
+            stats["latency_hidden_ms"] = await self._sum_hidden_latency(scope, session_id, payloads.keys())
+        return payloads, stats
+
+    async def _pool_lookup(self, scope: Scope, session_id: str, dep_name: str) -> PoolItem | None:
+        """Freshest live pool item for a dependency (pool is recency-desc)."""
+        for p in await self.pool.get_pool(scope, session_id):
+            if p.kind == "data" and p.dependency_name == dep_name:
+                return p
+        return None
+
+    async def _mark_consumed(self, scope: Scope, fetch_id: str, turn_index: int) -> None:
+        if not fetch_id:
+            return
+        try:
+            async with self.sessionmaker() as db:
+                await db.execute(
+                    update(DataFetchAudit)
+                    .where(
+                        DataFetchAudit.id == fetch_id,
+                        DataFetchAudit.tenant_id == scope.tenant_id,
+                        DataFetchAudit.consumed.is_(False),
+                    )
+                    .values(consumed=True, consumed_at_turn=turn_index)
+                )
+                await db.commit()
+        except Exception:
+            log.exception("mark-consumed audit write failed")
+
+    async def _sum_hidden_latency(self, scope: Scope, session_id: str, dep_names) -> int:
+        try:
+            from sqlalchemy import func, select
+
+            async with self.sessionmaker() as db:
+                total = (
+                    await db.execute(
+                        select(func.coalesce(func.sum(DataFetchAudit.fetch_duration_ms), 0)).where(
+                            DataFetchAudit.tenant_id == scope.tenant_id,
+                            DataFetchAudit.session_id == session_id,
+                            DataFetchAudit.dependency_name.in_(list(dep_names)),
+                            DataFetchAudit.speculative.is_(True),
+                            DataFetchAudit.consumed.is_(True),
+                        )
+                    )
+                ).scalar_one()
+                return int(total or 0)
+        except Exception:
+            return 0
+
+    # ----- session lifecycle -----
+
+    async def finalize_session(self, scope: Scope, session_id: str) -> None:
+        """Mark unconsumed speculative fetches wasted; drop the pool."""
+        try:
+            async with self.sessionmaker() as db:
+                await db.execute(
+                    update(DataFetchAudit)
+                    .where(
+                        DataFetchAudit.tenant_id == scope.tenant_id,
+                        DataFetchAudit.session_id == session_id,
+                        DataFetchAudit.consumed.is_(False),
+                        DataFetchAudit.wasted.is_(False),
+                    )
+                    .values(wasted=True)
+                )
+                await db.commit()
+        except Exception:
+            log.exception("finalize_session audit write failed")
+        await self.pool.clear(scope, session_id)

@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOPilot — System Architecture (review edition)</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.11), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.07), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono);font-size:.92em}svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(91,141,239,.08),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.05;margin:.3em 0 .25em;background:linear-gradient(92deg,#cfe0ff,#8fd9c9 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}.tag b{color:var(--ink)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(91,141,239,.2),transparent);color:#fff;border-left:2px solid var(--a)}
+main{min-width:0;max-width:772px}article section{margin:0 0 54px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}p{margin:.7em 0}.lead-p{font-size:19px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--a);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.1)}.callout.key .clabel{color:#9cc0ff}
+.callout.danger{border-color:rgba(239,91,110,.5);background:rgba(239,91,110,.08)}.callout.danger .clabel{color:#f6a2ad}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">SOPilot · system architecture · review edition</div>
+    <h1>SOPilot Architecture</h1>
+    <p class="lede">SOPilot manages AI conversation agents — voice-first — against <b>Standard Operating
+      Procedures</b>: it turns a written procedure into a machine-checkable conversation graph, tracks every live
+      conversation against that graph in the background, and feeds the agent the right instructions and the right
+      customer data at every turn, without ever adding latency the caller can hear. This document is the end-to-end
+      design: what the system is, how a conversation flows through it, what runs where, and the decisions we've
+      locked — written to be read standalone.</p>
+    <div class="byline">Prepared for team &amp; management review · July 2026 · foundation layer (P0) is built and
+      passing its test suite; phase plan in §10</div>
+    <div class="hero-tags">
+      <span class="tag">status: <b>foundation verified</b></span>
+      <span class="tag">stack: <b>FastAPI · Postgres · Redis</b></span>
+      <span class="tag">design: <b>two lanes, one pool</b></span>
+      <span class="tag">multi-tenant <b>by construction</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this document</div>
+  <ol>
+    <li><a href="#what">What SOPilot is</a></li>
+    <li><a href="#sop">An SOP, to a machine</a></li>
+    <li><a href="#idea">The core idea: two speeds</a></li>
+    <li><a href="#topology">Production topology</a></li>
+    <li><a href="#subsystems">The two subsystems, up close</a></li>
+    <li><a href="#turn">One turn, precisely</a></li>
+    <li><a href="#lifecycle">SOP lifecycle &amp; governance</a></li>
+    <li><a href="#data">Data architecture</a></li>
+    <li><a href="#tenancy">Tenancy &amp; security</a></li>
+    <li><a href="#slis">How we measure success</a></li>
+    <li><a href="#phases">Phase plan &amp; open risks</a></li>
+    <li><a href="#decisions">Decision log</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="what">
+  <div class="kicker">The product</div>
+  <h2>What SOPilot is, and why it's hard</h2>
+  <p class="lead-p">Companies run customer conversations — renewals, collections, bookings, activations — by
+  <b>procedure</b>: verify identity before discussing the account, quote real prices not guesses, read the disclosure
+  before closing, escalate on hard refusal. Large language models are good at conversation and unreliable at
+  procedure: public benchmarks consistently show even frontier models losing their place in multi-step,
+  branching procedures stuffed into a prompt, especially over long dialogues.</p>
+  <p>A <b>voice</b> agent makes this harder still, because the two things it must do fight each other:</p>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill a">be fast</span>
+      <p class="small" style="margin-top:8px">Sub-second responses, or the conversation feels broken. No time for
+      multi-step reasoning, database lookups (1–7 s each), or re-reading a five-page procedure every turn.</p></div>
+    <div class="card"><span class="pill b">be right</span>
+      <p class="small" style="margin-top:8px">Follow the procedure exactly, quote the customer's <i>real</i> data,
+      say the compliance language verbatim. Exactly the slow, careful work there's no time for.</p></div>
+  </div>
+  <p>SOPilot resolves the conflict by splitting the work between two components running at different speeds (§3), and
+  packages the result as a <b>multi-tenant platform</b>: customers author procedures from plain text, bind approved
+  prompt language to each conversation stage, run live voice/chat sessions supervised against the procedure, and get
+  per-turn analytics on how well it's working.</p>
+  <div class="callout info"><div class="clabel">◆ Where the performance numbers in this document come from</div>
+    Every figure quoted below (hit rates, latencies, accuracy percentages) was measured in our research prototype —
+    a working end-to-end system we built and published first, evaluated on simulated conversations across three
+    procedures (car-insurance renewal, credit-card activation, medical booking). Small sample sizes (5–10 sessions per
+    configuration): treat them as <b>strong design guidance, not production guarantees</b>. Re-measuring them at scale,
+    on this architecture, is an explicit phase-plan item (§10).</div>
+</section>
+
+<!-- 2 -->
+<section id="sop">
+  <div class="kicker">The contract</div>
+  <h2>An SOP, to a machine</h2>
+  <p>Customers write procedures as documents. SOPilot converts a document into a <b>conversation graph</b> — the
+  format everything else in the system runs on. Three node types matter:</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 208" role="img" aria-label="Example SOP graph: ordered agent actions, state-triggered actions, data dependencies">
+      <defs><marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .ab{rx:9;stroke-width:1.2}
+        .at{fill:#e7ebf3;font:11.5px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}
+        .as{fill:#aab3c5;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}
+        .al{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#arA)}
+        .ad{stroke:#8a93a8;stroke-width:1.5;fill:none;marker-end:url(#arA);stroke-dasharray:5 4}
+        .lg{fill:#7b8499;font:10px "Segoe UI",sans-serif}
+      </style>
+      <text class="lg" x="16" y="20" style="font-weight:800;letter-spacing:.06em">AGENT ACTIONS (what the agent may do — ordering enforced)</text>
+      <rect class="ab" x="16"  y="32" width="100" height="38" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="at" x="66"  y="55">Greeting</text>
+      <rect class="ab" x="140" y="32" width="130" height="38" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="at" x="205" y="55">VerifyIdentity</text>
+      <rect class="ab" x="294" y="32" width="120" height="38" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="at" x="354" y="55">PitchRenewal</text>
+      <rect class="ab" x="438" y="32" width="140" height="38" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="at" x="508" y="55">HandleObjection</text>
+      <rect class="ab" x="602" y="32" width="102" height="38" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="at" x="653" y="55">ClosePolite</text>
+      <line class="al" x1="116" y1="51" x2="138" y2="51"/>
+      <line class="al" x1="270" y1="51" x2="292" y2="51"/>
+      <text class="lg" x="16" y="118" style="font-weight:800;letter-spacing:.06em">USER STATES (what the classifier hears — triggers &amp; terminals)</text>
+      <rect class="ab" x="438" y="130" width="110" height="32" fill="#12262e" stroke="rgba(25,184,154,.55)"/><text class="at" x="493" y="150" style="font-weight:600">Objecting</text>
+      <rect class="ab" x="580" y="130" width="118" height="32" fill="#2a1620" stroke="rgba(239,91,110,.5)"/><text class="at" x="639" y="150" style="font-weight:600">HardDecline ✕</text>
+      <rect class="ab" x="294" y="130" width="120" height="32" fill="#1a2b20" stroke="rgba(62,207,142,.5)"/><text class="at" x="354" y="150" style="font-weight:600">AgreedToRenew ✓</text>
+      <line class="ad" x1="493" y1="128" x2="502" y2="72"/>
+      <line class="ad" x1="639" y1="128" x2="650" y2="72"/>
+      <rect class="ab" x="140" y="130" width="130" height="32" fill="#2b2113" stroke="rgba(240,167,60,.5)"/><text class="at" x="205" y="150" style="font-weight:600">📄 policy lookup</text>
+      <line class="ad" x1="252" y1="128" x2="330" y2="72"/>
+      <text class="lg" x="16" y="196">solid = ordering · dashed from a state = trigger · amber = data the action needs · ✓/✕ = conversation ends</text>
+    </svg>
+    <figcaption><b>A fragment of a renewal SOP as SOPilot stores it.</b> Actions are ordered; some actions only unlock
+      when the user reaches a state (you don't close politely unless they've firmly declined); actions declare the
+      external data they need — which is what makes prefetching possible.</figcaption>
+  </div></figure>
+  <p>Because the SOP is a graph and not prose, three things become mechanical that are otherwise hopeful: the runtime
+  always knows <b>which actions are legal right now</b> (so the agent can't skip identity verification); a <b>linter</b>
+  can reject broken procedures before they go live — unknown nodes, ordering cycles, unreachable actions, terminals
+  that aren't real states (in testing, the one procedure that kept failing turned out to contain exactly this class
+  of graph bug — which is why linting is a publish <i>blocker</i>, not a warning); and every action's <b>data needs are
+  declared</b>, so the system can fetch them before they're needed.</p>
+</section>
+
+<!-- 3 -->
+<section id="idea">
+  <div class="kicker">The mechanism</div>
+  <h2>The core idea: two speeds, one pool</h2>
+  <p class="lead-p">A fast agent talks; a smart supervisor thinks ahead. They never wait for each other. The only
+  thing connecting them is a per-session <b>pool</b> — a small shared workspace the supervisor fills speculatively
+  and the agent reads instantly.</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 250" role="img" aria-label="Two-speed concept: live user and fast agent on the critical path; supervisor prefetching into the pool off-path">
+      <defs><marker id="arB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .bb{rx:11;stroke-width:1.2}
+        .bt{fill:#e7ebf3;font:12.5px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}
+        .bs{fill:#aab3c5;font:10px "Segoe UI",sans-serif;text-anchor:middle}
+        .bl{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#arB)}
+        .bd{fill:#7b8499;font:10px "Segoe UI",sans-serif;text-anchor:middle}
+        .bband{fill:#7b8499;font:10.5px "Segoe UI",sans-serif;font-weight:800;letter-spacing:.08em}
+      </style>
+      <text class="bband" x="16" y="18">CRITICAL PATH — what the caller feels · sub-second</text>
+      <rect class="bb" x="16" y="30" width="120" height="58" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="bt" x="76" y="55">🎙 Caller</text>
+      <text class="bs" x="76" y="72">speaking · pausing</text>
+      <rect class="bb" x="216" y="30" width="190" height="58" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="bt" x="311" y="50">Voice agent (fast)</text>
+      <text class="bs" x="311" y="66">answers in real time</text>
+      <text class="bs" x="311" y="79">reads the pool — never waits</text>
+      <line class="bl" x1="136" y1="49" x2="214" y2="49"/>
+      <line class="bl" x1="214" y1="72" x2="136" y2="72"/>
+      <rect class="bb" x="566" y="30" width="138" height="150" fill="#1c2433" stroke="rgba(25,184,154,.6)"/>
+      <text class="bt" x="635" y="54">SESSION POOL</text>
+      <text class="bs" x="635" y="72">customer data</text>
+      <text class="bs" x="635" y="86">retrieved documents</text>
+      <text class="bs" x="635" y="100">pre-drafted instructions</text>
+      <text class="bs" x="635" y="122">each item expires (TTL)</text>
+      <text class="bs" x="635" y="136">wrong guesses just age out</text>
+      <text class="bs" x="635" y="158">≤ 30 items / session</text>
+      <line class="bl" x1="406" y1="59" x2="564" y2="59"/>
+      <text class="bd" x="486" y="50">reads (≤ 1 ms)</text>
+      <text class="bband" x="16" y="132">ASYNC LANE — runs while the caller is still talking · no deadline</text>
+      <rect class="bb" x="216" y="144" width="190" height="66" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="bt" x="311" y="164">Supervisor (smart)</text>
+      <text class="bs" x="311" y="180">predicts the next 1–3 turns</text>
+      <text class="bs" x="311" y="193">prefetches data + instructions</text>
+      <rect class="bb" x="16" y="144" width="150" height="66" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="bt" x="91" y="168">Data sources</text>
+      <text class="bs" x="91" y="184">CRM · policy DB · document</text>
+      <text class="bs" x="91" y="197">search · internal APIs (MCP)</text>
+      <line class="bl" x1="214" y1="177" x2="168" y2="177"/>
+      <text class="bd" x="191" y="168">queries</text>
+      <line class="bl" x1="406" y1="165" x2="564" y2="120"/>
+      <text class="bd" x="478" y="132">pre-stages results</text>
+      <text class="bd" x="360" y="238">a right guess turns a multi-second lookup into a millisecond read · a wrong guess costs nothing the caller can feel</text>
+    </svg>
+    <figcaption><b>The two-speed split.</b> All slow work — prediction, database queries, document retrieval, drafting —
+      overlaps the caller's own speaking time. The agent's turn never contains a lookup.</figcaption>
+  </div></figure>
+  <p>Three mechanisms make the two-speed design work. Here is what each one actually does, and why we're confident
+  in it:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Mechanism</th><th>How it works</th><th>Why we trust it</th></tr></thead>
+    <tbody>
+      <tr><td><b>The pool is forgiving.</b> Everything prefetched stays available to every later turn — nothing is
+        thrown away for being fetched "for the wrong question."</td>
+        <td>Every pool item carries a one-line summary. Each turn, items are ranked by how close their summary is in
+        meaning to what the caller just said; the best three go to the agent. Items prepared for a question that never
+        came simply expire quietly.</td>
+        <td>In testing, the pool had useful material ready on <b>96%</b> of turns; a conventional cache that only
+        returns exact matches, given the very same prefetched items, managed 11%. Net effect: ~22.5 seconds of lookup
+        waiting removed from a typical conversation.</td></tr>
+      <tr><td><b>Prediction comes from precedent, not from AI reasoning.</b> The system guesses the conversation's
+        next 1–3 steps by consulting the tenant's own past conversations.</td>
+        <td>Every conversation is stored step by step. At "identity just verified, price-sensitive customer,
+        objecting," SOPilot looks up what happened next the previous times this tenant's conversations stood at this
+        exact point — counting recent conversations and successful outcomes more heavily — and prefetches for the most
+        likely continuations. The lookup takes about a millisecond and involves no AI model at all, so it runs on
+        every single turn for free.</td>
+        <td>The action the agent actually took next was inside the top-3 prediction <b>88%</b> of the time. We also
+        built the "smarter" version — an AI model reasoning forward about where the dialogue might go — and it was
+        both far more expensive per turn and much <i>less</i> accurate (33–38%). Past behaviour predicts these
+        conversations better than simulated foresight.</td></tr>
+      <tr><td><b>Prefetched context is labelled as a guess.</b> The agent is told the truth about where its extra
+        context came from.</td>
+        <td>Injected material is framed: <i>"prepared in advance — may or may not fit this turn; ignore what isn't
+        relevant; if nothing fits, answer naturally."</i> So when the guess is wrong, the agent isn't pushed into
+        using it.</td>
+        <td>With a confident "high-relevance" label on identical content, agents forced stale data into
+        conversation-closing turns (answering about discounts while the caller was saying goodbye) and more sessions
+        failed: 3/5 vs 4/5 success with the honest label.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="pull">The design reflex behind the whole system: move intelligence off the critical path, and replace
+  model calls with something cheaper — a count, a similarity score, a label — wherever measurement says it works.</p>
+</section>
+
+<!-- 4 -->
+<section id="topology">
+  <div class="kicker">The map</div>
+  <h2>Production topology: two deployables, one codebase</h2>
+  <p>The two speeds become two <b>deployables</b> built from one codebase: <span class="mono">sopilot-api</span>
+  (the online lane — everything the caller can feel) and <span class="mono">sopilot-supervisor</span> (the background
+  lane — everything slow), connected by a durable event stream. They share one Python package, one schema, one
+  test suite; they scale, deploy, and fail independently.</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 402" role="img" aria-label="SOPilot production topology: online lane, turn-event bus, supervisor lane, pool, Postgres">
+      <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .bx2{rx:11;stroke-width:1.2}
+        .t2{fill:#e7ebf3;font:12.5px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}
+        .s2{fill:#aab3c5;font:10px "Segoe UI",sans-serif;text-anchor:middle}
+        .l2{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#ar2)}
+        .lb{fill:#7b8499;font:10px "Segoe UI",sans-serif;text-anchor:middle}
+        .lbl{fill:#7b8499;font:10px "Segoe UI",sans-serif;text-anchor:start}
+        .band{fill:#7b8499;font:10.5px "Segoe UI",sans-serif;font-weight:800;letter-spacing:.08em}
+      </style>
+      <text class="band" x="16" y="18">ONLINE LANE — sopilot-api · latency-bounded · no AI calls, no external fetches</text>
+      <rect class="bx2" x="16" y="30" width="150" height="58" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="t2" x="91" y="50">Channel adapters</text>
+      <text class="s2" x="91" y="66">realtime voice · chat</text>
+      <text class="s2" x="91" y="79">(land in P2)</text>
+      <rect class="bx2" x="206" y="30" width="210" height="58" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="t2" x="311" y="48">plan-turn (per turn)</text>
+      <text class="s2" x="311" y="63">SOP position · context selection</text>
+      <text class="s2" x="311" y="76">instruction lookup · prompt assembly</text>
+      <rect class="bx2" x="16" y="116" width="150" height="62" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="t2" x="91" y="136">Management API</text>
+      <text class="s2" x="91" y="152">admin · SOPs · sessions</text>
+      <text class="s2" x="91" y="166">(reads/writes Postgres)</text>
+      <line class="l2" x1="166" y1="59" x2="204" y2="59"/>
+      <rect class="bx2" x="566" y="30" width="138" height="146" fill="#1c2433" stroke="rgba(25,184,154,.6)"/>
+      <text class="t2" x="635" y="52">SESSION POOL</text>
+      <text class="s2" x="635" y="68">(Redis)</text>
+      <text class="s2" x="635" y="90">data + instruction items</text>
+      <text class="s2" x="635" y="106">per-item TTL · 30-cap</text>
+      <text class="s2" x="635" y="120">confidence eviction</text>
+      <text class="s2" x="635" y="142">in-flight claims</text>
+      <text class="s2" x="635" y="156">(SET NX)</text>
+      <line class="l2" x1="416" y1="59" x2="564" y2="59"/>
+      <text class="lb" x="490" y="50">pool reads (≤ 1 ms)</text>
+      <line class="l2" x1="261" y1="88" x2="261" y2="166"/>
+      <text class="lbl" x="272" y="122">XADD turn.completed</text>
+      <text class="lbl" x="272" y="136">(fire-and-forget)</text>
+      <rect class="bx2" x="206" y="168" width="340" height="40" fill="#20242f" stroke="#39425a"/>
+      <text class="t2" x="376" y="185">turn-event bus</text>
+      <text class="s2" x="376" y="200"><tspan class="mono">events:turns</tspan> — Redis Stream, consumer group</text>
+      <line class="l2" x1="376" y1="208" x2="376" y2="248"/>
+      <text class="lbl" x="388" y="232">XREADGROUP · XACK · XAUTOCLAIM</text>
+      <text class="band" x="16" y="242">SUPERVISOR LANE — sopilot-supervisor × N · no deadline</text>
+      <rect class="bx2" x="18" y="254" width="200" height="62" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="t2" x="118" y="274">predict + plan</text>
+      <text class="s2" x="118" y="290">precedent lookup (~1 ms, no AI)</text>
+      <text class="s2" x="118" y="303">query drafting (one small AI call)</text>
+      <rect class="bx2" x="252" y="254" width="200" height="62" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="t2" x="352" y="274">prefetch + pre-generate</text>
+      <text class="s2" x="352" y="290">fetcher SDK — idempotent only</text>
+      <text class="s2" x="352" y="303">instruction pre-gen (P2, gated)</text>
+      <rect class="bx2" x="486" y="254" width="218" height="62" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="t2" x="595" y="274">pool + audit writers</text>
+      <text class="s2" x="595" y="290">index summaries · pool insert</text>
+      <text class="s2" x="595" y="303">audit row per fetch and per pick</text>
+      <line class="l2" x1="218" y1="285" x2="250" y2="285"/>
+      <line class="l2" x1="452" y1="285" x2="484" y2="285"/>
+      <line class="l2" x1="595" y1="252" x2="635" y2="180"/>
+      <text class="lbl" x="646" y="222">pool items</text>
+      <text class="band" x="360" y="344" style="text-anchor:middle">DURABLE STATE — Postgres 16 + pgvector (the truth)</text>
+      <rect class="bx2" x="16" y="350" width="688" height="46" fill="#231b33" stroke="rgba(169,116,240,.5)"/>
+      <text class="s2" x="360" y="369" style="fill:#e7ebf3;font-weight:600">tenants · projects · api_keys · sops / sop_versions · sessions / turns · precedent_traces (vec) · corpora (vec) · data_fetches · pool_picks</text>
+      <text class="s2" x="360" y="385">tenancy spine on every row · audit rows = SLI substrate · traces = predictor fuel</text>
+      <line class="l2" x1="118" y1="316" x2="118" y2="348"/>
+      <text class="lbl" x="128" y="334">history reads (traces)</text>
+      <line class="l2" x1="595" y1="316" x2="595" y2="348"/>
+      <text class="lbl" x="605" y="334">audit writes</text>
+    </svg>
+    <figcaption><b>The production topology.</b> The online lane (top) touches only the pool and Postgres reads; the
+      supervisor lane (bottom) consumes turn events off the stream and does everything slow — prediction, fetching,
+      pre-generation — then writes pool items and audit rows. The pool is the only bridge between the lanes; the
+      Management API writes SOPs, keys, and sessions straight to Postgres.</figcaption>
+  </div></figure>
+
+  <h3>Why two deployables (and why not two codebases)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th><span class="pill a">online lane</span></th><th><span class="pill ctrl">supervisor lane</span></th></tr></thead>
+    <tbody>
+      <tr><td>latency contract</td><td>hard: p95 &lt; 500 ms inside a live pause</td><td>none — a queue processor, not a deadline</td></tr>
+      <tr><td>scales with</td><td>concurrent conversations × turn rate</td><td>fetcher latency, AI-call budget — bursty</td></tr>
+      <tr><td>if it fails</td><td>a caller hears silence — unacceptable</td><td>a prefetch is late or lost — absorbed by design (more live fallbacks, all logged)</td></tr>
+      <tr><td>changes with</td><td>product logic: prompts, channels, SOP semantics</td><td>prediction logic: predictors, prefetch policies</td></tr>
+    </tbody>
+  </table></div>
+  <p>Different latency contracts, different scaling, different blast radius → separate processes. But the lanes share
+  everything expensive to duplicate — the SOP schema, pool format, tenancy, audit models — so splitting the
+  <i>codebase</i> would tax every schema change for no isolation gain. One package, two entrypoints.</p>
+  <div class="callout key"><div class="clabel">◆ The bus between them is durable on purpose</div>
+    After each turn, the online lane emits one event (<span class="mono">turn.completed</span>: who said what, which
+    state the user is in, which action was taken) onto a <b>Redis Streams consumer group</b> and moves on. Supervisor
+    workers consume, do their work, acknowledge. If a worker crashes mid-job, another reclaims the event automatically.
+    That gives background work three properties in-process background tasks can never have: it <b>survives restarts</b>,
+    it <b>retries</b>, and its backlog is <b>measurable</b> (queue age = supervisor lag, the background lane's single
+    health number). For local development a flag runs both lanes in one process over the same bus — the code path never
+    forks.</div>
+</section>
+
+<!-- 4b -->
+<section id="subsystems">
+  <div class="kicker">Separation of concerns</div>
+  <h2>The two subsystems, up close</h2>
+  <p class="lead-p">The topology above shows the whole machine; these two diagrams isolate its halves, because they
+  are genuinely different products of engineering: <b>SOP &amp; prompt management</b> is deterministic string-and-graph
+  work under a hard latency budget, while <b>predicted retrieval</b> is probabilistic, model-assisted, and free of
+  deadlines. They meet only at the pool.</p>
+
+  <h3>Subsystem 1 — SOP &amp; prompt management (online)</h3>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 292" role="img" aria-label="SOP and prompt management subsystem: SOP version, prompt blocks and classified turn feed position tracker and prompt assembler, producing per-turn instructions">
+      <defs><marker id="arS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .sb{rx:10;stroke-width:1.2}
+        .st{fill:#e7ebf3;font:11.5px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}
+        .ss{fill:#aab3c5;font:9.8px "Segoe UI",sans-serif;text-anchor:middle}
+        .sl{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#arS)}
+        .sd{fill:#7b8499;font:9.8px "Segoe UI",sans-serif;text-anchor:middle}
+        .sband{fill:#7b8499;font:10.5px "Segoe UI",sans-serif;font-weight:800;letter-spacing:.08em}
+      </style>
+      <text class="sband" x="16" y="18">DETERMINISTIC · PER TURN · p95 &lt; 500 ms · ZERO AI CALLS</text>
+      <rect class="sb" x="16" y="32" width="150" height="52" fill="#231b33" stroke="rgba(169,116,240,.55)"/>
+      <text class="st" x="91" y="53">Published SOP vN</text>
+      <text class="ss" x="91" y="69">conversation graph</text>
+      <rect class="sb" x="16" y="104" width="150" height="52" fill="#231b33" stroke="rgba(169,116,240,.55)"/>
+      <text class="st" x="91" y="125">Prompt block library</text>
+      <text class="ss" x="91" y="141">versioned · stage-bound</text>
+      <rect class="sb" x="16" y="176" width="150" height="52" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="st" x="91" y="197">Classified turn</text>
+      <text class="ss" x="91" y="213">cohort · state · mood</text>
+      <rect class="sb" x="226" y="32" width="190" height="64" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="st" x="321" y="52">SOP position tracker</text>
+      <text class="ss" x="321" y="68">visited set → legal actions</text>
+      <text class="ss" x="321" y="81">illegal skips impossible</text>
+      <rect class="sb" x="226" y="140" width="190" height="88" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="st" x="321" y="161">Prompt assembler</text>
+      <text class="ss" x="321" y="178">stage blocks + must-say / avoid</text>
+      <text class="ss" x="321" y="191">speculative context block</text>
+      <text class="ss" x="321" y="204">pre-drafted instruction on hit</text>
+      <text class="ss" x="321" y="217">(used verbatim)</text>
+      <rect class="sb" x="456" y="32" width="150" height="64" fill="#1c2433" stroke="rgba(25,184,154,.6)"/>
+      <text class="st" x="531" y="53">SESSION POOL</text>
+      <text class="ss" x="531" y="69">read-only here —</text>
+      <text class="ss" x="531" y="82">filled by subsystem 2</text>
+      <rect class="sb" x="476" y="152" width="228" height="64" fill="#231b33" stroke="rgba(169,116,240,.55)"/>
+      <text class="st" x="590" y="173">Per-turn instruction payload</text>
+      <text class="ss" x="590" y="189">stage prompt · constraints · context</text>
+      <text class="ss" x="590" y="202">→ session.update / response.create</text>
+      <line class="sl" x1="166" y1="58" x2="224" y2="58"/>
+      <line class="sl" x1="166" y1="130" x2="224" y2="168"/>
+      <line class="sl" x1="166" y1="202" x2="224" y2="90"/>
+      <text class="sd" x="262" y="130">updates position</text>
+      <line class="sl" x1="321" y1="96" x2="321" y2="138"/>
+      <text class="sd" x="362" y="120">chosen action</text>
+      <line class="sl" x1="531" y1="96" x2="418" y2="164"/>
+      <text class="sd" x="492" y="122">top-3 context + drafts</text>
+      <line class="sl" x1="416" y1="184" x2="474" y2="184"/>
+      <text class="sd" x="360" y="272">everything here is graph math, Redis reads, and string assembly — nothing can stall the caller</text>
+    </svg>
+    <figcaption><b>Subsystem 1 keeps the agent on-script.</b> It knows where the conversation is in the procedure,
+      which actions are legal, and which approved words belong to this stage — and it only ever <i>reads</i> the pool.</figcaption>
+  </div></figure>
+
+  <h3>Subsystem 2 — predicted retrieval (background)</h3>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 302" role="img" aria-label="Predicted retrieval subsystem: turn events and precedent traces feed the counting predictor, prefetch planner, fetchers, and pool writes">
+      <defs><marker id="arR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .rb{rx:10;stroke-width:1.2}
+        .rt{fill:#e7ebf3;font:11.5px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}
+        .rs{fill:#aab3c5;font:9.8px "Segoe UI",sans-serif;text-anchor:middle}
+        .rl{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#arR)}
+        .rd{fill:#7b8499;font:9.8px "Segoe UI",sans-serif;text-anchor:middle}
+        .rband{fill:#7b8499;font:10.5px "Segoe UI",sans-serif;font-weight:800;letter-spacing:.08em}
+      </style>
+      <text class="rband" x="16" y="18">SPECULATIVE · NO DEADLINE · MODEL-ASSISTED · MISPREDICTION-TOLERANT</text>
+      <rect class="rb" x="16" y="40" width="130" height="64" fill="#20242f" stroke="#39425a"/>
+      <text class="rt" x="81" y="62">Turn event</text>
+      <text class="rs" x="81" y="78">from the bus:</text>
+      <text class="rs" x="81" y="91">state · action · text</text>
+      <rect class="rb" x="186" y="40" width="190" height="64" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="rt" x="281" y="60">Precedent predictor</text>
+      <text class="rs" x="281" y="76">looks up this tenant's history</text>
+      <text class="rs" x="281" y="89">~1 ms · no AI call · next 1–3 turns</text>
+      <rect class="rb" x="186" y="160" width="190" height="64" fill="#231b33" stroke="rgba(169,116,240,.55)"/>
+      <text class="rt" x="281" y="181">Precedent traces</text>
+      <text class="rs" x="281" y="197">every past conversation, step by step</text>
+      <text class="rs" x="281" y="210">recent + successful count more</text>
+      <rect class="rb" x="416" y="40" width="180" height="80" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="rt" x="506" y="60">Prefetch planner</text>
+      <text class="rs" x="506" y="76">reads each action's declared data needs</text>
+      <text class="rs" x="506" y="89">builds the search queries</text>
+      <text class="rs" x="506" y="102">(one small AI call drafts them)</text>
+      <rect class="rb" x="416" y="160" width="180" height="72" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="rt" x="506" y="181">Fetch · index · write</text>
+      <text class="rs" x="506" y="197">CRM · documents · MCP APIs</text>
+      <text class="rs" x="506" y="210">idempotent only · deduped</text>
+      <text class="rs" x="506" y="223">audited (consumed / wasted)</text>
+      <rect class="rb" x="626" y="160" width="78" height="72" fill="#1c2433" stroke="rgba(25,184,154,.6)"/>
+      <text class="rt" x="665" y="184">POOL</text>
+      <text class="rs" x="665" y="200">TTL · conf</text>
+      <text class="rs" x="665" y="216">→ subsys 1</text>
+      <line class="rl" x1="146" y1="72" x2="184" y2="72"/>
+      <line class="rl" x1="281" y1="158" x2="281" y2="106"/>
+      <text class="rd" x="322" y="136">history</text>
+      <line class="rl" x1="376" y1="72" x2="414" y2="72"/>
+      <line class="rl" x1="506" y1="120" x2="506" y2="158"/>
+      <text class="rd" x="580" y="142">plan ≥ confidence floor</text>
+      <line class="rl" x1="596" y1="196" x2="624" y2="196"/>
+      <text class="rd" x="360" y="282">a wrong prediction simply ages out of the pool unused — no error, no caller impact, and the audit row still teaches the predictor</text>
+    </svg>
+    <figcaption><b>Subsystem 2 thinks ahead.</b> It learns each tenant's conversational habits from its own history,
+      predicts the next few turns, and stages data and drafts into the pool — entirely off the caller's clock.</figcaption>
+  </div></figure>
+</section>
+
+<!-- 5 -->
+<section id="turn">
+  <div class="kicker">The hot path</div>
+  <h2>One turn, precisely</h2>
+  <p>Voice runs on a realtime speech model steered per turn: SOPilot holds the model in <b>manual turn mode</b>, and
+  in the beat between "caller stopped speaking" and "agent starts speaking" it injects the current stage's
+  instructions plus whatever the pool holds. That window is the entire latency budget — so it contains <b>zero AI
+  calls and zero external lookups</b>. Everything in it is graph arithmetic, one text-similarity computation, and
+  sub-millisecond pool reads.</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 268" role="img" aria-label="Per-turn timeline: on-path steps under 500ms; background work overlapping speech">
+      <style>.q{fill:#aab3c5;font:10.5px "Segoe UI",sans-serif}.qb{rx:8;stroke-width:1.1}.qt{fill:#e7ebf3;font:11px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.qx{stroke:#39425a;stroke-width:1}.qh{fill:#7b8499;font:10.5px "Segoe UI",sans-serif;font-weight:800;letter-spacing:.06em}</style>
+      <text class="qh" x="18" y="22">ON-PATH — target p95 &lt; 500 ms · zero AI calls</text>
+      <rect class="qb" x="18" y="32" width="130" height="30" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="qt" x="83" y="51">caller stops speaking</text>
+      <rect class="qb" x="162" y="32" width="150" height="30" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="qt" x="237" y="51">SOP position update</text>
+      <rect class="qb" x="326" y="32" width="170" height="30" fill="#1c2433" stroke="rgba(25,184,154,.6)"/><text class="qt" x="411" y="51">select context ~300 ms</text>
+      <rect class="qb" x="510" y="32" width="190" height="30" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="qt" x="605" y="51">inject instructions → speak</text>
+      <text class="q" x="18" y="84">① which actions are legal now — pure graph math (µs)</text>
+      <text class="q" x="18" y="100">② rank pool items by closeness in meaning to what the caller just said; drop near-duplicates; take top 3 (no AI call)</text>
+      <text class="q" x="18" y="116">③ pre-drafted instruction for this exact (action, state)? → use it verbatim, skip drafting entirely</text>
+      <text class="q" x="18" y="132">④ stage prompt + approved phrasing + speculative context block → realtime model speaks</text>
+      <line class="qx" x1="18" y1="148" x2="700" y2="148"/>
+      <text class="qh" x="18" y="170">OFF-PATH — already running while the agent speaks and the caller replies</text>
+      <rect class="qb" x="18" y="182" width="140" height="30" fill="#1b1f2a" stroke="#39425a"/><text class="qt" x="88" y="201">precedent lookup</text>
+      <rect class="qb" x="172" y="182" width="150" height="30" fill="#1b1f2a" stroke="#39425a"/><text class="qt" x="247" y="201">plan + draft queries</text>
+      <rect class="qb" x="336" y="182" width="150" height="30" fill="#1b1f2a" stroke="#39425a"/><text class="qt" x="411" y="201">fetch (read-only ops)</text>
+      <rect class="qb" x="500" y="182" width="200" height="30" fill="#1b1f2a" stroke="#39425a"/><text class="qt" x="600" y="201">index · pool write · audit</text>
+      <text class="q" x="18" y="236">pool miss on required data → one blocking live fetch (rare by design, ~9% in testing, every occurrence logged)</text>
+      <text class="q" x="18" y="252">→ if the live fetch fails too, the agent falls back to the stage's baseline prompt — the caller never hears an error</text>
+    </svg>
+    <figcaption><b>The turn contract.</b> Above the line: arithmetic and Redis reads only. Below the line: everything
+      slow, running during the caller's own speech — where latency is free.</figcaption>
+  </div></figure>
+  <p>Two prompt rules are enforced by unit tests, not convention: injected context is always <b>labelled
+  speculative</b> ("may or may not fit this turn — if nothing fits, reply naturally"), and pre-drafted instructions
+  are used <b>verbatim</b> on a hit — if we don't trust a draft enough to say it, it doesn't enter the pool.</p>
+</section>
+
+<!-- 6 -->
+<section id="lifecycle">
+  <div class="kicker">Governance</div>
+  <h2>SOP lifecycle: from document to dashboard</h2>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 168" role="img" aria-label="SOP lifecycle: document to draft to lint to published version to live sessions to traces and analytics">
+      <defs><marker id="arC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .cb{rx:9;stroke-width:1.2}
+        .ct{fill:#e7ebf3;font:11px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}
+        .cs{fill:#aab3c5;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}
+        .cl{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#arC)}
+        .cd{fill:#7b8499;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}
+      </style>
+      <rect class="cb" x="16"  y="36" width="118" height="46" fill="#1b1f2a" stroke="#39425a"/><text class="ct" x="75"  y="56">Policy document</text><text class="cs" x="75" y="71">plain text / PDF</text>
+      <rect class="cb" x="164" y="36" width="146" height="46" fill="#1b1f2a" stroke="#39425a"/><text class="ct" x="237" y="56">Draft SOP graph</text><text class="cs" x="237" y="71">AI-assisted builder + editor</text>
+      <rect class="cb" x="340" y="36" width="116" height="46" fill="#2b2113" stroke="rgba(240,167,60,.55)"/><text class="ct" x="398" y="56">Lint gate</text><text class="cs" x="398" y="71">blocks broken graphs</text>
+      <rect class="cb" x="486" y="36" width="108" height="46" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="ct" x="540" y="56">Published vN</text><text class="cs" x="540" y="71">append-only versions</text>
+      <rect class="cb" x="624" y="36" width="80" height="46" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="ct" x="664" y="56">Live</text><text class="cs" x="664" y="71">sessions</text>
+      <line class="cl" x1="134" y1="59" x2="162" y2="59"/>
+      <line class="cl" x1="310" y1="59" x2="338" y2="59"/>
+      <line class="cl" x1="456" y1="59" x2="484" y2="59"/>
+      <line class="cl" x1="594" y1="59" x2="622" y2="59"/>
+      <rect class="cb" x="340" y="118" width="264" height="34" fill="#1b1f2a" stroke="#39425a"/><text class="ct" x="472" y="139">precedent traces + fetch/pick audit</text>
+      <rect class="cb" x="60" y="118" width="240" height="34" fill="#1b1f2a" stroke="#39425a"/><text class="ct" x="180" y="139">dashboards · SLIs · predictor fuel</text>
+      <line class="cl" x1="664" y1="82" x2="590" y2="116"/>
+      <line class="cl" x1="338" y1="135" x2="302" y2="135"/>
+      <text class="cd" x="472" y="110">every turn logged</text>
+      <text class="cd" x="180" y="110">every conversation makes the next one cheaper</text>
+    </svg>
+    <figcaption><b>The governance loop.</b> Procedures are versioned artifacts with a publish gate; live sessions feed
+      the audit trail that powers both the dashboards and the prediction engine.</figcaption>
+  </div></figure>
+  <p>Two governance rules worth calling out for reviewers:</p>
+  <p><b>Prompt language is versioned separately from procedure structure.</b> The words the agent must say (role
+  framing, stage instructions, compliance boilerplate, escalation language) live in a reusable <b>prompt-block
+  library</b>; an SOP version <i>binds</i> blocks to stages. Legal can update the disclosure text without touching the
+  graph, and vice versa. Bindings are pinned when a session starts — a mid-conversation prompt change never lands
+  mid-call.</p>
+  <p><b>Publishing is gated, not advised.</b> The linter rejects unknown nodes, ordering cycles, unreachable actions,
+  undeclared data dependencies, and terminal markers that aren't real states — as a hard 422 on the publish endpoint.
+  Customers will author worse graphs than we do; the gate is the difference between "their editing bug" and "our
+  production incident."</p>
+</section>
+
+<!-- 7 -->
+<section id="data">
+  <div class="kicker">State</div>
+  <h2>Data architecture: what lives where, and why</h2>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill ctrl">Postgres — the truth</span>
+      <p class="small" style="margin-top:8px">Everything with a lifecycle or an audit obligation: the tenancy spine
+      (tenants → projects → API keys), versioned SOPs and prompt blocks, sessions and turns,
+      <b>precedent traces</b> (one row per situation→action→outcome, indexed for meaning-search — the prediction
+      engine's raw material, accumulated per tenant), managed <b>retrieval corpora</b> (documents indexed for meaning-search once at
+      upload, searched per turn), and the <b>audit pair</b> — every fetch and every pool pick, with predictor source
+      and outcome. The audit tables are the raw material for every success metric in §9.</p></div>
+    <div class="card"><span class="pill b">Redis — the moment</span>
+      <p class="small" style="margin-top:8px">Everything session-scoped and expendable: the pool (one hash per
+      session, per-item TTL, 30-item cap), in-flight fetch claims (so two workers never duplicate a fetch), and the
+      turn-event stream. Redis can be flushed in production and the system degrades gracefully to a known mode — a
+      few turns of extra live lookups, all logged — because <b>nothing in Redis is ever the only copy of anything
+      that matters</b>.</p></div>
+  </div>
+  <div class="callout info"><div class="clabel">◆ Isolation is enforced at the storage layer</div>
+    Every Redis key is prefixed <span class="mono">sop:{tenant}:{project}:…</span> and every database query filters on
+    tenant + project — mediated by a single <span class="mono">Scope</span> object that all storage operations require
+    as an argument. There is no unscoped access path in the codebase, and the integration suite asserts the negative
+    case: one tenant reading another's SOPs, sessions, or pool gets a 404, proven on every test run.</div>
+  <p class="small">Retention (to finalize in P1): raw audit rows 90 days, then aggregates; precedent traces retained
+  long-term (they are the accumulating advantage — prediction quality grows with history, and recency weighting
+  already discounts stale patterns); session transcripts per tenant contract.</p>
+</section>
+
+<!-- 8 -->
+<section id="tenancy">
+  <div class="kicker">Boundaries</div>
+  <h2>Tenancy &amp; security</h2>
+  <p>SOPilot is multi-tenant and multi-project from the first migration: <b>tenant → project → SOP</b>, and everything
+  hangs off that spine — prompt libraries, corpora, precedent traces, pool namespaces, dashboards, API keys. Notably,
+  <b>prediction data is tenant-scoped by construction</b>: the counting predictor learns one tenant's conversational
+  patterns and structurally cannot leak them into another's predictions (which is also simply better prediction —
+  conversation habits are per-business).</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Layer</th><th>Built today</th><th>Production requirement (phase)</th></tr></thead>
+    <tbody>
+      <tr><td>API auth</td><td>tenant-level bearer keys, hashed at rest, revocable</td><td>per-project keys + runtime/manage/admin roles (P1)</td></tr>
+      <tr><td>Admin plane</td><td>deployment admin token for tenant bootstrap</td><td>operator identity + audit of every admin action (P1)</td></tr>
+      <tr><td>Connector credentials</td><td>none needed yet (mock + own-DB retrieval only)</td><td>per-tenant secret store before the first real CRM/API connector — a tenant's credentials scoped like its data (P2)</td></tr>
+      <tr><td>Quotas</td><td>speculative-work budget per process</td><td>per-tenant turn-rate + prefetch quotas, so one tenant's burst can't starve another (P2)</td></tr>
+      <tr><td>Model keys</td><td>AI model keys server-side only</td><td>same, plus ephemeral short-lived tokens for the browser/phone leg of realtime voice (P2)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 9 -->
+<section id="slis">
+  <div class="kicker">Measurement</div>
+  <h2>How we measure success</h2>
+  <p>Every promise in this document maps to a number computed from the audit tables — wired in from the first
+  session, not added later:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Metric</th><th>Meaning</th><th>Target</th></tr></thead>
+    <tbody>
+      <tr><td><b>Effective hit rate</b></td><td>share of data-needing turns served from the pool (the architecture's core bet)</td><td>≥ 70%; alert &lt; 60%</td></tr>
+      <tr><td><b>Live-fallback rate</b></td><td>share of lookups the caller actually had to wait for</td><td>&lt; 10%</td></tr>
+      <tr><td><b>Plan-turn latency</b></td><td>the on-path window, wall-clock</td><td>p95 &lt; 500 ms</td></tr>
+      <tr><td><b>Latency hidden</b></td><td>seconds of external-lookup time moved off the caller's ear, per conversation</td><td>trend — the customer-facing value story</td></tr>
+      <tr><td><b>Supervisor lag</b></td><td>age of the oldest unprocessed turn event</td><td>&lt; median gap between turns — degrades <i>before</i> hit rate does, so it's the early warning</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Implementation: OpenTelemetry traces across api → stream → supervisor keyed by session id;
+  Prometheus counters off the audit writes; per-tenant dashboards in the operations console (P3) read the same
+  tables.</p>
+</section>
+
+<!-- 10 -->
+<section id="phases">
+  <div class="kicker">The plan, honestly</div>
+  <h2>Phase plan &amp; open risks</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Phase</th><th>Scope</th><th>Exit criterion</th></tr></thead>
+    <tbody>
+      <tr><td><b>P0 — substrate</b> <span class="pill win">done</span></td>
+        <td>core engine ported to Postgres + Redis; tenancy; versioned SOPs + linter; fetcher SDK; audit schema</td>
+        <td>✅ unit + isolation suites green (29 + 14 checks). ⏳ one item open: reproducing the prototype's measured numbers on this stack (needs model-backed
+        sessions; runs with the P1 bench harness)</td></tr>
+      <tr><td><b>P1 — authoring &amp; rails</b></td>
+        <td>two-deployable split + event bus; bench harness; CI; prompt-block library; document→draft-SOP ingestion
+        with continuous linting</td>
+        <td>a non-engineer goes from pasted policy doc to lint-clean published SOP in one sitting; prototype parity
+        numbers reproduced (20+ sessions per configuration)</td></tr>
+      <tr><td><b>P2 — realtime runtime</b></td>
+        <td>voice + chat adapters; instruction pre-generation behind pre-committed criteria; per-tenant quotas +
+        connector secrets</td>
+        <td>live voice demo on two SOPs; instruction hit ≥ 70%; plan-turn p95 &lt; 500 ms</td></tr>
+      <tr><td><b>P3 — console &amp; proof</b></td>
+        <td>operations console (live session X-ray, fleet SLIs, corpus manager); external benchmark runs; human A/B
+        harness</td>
+        <td>published external-benchmark table that says what the sales deck says</td></tr>
+    </tbody>
+  </table></div>
+  <h3>The risks we're watching (not hiding)</h3>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill danger">evidence maturity</span>
+      <p class="small" style="margin-top:8px">Prototype numbers came from a small number of simulated conversations — no real-call
+      acoustics, interruptions, or topic whiplash. The architecture should transfer; the exact rates won't survive
+      contact unchanged. That's why re-measurement is a phase gate, not a footnote.</p></div>
+    <div class="card"><span class="pill danger">the newest bet is unproven</span>
+      <p class="small" style="margin-top:8px">Pre-generating full instructions (not just data) was designed but never
+      measured in the prototype. It ships only if it beats the live-drafting baseline on pre-committed criteria — the
+      same discipline that killed our own weaker ideas.</p></div>
+    <div class="card"><span class="pill danger">cold start</span>
+      <p class="small" style="margin-top:8px">The predictor learns from a tenant's own history; week one runs at the
+      architecture's worst operating point, exactly when the customer is judging it. Mitigations exist (statistical
+      smoothing measured at +12 points on sparse data; simulator-seeded warm-up) — onboarding must use them.</p></div>
+    <div class="card"><span class="pill danger">per-turn classification</span>
+      <p class="small" style="margin-top:8px">The loop keys off classifying each user turn (who is this, what state
+      are they in). Doing that fast <i>and</i> well is an open P2 trade — our prototype's attempt to just use a smaller
+      model collapsed task success from 10/10 to 4/10, so "cheap will be fine" is not an assumption we'll make.</p></div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section id="decisions">
+  <div class="kicker">The record</div>
+  <h2>Decision log</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>Decision</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>D-1</td><td>One codebase, two deployables (<span class="mono">sopilot-api</span> / <span class="mono">sopilot-supervisor</span>), Redis Streams consumer group between; single-process flag for dev</td><td>different latency contracts, scaling, blast radius; durable queue beats in-process background tasks (§4)</td></tr>
+      <tr><td>D-2</td><td>The pool is the only interface between lanes; context selection, instruction lookup, and the rare live fallback stay on-path</td><td>keeps the latency budget free of queue hops; misses are absorbed, not propagated (§5)</td></tr>
+      <tr><td>D-3</td><td>Postgres = truth, Redis = expendable; a Redis flush degrades, never loses</td><td>cold-start is already a designed-for mode (§7)</td></tr>
+      <tr><td>D-4</td><td>Storage-layer isolation via one Scope object; prediction data tenant-scoped</td><td>multi-tenancy as structure, not review discipline; asserted by tests (§8)</td></tr>
+      <tr><td>D-5</td><td>Speculative labelling of injected context + verbatim instruction hits, enforced by unit tests</td><td>measured: honest framing outperformed confident framing (§3)</td></tr>
+      <tr><td>D-6</td><td>Linting is a publish blocker, growing from structural to semantic checks</td><td>the one benchmark failure we ever had was an authoring bug the linter now catches (§6)</td></tr>
+      <tr><td>D-7</td><td>Prompt blocks versioned separately from SOP structure; bindings pinned at session start</td><td>legal and flow-design change on different clocks (§6)</td></tr>
+      <tr><td>D-8</td><td>Extra speculative planning during long user pauses ships behind a flag, off by default</td><td>only pays off when callers actually pause; per-tenant data decides (measured 0.6%→86% hit rate depending on pause time)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout key"><div class="clabel">◆ The one-paragraph summary for the busy reviewer</div>
+    SOPilot makes conversation agents follow procedure without making them slow. The procedure is a lintable,
+    versioned graph; a fast lane answers the caller reading only from a pre-staged pool; a background lane predicts
+    the conversation's next steps (by counting a tenant's own history — ~1 ms, no model calls) and fills that pool
+    with data and drafted instructions before they're needed. The two lanes are separate deployables joined by a
+    durable event stream and isolated per tenant at the storage layer. Every claim has a metric wired from day one,
+    and the foundation layer passes its full test suite today.</div>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  SOPilot system architecture — review edition, July 2026. Self-contained by design; deeper companions for the
+  engineering team live in the repository (<span class="mono">ARCHITECTURE.md</span>, the P0 codebase and test suite,
+  and the research prototype the performance figures come from).
+</footer>
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
+</script>
+</body>
+</html>

@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Supervisor Ships — from MCPlanner research to an SOP-based conversation management product</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.11), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.07), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(91,141,239,.08),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.05;margin:.3em 0 .25em;background:linear-gradient(92deg,#cfe0ff,#8fd9c9 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}.tag b{color:var(--ink)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(91,141,239,.2),transparent);color:#fff;border-left:2px solid var(--a)}
+main{min-width:0;max-width:772px}article section{margin:0 0 54px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}p{margin:.7em 0}.lead-p{font-size:19px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--a);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.1)}.callout.key .clabel{color:#9cc0ff}
+.callout.danger{border-color:rgba(239,91,110,.5);background:rgba(239,91,110,.08)}.callout.danger .clabel{color:#f6a2ad}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Product kickoff · conversational agents · discussion I</div>
+    <h1>The Supervisor Ships</h1>
+    <p class="lede">MCPlanner asked a research question: can a slow, smart supervisor make a fast, weak voice agent
+      behave like an expert who follows the procedure? The answer came back with numbers — and, just as valuably, with a
+      list of things that <b>don't</b> work. This is the discussion doc for turning the working subset into a product:
+      <b>SOP-based conversation agent management</b>, with realtime voice as the first-class citizen.</p>
+    <div class="byline">A productization of <a href="https://github.com/dsivov/MCPlanner" target="_blank" rel="noopener">MCPlanner</a> ·
+      <b>SOPilot</b> — a multi-tenant, multi-project platform from day one</div>
+    <div class="hero-tags">
+      <span class="tag">keep: the <b>pool</b></span>
+      <span class="tag">keep: <b>counting</b>, not search</span>
+      <span class="tag">drop: <b>MCTS on-path</b></span>
+      <span class="tag">build: <b>instruction prefetch</b></span>
+      <span class="tag">prove: <b>SOP-Maze / SAGE</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this discussion</div>
+  <ol>
+    <li><a href="#premise">Where this starts</a></li>
+    <li><a href="#proved">What the research proved</a></li>
+    <li><a href="#dropped">What stays in the lab</a></li>
+    <li><a href="#gap">The unbuilt half</a></li>
+    <li><a href="#product">The product shape</a></li>
+    <li><a href="#turnloop">One turn, end to end</a></li>
+    <li><a href="#retrieval">Retrieval &amp; persistence, for real</a></li>
+    <li><a href="#benchmarks">How we prove it</a></li>
+    <li><a href="#risks">Where it can fail</a></li>
+    <li><a href="#roadmap">The build order</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="premise">
+  <div class="kicker">The setup</div>
+  <h2>Where this starts</h2>
+  <p class="lead-p">A voice agent has one job that fights itself: be fast (sub-second, or the dialogue feels broken) and
+  be right (follow the SOP, use the customer's real data, don't improvise policy). MCPlanner's answer was two systems and
+  one pool: a fast on-path agent that only ever <i>reads</i>, and a slow off-path supervisor that predicts where the
+  conversation is going and pre-stages what the agent will need.</p>
+  <p>The POC worked well enough to write up. But a research repo is a place where good and bad ideas live side by side,
+  documented with equal affection. The product cannot afford that. So the first task of this discussion is triage:
+  what did the experiments actually validate, what did they kill, and what did they never get to.</p>
+  <p>One more thing changed since we started: the outside world built the measuring stick. <b>SOP-Maze</b> (Meituan, 397
+  tasks distilled from 300K real customer-service API logs) shows frontier models failing at exactly the three things we
+  target — <i>route blindness</i> in branching procedures, <i>conversational fragility</i>, and <i>calculation under
+  context</i>. <b>SAGE</b> benchmarks graph-guided service dialogues; <b>SOP-Bench</b> covers tool-orchestration SOPs.
+  When we claim the supervisor architecture fixes SOP-following, there is now a public yardstick to prove it on — and the
+  benchmarks' failure catalogues read like our feature list.</p>
+  <div class="callout key"><div class="clabel">◆ The product in one sentence</div>
+    A system that turns a plain-text procedure into a versioned SOP graph with stage-bound prompts, then supervises live
+    conversations against it — tracking state in the background, injecting the right instructions and the right retrieved
+    data into the agent at every turn, without ever standing on the latency-critical path.</div>
+</section>
+
+<!-- 2 -->
+<section id="proved">
+  <div class="kicker">The keep list</div>
+  <h2>What the research proved</h2>
+  <p>Everything in this table survived an experiment with a pre-committed criterion. These are the load-bearing walls of
+  the product; the numbers are from the paper and the N=5 lab-notebook verifications.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Idea</th><th>Evidence</th><th>Role in the product</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill win">pool, not cache</span> misprediction-tolerant session pool</td>
+        <td>96% of turns supplied vs <b>11%</b> for exact-key lookup on the same fetches (+84 pp); 95.5% of the
+        perfect-foresight oracle's benefit; ~22.5 s of external-data latency hidden per conversation</td>
+        <td>the blackboard every agent reads; Redis-backed in production</td></tr>
+      <tr><td><span class="pill win">counting beats search</span> empirical predictor over precedent traces</td>
+        <td>recall@3 <b>88%</b> at ~1 ms / 0 tokens vs 33% for MCTS (~25.6K tokens) and 38% for a naive LLM; ~99% token
+        reduction on the prediction path</td>
+        <td>the default next-action / prefetch predictor; SQL over traces, no model call</td></tr>
+      <tr><td><span class="pill win">no LLM on the critical path</span> cosine + dedup rerank (thresholded MMR)</td>
+        <td>mean 1523 → <b>299 ms</b>, p95 2167 → 483 ms, quality held (87% agreement with the LLM's picks; dedup
+        recovers the rest)</td>
+        <td>the per-turn curation step; embeddings precomputed at insert</td></tr>
+      <tr><td><span class="pill win">honest framing</span> label prefetched context as speculative</td>
+        <td>“curated, high-relevance” label: 3/5 sessions; “speculative — ignore what doesn't fit”: <b>4/5</b>; failure
+        mode was the agent forcing irrelevant items on closing turns</td>
+        <td>a fixed rule of the prompt contract, not a tunable</td></tr>
+      <tr><td><span class="pill win">one cheap generative call</span> small-model prediction of the user's next utterance
+        for the free-text query slot</td>
+        <td>+11–14 pp retrieved-doc overlap on fine-grained corpora at ~85× lower cost than MCTS rollouts</td>
+        <td>the only LLM in the prefetch pipeline, and only for RAG queries</td></tr>
+      <tr><td><span class="pill win">async supervisor</span> planning fully off-path (<span class="mono">tier3_enabled=false</span>)
+        + pondering mined for prefetch</td>
+        <td>live latency 21.7 → 3.8 s (−82%); live-fallback 59% → <b>7%</b> once pondering rollouts feed the pool; ~80%
+        fewer LLM calls per session</td>
+        <td>the architecture invariant: the live agent never waits for the supervisor</td></tr>
+      <tr><td><span class="pill win">cold start</span> shrinkage toward SOP-level marginal + recency decay</td>
+        <td>+12 pp recall@3 at 10% history, converging as data accumulates</td>
+        <td>every new tenant starts here; simulator-seeded precedents as warm-up</td></tr>
+      <tr><td><span class="pill win">realtime steering</span> manual turn control + per-turn <span class="mono">session.update</span>
+        instruction injection</td>
+        <td>the Avatar path already runs the locked pipeline end-to-end against GPT-Realtime: plan-turn → instructions →
+        <span class="mono">response.create</span>, key never leaves the server</td>
+        <td>the voice adapter, lifted almost as-is</td></tr>
+    </tbody>
+  </table></div>
+  <p class="pull">The through-line: every win moved intelligence <i>off</i> the critical path and replaced a model call
+  with something cheaper — a count, a cosine, a label. The product should be built out of exactly that reflex.</p>
+</section>
+
+<!-- 3 -->
+<section id="dropped">
+  <div class="kicker">The drop list</div>
+  <h2>What stays in the lab</h2>
+  <p>These aren't guesses — each one was tried and measured. Writing them down is what stops them from sneaking back in
+  under a new name during a design review.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Retired idea</th><th>Why it died</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill danger">live MCTS on the critical path</span></td>
+        <td>10–15 s, two-thirds of turn latency; removing it cost nothing once the pool carried the load</td></tr>
+      <tr><td><span class="pill danger">MCTS for retrieval prediction</span></td>
+        <td>33% recall@3 at ~25.6K tokens vs counting's 88% at zero — “habits, not hypotheticals.” Kept only as an
+        optional cold-start planner</td></tr>
+      <tr><td><span class="pill danger">LLM rerank of the pool</span></td>
+        <td>its only unique value was dedup; a cosine threshold does that in 0 ms</td></tr>
+      <tr><td><span class="pill danger">confidence gates &amp; cosine floors</span></td>
+        <td>real pool cosines cluster ~0.30 with 0.013 median gaps — there are no cliffs to gate on; 0% adoption of the
+        fast path in practice</td></tr>
+      <tr><td><span class="pill danger">exact-key / query-hash cache model</span></td>
+        <td>discards approximately-right prefetches — the 60% “≥1 shared doc” signal the pool monetizes</td></tr>
+      <tr><td><span class="pill danger">Thompson sampling exploration</span></td>
+        <td>identical to decay+shrinkage (49.4% vs 49.4%): the true next action is revealed every turn, so this is online
+        supervised learning, not a bandit</td></tr>
+      <tr><td><span class="pill danger">smaller live model to cut latency</span></td>
+        <td>gpt-4o-mini was <i>slower</i> on the structured call and collapsed success 10/10 → 4/10; the LLM floor yields
+        to streaming, not shrinking</td></tr>
+      <tr><td><span class="pill danger">“curated, high-relevance” framing</span></td>
+        <td>actively harmful on closing turns — the agent answers about discounts while the user is saying goodbye</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout caveat"><div class="clabel">◆ One nuance worth keeping</div>
+    <b>Pondering isn't dead — it was mistested.</b> At zero-pause simulator cadence, 98% of pondering runs were cancelled
+    and it contributed 3% of pool fetches; with realistic think-time injected, its hit rate jumped to 86%. In production,
+    real users pause. Ship it off by default, instrumented, and let per-tenant data decide — that's a flag, not a
+    conviction.</div>
+</section>
+
+<!-- 4 -->
+<section id="gap">
+  <div class="kicker">The honest gap</div>
+  <h2>The unbuilt half is the product</h2>
+  <p class="lead-p">MCPlanner validated <b>data</b> prefetch (Milestone A) and never built <b>instruction</b> prefetch
+  (Milestone B). The product you asked for — pre-built prompts bound to conversation stages, served just-in-time — is
+  precisely Milestone B. We are not porting a finished result; we are building the missing half on top of a validated
+  substrate.</p>
+  <p>That's a favorable position, for two reasons. First, the substrate generalizes: an instruction is just a
+  <span class="mono">PoolItem</span> with <span class="mono">kind:"instruction"</span> — same pool, same TTL, same rerank,
+  same honest framing. The POC already sketched this (<span class="mono">schedule_instruction_prefetch</span> exists; it's
+  exact-match and unmeasured). Second, the realtime Avatar path already does a degenerate version of it every turn: it
+  builds instructions live from the chosen action's <span class="mono">must_say</span>/<span class="mono">must_not_say</span>
+  and injects them. The product upgrades that from “assembled from SOP fields at plan time” to “authored prompt blocks,
+  versioned in a library, bound to stages, pre-staged by prediction.”</p>
+  <div class="callout danger"><div class="clabel">◆ Pre-commit the criteria now, like the research did</div>
+    Instruction prefetch ships only if it beats the live-assembled baseline on: instruction hit-rate at lookup (target
+    ≥70%, the production note's load-bearing bet), no regression in session success, and plan-turn p95 under the voice
+    budget. The lab notes' open questions Q1–Q8 (granularity, trust model, wrong-instruction feedback loop, break-even
+    economics) become the product's first experiment plan — with N≥20, not N=5.</div>
+</section>
+
+<!-- 5 -->
+<section id="product">
+  <div class="kicker">The proposal</div>
+  <h2>The product shape: four services, one pool</h2>
+  <p>Everything the user-facing ask contains — SOP from plain text, stage-bound prompts, background tracking with live
+  instruction delivery, a management UI, and production retrieval — falls out of four services around the same two-lane
+  architecture the research locked.</p>
+
+  <div class="callout key"><div class="clabel">◆ Tenancy is structural, not a checkbox</div>
+    SOPilot is multi-tenant and multi-project from the first migration: <b>tenant → project → SOPs</b>, and everything
+    hangs off that spine — prompt libraries, corpora, precedent traces, pool namespaces, dashboards, API keys. Two
+    consequences worth locking now. First, <b>the precedent store is tenant-scoped by construction</b>: the counting
+    predictor learns one tenant's conversational habits and must never leak them into another's predictions (it's also
+    simply better prediction — habits are per-business). Second, isolation follows the pattern already proven in
+    Context&nbsp;Graph's workspace pool: scoping enforced at the storage layer (Postgres row-level scoping + per-tenant
+    Redis key namespaces), not in application <i>if</i>-statements. Projects give a tenant separate lifecycles per use
+    case — the collections SOP and the sales SOP share a prompt library only when their owner says so.</div>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 320" role="img" aria-label="SOPilot architecture: studio, runtime, retrieval, console around a Redis pool">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.bx{rx:11;stroke-width:1.2}.tt{fill:#e7ebf3;font:12.5px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}.ss{fill:#aab3c5;font:10px "Segoe UI",sans-serif;text-anchor:middle}.ln{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#ar)}.lbl{fill:#7b8499;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}</style>
+      <!-- critical path band -->
+      <text class="lbl" x="360" y="16" style="font-weight:800;letter-spacing:.1em">CRITICAL PATH — latency-bounded, no supervisor calls, reads only</text>
+      <rect class="bx" x="20" y="28" width="150" height="52" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="tt" x="95" y="50">Live channel</text><text class="ss" x="95" y="66">GPT-Realtime · chat · SIP</text>
+      <rect class="bx" x="240" y="28" width="180" height="52" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="tt" x="330" y="50">Channel adapter</text><text class="ss" x="330" y="66">session.update / prompt swap</text>
+      <rect class="bx" x="500" y="28" width="200" height="52" fill="#1c2433" stroke="rgba(25,184,154,.55)"/>
+      <text class="tt" x="600" y="50">SESSION POOL (Redis)</text><text class="ss" x="600" y="66">data + instructions · TTL · tags</text>
+      <line class="ln" x1="170" y1="54" x2="238" y2="54"/><line class="ln" x1="420" y1="54" x2="498" y2="54"/>
+      <text class="lbl" x="459" y="46">reads ≤ ms</text>
+      <!-- async band -->
+      <text class="lbl" x="360" y="118" style="font-weight:800;letter-spacing:.1em">ASYNC LANE — supervisor workers, speculative, preemptible</text>
+      <rect class="bx" x="20" y="132" width="200" height="60" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="tt" x="120" y="152">Supervisor runtime</text><text class="ss" x="120" y="166">classify · track SOP state</text><text class="ss" x="120" y="179">count-predict · prefetch · rerank</text>
+      <rect class="bx" x="260" y="132" width="200" height="60" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="tt" x="360" y="152">Retrieval service</text><text class="ss" x="360" y="166">pgvector corpora · fetcher SDK</text><text class="ss" x="360" y="179">MCP / DB / API connectors</text>
+      <rect class="bx" x="500" y="132" width="200" height="60" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="tt" x="600" y="152">Precedent store</text><text class="ss" x="600" y="166">traces · outcomes · embeddings</text><text class="ss" x="600" y="179">the counting predictor's fuel</text>
+      <line class="ln" x1="120" y1="132" x2="560" y2="84"/><text class="lbl" x="330" y="103">writes pre-staged items</text>
+      <line class="ln" x1="220" y1="162" x2="258" y2="162"/><line class="ln" x1="460" y1="162" x2="498" y2="162"/>
+      <!-- authoring band -->
+      <text class="lbl" x="360" y="230" style="font-weight:800;letter-spacing:.1em">AUTHORING &amp; OPERATIONS — humans in the loop</text>
+      <rect class="bx" x="60" y="244" width="260" height="60" fill="#231b33" stroke="rgba(169,116,240,.5)"/>
+      <text class="tt" x="190" y="264">SOP Studio</text><text class="ss" x="190" y="278">plain text → SOP graph · linter</text><text class="ss" x="190" y="291">prompt library · versions · publish</text>
+      <rect class="bx" x="400" y="244" width="260" height="60" fill="#231b33" stroke="rgba(169,116,240,.5)"/>
+      <text class="tt" x="530" y="264">Operations Console</text><text class="ss" x="530" y="278">live session monitor · SLIs</text><text class="ss" x="530" y="291">corpus manager · trace explorer</text>
+      <line class="ln" x1="190" y1="244" x2="120" y2="194"/><line class="ln" x1="530" y1="244" x2="590" y2="194"/>
+    </svg>
+    <figcaption><b>Same two-lane invariant the research locked, with product organs around it.</b> The live channel only
+      ever reads the pool; everything intelligent happens in the async lane; humans author and observe from below.</figcaption>
+  </div></figure>
+
+  <h3>SOP Studio — plain text in, governed procedure out</h3>
+  <p>The POC's chat-to-build flow (<span class="mono">build-turn</span> + server-side patch merge, graph re-derived every
+  step so you watch it grow) ports directly and gains three product-grade layers: <b>batch ingestion</b> (paste a policy
+  document or upload a PDF, get a draft SOP to refine conversationally), a <b>linter</b> (the credit-card SOP's
+  objection-loop pathology was an authoring bug — state-prereq gating, reachability and loop checks become publish
+  blockers, not incident reports), and <b>versioning with publish/rollback</b>, because in production the SOP is a
+  governed artifact someone signs off on.</p>
+  <h3>The prompt library — stages get authored voices</h3>
+  <p>Each SOP stage (agent action) binds to prompt blocks from a reusable library: role framing, stage instructions,
+  <span class="mono">must_say</span>/<span class="mono">avoid</span> constraints, compliance boilerplate, escalation
+  language — separately versioned from the SOP so legal can update the disclosure text without touching the graph.
+  At runtime these are what instruction prefetch pre-stages.</p>
+  <h3>Supervisor runtime — the background tracker</h3>
+  <p>The locked no-tier-3 pipeline, portably re-plumbed: classify (cohort, state, mood) → SOP position update → empirical
+  predictor over the tenant's precedent traces → prefetch data + instructions into the pool → cosine+dedup rerank on
+  demand. Stateless workers; all session state in Redis; every decision audited to Postgres.</p>
+  <h3>Operations Console — the research UI, grown up</h3>
+  <p>The POC frontend already shows the right things (SOP graph position, blackboard contents, per-turn traces, hit-rate
+  chips). The console keeps that per-session X-ray and adds the fleet view: the SLIs from the production note — effective
+  hit rate, latency hidden, live-fallback rate, tier distribution, rerank p95 — per SOP, per tenant, from day one.
+  The 70% instruction-hit-rate bet is either visible on a dashboard or it isn't real.</p>
+</section>
+
+<!-- 6 -->
+<section id="turnloop">
+  <div class="kicker">The mechanism</div>
+  <h2>One turn, end to end (voice)</h2>
+  <p>The realtime path is the part most products get wrong, and the part the POC already solved elegantly: run the voice
+  model with <b>manual turn control</b> (<span class="mono">turn_detection.create_response=false</span>), so there is a
+  supervisor window between “user stopped speaking” and “agent starts speaking” — and keep that window under half a
+  second by making it contain <i>zero</i> LLM calls.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 210" role="img" aria-label="Per-turn timeline: user speech overlapped by async prefetch; short plan window; instruction injection; agent speaks">
+      <style>.tl{fill:#aab3c5;font:10.5px "Segoe UI",sans-serif}.tb{rx:8;stroke-width:1.1}.tt2{fill:#e7ebf3;font:11px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.ax{stroke:#39425a;stroke-width:1}</style>
+      <line class="ax" x1="20" y1="40" x2="700" y2="40"/>
+      <text class="tl" x="20" y="30">turn N: user speaking (2–8 s of free supervisor time)</text>
+      <rect class="tb" x="20" y="50" width="300" height="30" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="tt2" x="170" y="69">🎙 user audio → live transcription</text>
+      <rect class="tb" x="20" y="92" width="300" height="30" fill="#1b1f2a" stroke="#39425a"/><text class="tt2" x="170" y="111">async: classify · count-predict · prefetch pool</text>
+      <rect class="tb" x="336" y="50" width="120" height="30" fill="#1c2433" stroke="rgba(25,184,154,.6)"/><text class="tt2" x="396" y="69">plan-turn ≤500 ms</text>
+      <text class="tl" x="336" y="100">pool rerank (cosine+dedup, ~300 ms)</text>
+      <text class="tl" x="336" y="114">+ instruction lookup — no LLM calls</text>
+      <rect class="tb" x="472" y="50" width="140" height="30" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="tt2" x="542" y="69">session.update + create</text>
+      <rect class="tb" x="628" y="50" width="72" height="30" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="tt2" x="664" y="69">🗣 agent</text>
+      <text class="tl" x="472" y="100">stage prompt + must_say/avoid</text>
+      <text class="tl" x="472" y="114">+ speculative context block</text>
+      <line class="ax" x1="20" y1="140" x2="700" y2="140"/>
+      <text class="tl" x="20" y="158">meanwhile, for turn N+1: supervisor writes predicted data + instructions into the pool;</text>
+      <text class="tl" x="20" y="174">a wrong guess just expires (TTL) — a right guess turns a multi-second lookup into a millisecond read.</text>
+      <text class="tl" x="20" y="198" style="fill:#7b8499">text channels: same loop, without the manual-turn-control trick — instructions swap between messages.</text>
+    </svg>
+    <figcaption><b>The supervisor never stands between the user and the agent.</b> Its work overlaps the user's own
+      speech; the on-path window contains only pool reads, one embedding, and arithmetic.</figcaption>
+  </div></figure>
+
+  <p>Two contract rules carry over from the research as non-negotiable: the injected context block is always labelled
+  <b>speculative</b> (“ignore what doesn't fit; if nothing fits, reply naturally”), and the live agent never blocks on a
+  supervisor product — a pool miss falls back to the stage's baseline prompt and gets logged as the SLI event that it is.</p>
+</section>
+
+<!-- 7 -->
+<section id="retrieval">
+  <div class="kicker">Production grade</div>
+  <h2>Retrieval &amp; persistence, for real</h2>
+  <p>The POC's honest confession: the pool is a process-memory singleton, retrieval runs over three authored fixture
+  corpora, and every non-RAG fetcher is a mock returning canned text. That was correct for research. For the product,
+  this layer is where most of the porting work lives.</p>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill a">state</span>
+      <p class="small" style="margin-top:8px"><b>Postgres + pgvector</b> replaces SQLite + sqlite-vec for everything
+      durable: SOPs and versions, prompt library, precedent traces and embeddings, per-call audits, corpus documents.
+      <b>Redis</b> holds the live session pool (TTL is native) and feeds the console's live views — this is what makes the
+      runtime multi-worker and horizontally scalable, which the in-memory singleton structurally wasn't.</p></div>
+    <div class="card"><span class="pill a">fetchers</span>
+      <p class="small" style="margin-top:8px">A <b>fetcher SDK</b> replaces the mocks: MCP tools first (one connector
+      standard, plays into the existing PolarTie stack), then REST/DB connectors. Declared per data-dependency in the SOP,
+      with the POC's good bones kept: declared latency, TTL, idempotency flags — the scheduler still refuses to
+      speculatively fire non-idempotent calls.</p></div>
+    <div class="card"><span class="pill a">corpora</span>
+      <p class="small" style="margin-top:8px"><b>Manageable retrieval</b> means corpora are tenant data with a UI: upload
+      and chunk documents per corpus, bind corpora to SOP data-dependencies, re-embed on model change, inspect what any
+      given turn retrieved and why. Embeddings computed at ingest, never on the turn path; per-turn cost is one query
+      embedding + cosine math.</p></div>
+    <div class="card"><span class="pill a">audit</span>
+      <p class="small" style="margin-top:8px">Every fetch, pick, injection, and fallback lands in Postgres with its
+      predictor source and outcome — the same discipline that let the research compute regret against an oracle becomes
+      the product's analytics substrate, and the raw material the counting predictor learns from. The trace <i>is</i> the
+      moat: every conversation makes the next one cheaper.</p></div>
+  </div>
+  <div class="callout info"><div class="clabel">◆ Ecosystem note</div>
+    The retrieval tier deliberately speaks MCP so a Context&nbsp;Graph / KnowledgeRag workspace can serve as a corpus or
+    precedent backend where a customer already runs one — the supervisor's “query KG during the user's speech-time” lane
+    was designed for exactly that shape. Optional, not a dependency.</div>
+</section>
+
+<!-- 8 -->
+<section id="benchmarks">
+  <div class="kicker">Proof, not vibes</div>
+  <h2>How we prove it</h2>
+  <p>The paper's own limitations section is the test plan. Internal N=5 simulator runs earned a publication; a product
+  claim needs external yardsticks and bigger N.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Level</th><th>Harness</th><th>What it demonstrates</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill b">unit SLIs</span></td><td>built-in dashboards, every tenant</td>
+        <td>effective hit rate ≥70%, plan-turn p95 &lt;500 ms, live-fallback &lt;10%, latency hidden per session</td></tr>
+      <tr><td><span class="pill b">external</span></td><td><b>SOP-Maze</b> tasks + <b>SAGE</b> dialogues run through the runtime</td>
+        <td>the headline marketing claim: supervised weak model ≥ unsupervised frontier model on SOP adherence — route
+        blindness is exactly what background state-tracking removes</td></tr>
+      <tr><td><span class="pill b">ablation</span></td><td>the POC's autopilot harness, N≥20, Wilson CIs</td>
+        <td>instruction prefetch vs live-assembled baseline; pondering on/off under real pause distributions; the
+        4-arm cache comparison (no-cache / per-turn RAG / exact-key / pool) reviewers asked for</td></tr>
+      <tr><td><span class="pill b">human</span></td><td>the GPT-Realtime avatar A/B harness (already built)</td>
+        <td>the simulator-to-human jump: real pauses, real interruptions, real mishearings</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 9 -->
+<section id="risks">
+  <div class="kicker">The honest ledger</div>
+  <h2>Where it can fail</h2>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill danger">simulator gap</span>
+      <p class="small" style="margin-top:8px">Every headline number comes from LLM-simulated users — no ASR noise,
+      barge-in, or topic whiplash. The architecture should transfer; the <i>rates</i> won't survive contact unchanged.
+      Budget for re-measurement on real calls before quoting numbers to customers.</p></div>
+    <div class="card"><span class="pill danger">the core bet is unproven</span>
+      <p class="small" style="margin-top:8px">Instruction prefetch — the product's center — was never measured in the
+      research. It inherits a validated substrate, but “instructions behave like data in the pool” is a hypothesis with
+      pre-committed criteria, not a result.</p></div>
+    <div class="card"><span class="pill danger">the latency you can't hide</span>
+      <p class="small" style="margin-top:8px">The pool hides external-data latency, not model inference. In the text
+      pipeline two live LLM calls (~4 s) dominated. Realtime speech-to-speech models mostly dissolve this — which is
+      exactly why voice-first is the right wedge — but classify-quality on a fast model needs watching.</p></div>
+    <div class="card"><span class="pill danger">SOP authoring quality</span>
+      <p class="small" style="margin-top:8px">The one SOP that failed (credit-card, 0/5) failed on graph pathology, not
+      architecture. Customers will author worse graphs than we did. The linter isn't a nice-to-have; it's the difference
+      between “their bug” and “our outage.”</p></div>
+    <div class="card"><span class="pill danger">cold start economics</span>
+      <p class="small" style="margin-top:8px">The counting predictor is only as good as accumulated traces; a new tenant
+      has none. Shrinkage helps (+12 pp), simulator-seeding helps, but the first weeks of any deployment run at the
+      architecture's worst operating point — precisely when the customer is judging it.</p></div>
+    <div class="card"><span class="pill danger">crowded lane</span>
+      <p class="small" style="margin-top:8px">VoiceAgentRAG, LTS-VoiceAgent, PASTE — the two-system pattern is
+      converging independently in several labs. The defensible parts are the SOP governance layer, the precedent
+      flywheel, and the management surface — not the prefetch trick alone. Speed matters.</p></div>
+  </div>
+  <div class="callout caveat"><div class="clabel">◆ The honest reframe</div>
+    Four of the six are about evidence and operations, not architecture. That's the healthy failure profile for a
+    productization: the research de-risked the design; what remains is proving it where it's cheap to be wrong (harness,
+    linter, dashboards) before customers prove it where it's expensive.</div>
+</section>
+
+<!-- 10 -->
+<section id="roadmap">
+  <div class="kicker">Sequencing</div>
+  <h2>The build order</h2>
+  <p>Ordered so that every phase ends with something demoable, and the riskiest unproven piece (instruction prefetch)
+  lands on top of already-hardened plumbing rather than alongside it.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Phase</th><th>Scope</th><th>Exit criterion</th></tr></thead>
+    <tbody>
+      <tr><td><b>P0 — substrate</b></td>
+        <td>port planner core off SQLite: Postgres+pgvector, Redis pool, stateless supervisor workers, tenant→project→SOP
+        scoping + auth enforced at the storage layer, fetcher SDK (MCP first), audit schema</td>
+        <td>locked-config POC benchmarks reproduce on the new stack (same hit rates, rerank p95 ≤500 ms) with 2+ workers
+        and 2+ isolated tenants running concurrently</td></tr>
+      <tr><td><b>P1 — SOP Studio</b></td>
+        <td>document→draft-SOP ingestion + conversational refinement (port build-turn), linter (prereq gating, loop &amp;
+        reachability checks), prompt library with stage bindings, versioning/publish</td>
+        <td>a non-author can go from a pasted policy doc to a lint-clean, published SOP with bound prompts in one sitting</td></tr>
+      <tr><td><b>P2 — realtime runtime</b></td>
+        <td>voice adapter (manual turn control + session.update), text adapter, instruction prefetch behind its
+        pre-committed criteria, pondering behind a flag with pause-aware scheduling</td>
+        <td>live voice demo on 2 SOPs; instruction hit ≥70%; plan-turn p95 &lt;500 ms; N≥20 ablation vs live-assembled baseline</td></tr>
+      <tr><td><b>P3 — console &amp; proof</b></td>
+        <td>fleet dashboards (SLIs), live session X-ray, corpus manager, trace explorer; SOP-Maze/SAGE harness runs;
+        human A/B via the avatar rig</td>
+        <td>the external-benchmark table exists and says what the marketing says</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout key"><div class="clabel">◆ The one-sentence version</div>
+    The research already paid for the expensive lessons — counting beats search, pools beat caches, honesty beats
+    confidence, and nothing smart belongs on the critical path. The product is those four lessons with a database,
+    a linter, a prompt library, and a dashboard — plus one new bet, instruction prefetch, which we will measure the
+    same way we measured everything else: criteria first.</div>
+  <p class="small">Open items for this discussion: P0 stack confirmation (Postgres+pgvector+Redis vs. anything already
+  standard in-house), whether SOP-Maze or SAGE is the first external target, and which two SOPs make the P2 demo.</p>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  Discussion I of the SOPilot productization — a synthesis of
+  <a href="https://github.com/dsivov/MCPlanner" target="_blank" rel="noopener">MCPlanner</a> (paper: <i>Speculative
+  Context</i>; blog: <i>Supervising the Fast Mouth</i>) into a product plan. External yardsticks:
+  <a href="https://arxiv.org/html/2510.08942v1" target="_blank" rel="noopener">SOP-Maze</a> ·
+  <a href="https://arxiv.org/pdf/2604.09285" target="_blank" rel="noopener">SAGE</a> ·
+  <a href="https://arxiv.org/abs/2506.08119" target="_blank" rel="noopener">SOP-Bench</a>. Related art: PASTE
+  (arXiv:2603.18897), ChatSOP (arXiv:2407.03884), VoiceAgentRAG (arXiv:2603.02206). All research numbers are N=5
+  simulator results — treated here as design guidance, not production claims.
+</footer>
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
+</script>
+</body>
+</html>
