@@ -29,6 +29,9 @@ class NamedItem(BaseModel):
     must_say: list[str] = Field(default_factory=list)
     must_not_say: list[str] = Field(default_factory=list)
     data_dependencies: list[str] = Field(default_factory=list)
+    # D-7: names of PromptBlocks whose published content is injected when this
+    # action/stage runs. Resolved + snapshotted at session start.
+    prompt_blocks: list[str] = Field(default_factory=list)
 
 
 class CohortMood(BaseModel):

@@ -90,6 +90,36 @@ class Sop(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
+class PromptBlock(Base):
+    """D-7: reusable, separately-versioned prompt language (role framing, stage
+    instructions, compliance boilerplate). SOP stages bind blocks by name; the
+    binding is resolved to published versions and snapshotted at session start."""
+
+    __tablename__ = "prompt_blocks"
+    __table_args__ = (UniqueConstraint("project_id", "name"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    project_id: Mapped[str] = mapped_column(String(32), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(32), default="stage")  # stage | compliance | role | escalation
+    latest_version: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class PromptBlockVersion(Base):
+    __tablename__ = "prompt_block_versions"
+    __table_args__ = (UniqueConstraint("block_id", "version"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    block_id: Mapped[str] = mapped_column(ForeignKey("prompt_blocks.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(16), default="draft")  # draft | published | retired
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class SopVersion(Base):
     __tablename__ = "sop_versions"
     __table_args__ = (UniqueConstraint("sop_id", "version"),)
@@ -115,6 +145,10 @@ class ConversationSession(Base):
     sop_version: Mapped[int] = mapped_column(Integer, default=0)
     channel: Mapped[str] = mapped_column(String(32), default="text")  # text | realtime_voice | bench
     status: Mapped[str] = mapped_column(String(16), default="active")  # active | ended
+    # D-7: prompt-block bindings snapshotted at session start —
+    # {block_name: {"version": int, "content": str}}. A mid-conversation block
+    # publish never lands mid-call.
+    prompt_bindings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     terminal_outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

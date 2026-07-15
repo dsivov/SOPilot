@@ -144,6 +144,15 @@ async def plan_turn(
             await_inflight_ms=0,
         )
 
+    # D-7: stage blocks come from the bindings pinned at session start.
+    bindings = session.prompt_bindings or {}
+    action_obj = next((a for a in task_def.agent_actions if a.name == chosen), None)
+    stage_blocks = [
+        bindings[n]["content"]
+        for n in (action_obj.prompt_blocks if action_obj else [])
+        if n in bindings
+    ]
+
     plan = build_plan(
         turn_index=turn_index,
         subsystems=scope.subsystems,
@@ -155,6 +164,7 @@ async def plan_turn(
         dep_payloads=dep_payloads,
         consume_stats=consume_stats,
         instruction_item=instruction_item,
+        stage_blocks=stage_blocks,
     )
 
     db.add(

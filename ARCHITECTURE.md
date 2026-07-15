@@ -261,7 +261,14 @@ search breaks silently otherwise).
 
 1. ~~**D-1 implementation** — turn-event stream, `sopilot-supervisor` entrypoint,
    embedded-dev flag~~ ✅ done, with D-9 subsystem modes.
-2. **Bench harness + POC parity run** — closes P0's exit criterion (N≥20).
+2. ~~**Bench harness + POC parity run**~~ ✅ done — parity closed, see
+   `bench/BENCH_P0_PARITY.md`.
+3. ~~**Local check script**~~ ✅ `scripts/check.sh` (no hosted CI by decision).
+4. ~~**Prompt-block model + bindings (D-7)**~~ ✅ done — versioned library
+   (`/prompt-blocks` CRUD + publish), publish gate on SOPs binding unpublished
+   blocks, bindings snapshotted into the session at start (mid-call
+   immutability verified live), assembly order: role header → authored blocks →
+   stage constraints.
 3. **CI** — ruff + unit + compose-based integration on push.
 4. **Prompt-block model + stage bindings** (D-7).
 5. **Document → draft-SOP ingestion** + continuous editor linting.

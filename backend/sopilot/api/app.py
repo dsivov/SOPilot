@@ -13,7 +13,7 @@ from ..fetchers.mcp import McpFetcher
 from ..pool import SessionPool
 from ..prefetch import PrefetchManager
 from ..supervisor import SupervisorWorker
-from . import admin, runtime, sessions, sops
+from . import admin, prompt_blocks, runtime, sessions, sops
 
 
 def create_app() -> FastAPI:
@@ -53,6 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(sops.router)
     app.include_router(sessions.router)
     app.include_router(runtime.router)
+    app.include_router(prompt_blocks.router)
 
     @app.get("/health")
     async def health() -> dict:

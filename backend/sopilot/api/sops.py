@@ -131,13 +131,21 @@ async def lint_sop(
 async def publish_sop(
     sop_id: str, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
 ) -> dict:
+    from ..runtime import collect_prompt_block_names
+    from .prompt_blocks import resolve_published_blocks
+
     sop = await _get_sop(db, scope, sop_id)
     version = (
         await db.execute(
             select(SopVersion).where(SopVersion.sop_id == sop.id).order_by(SopVersion.version.desc()).limit(1)
         )
     ).scalar_one()
-    problems = SOPGraph(TaskDefinition.model_validate(version.definition)).lint()
+    task_def = TaskDefinition.model_validate(version.definition)
+    problems = SOPGraph(task_def).lint()
+    # D-7 publish gate: every bound prompt block must exist with a published version.
+    _, missing = await resolve_published_blocks(db, scope, collect_prompt_block_names(task_def))
+    for name in sorted(missing):
+        problems.append(f"prompt block '{name}' has no published version")
     if problems:
         raise HTTPException(status_code=422, detail={"message": "lint failed", "problems": problems})
     version.status = "published"

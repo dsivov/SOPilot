@@ -53,12 +53,25 @@ async def start_session(
     ).scalar_one_or_none()
     if version is None:
         raise HTTPException(status_code=409, detail="SOP has no published version")
+    # D-7: pin prompt-block bindings now — a block published mid-conversation
+    # never lands mid-call.
+    from ..runtime import collect_prompt_block_names
+    from .prompt_blocks import resolve_published_blocks
+
+    task_def = TaskDefinition.model_validate(version.definition)
+    bindings, missing = await resolve_published_blocks(db, scope, collect_prompt_block_names(task_def))
+    if missing:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "SOP binds prompt blocks with no published version", "missing": sorted(missing)},
+        )
     session = ConversationSession(
         tenant_id=scope.tenant_id,
         project_id=scope.project_id,
         sop_id=sop.id,
         sop_version=version.version,
         channel=req.channel,
+        prompt_bindings=bindings or None,
     )
     db.add(session)
     await db.commit()

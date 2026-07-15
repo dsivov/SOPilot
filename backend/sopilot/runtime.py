@@ -37,6 +37,14 @@ def choose_action(requested: str | None, allowed: list[str]) -> str:
     return allowed[0] if allowed else ""
 
 
+def collect_prompt_block_names(task_def: TaskDefinition) -> set[str]:
+    """All prompt-block names an SOP definition binds (publish-time existence check)."""
+    names: set[str] = set()
+    for action in task_def.agent_actions:
+        names.update(action.prompt_blocks or [])
+    return names
+
+
 def assemble_stage_prompt(
     task_def: TaskDefinition,
     action_name: str,
@@ -44,6 +52,7 @@ def assemble_stage_prompt(
     context_block: str = "",
     dep_payloads: dict[str, str] | None = None,
     instruction_text: str | None = None,
+    stage_blocks: list[str] | None = None,
 ) -> str:
     """The per-turn instruction payload for the live agent.
 
@@ -63,6 +72,8 @@ def assemble_stage_prompt(
         lines.append(f"GOAL: {cp.goal}")
     if cp.knowledge:
         lines.append(f"BACKGROUND: {cp.knowledge}")
+    for content in stage_blocks or []:  # D-7: authored, versioned language — pinned at session start
+        lines.append(content)
     lines.append(f"CURRENT STAGE: {action_name}")
     if action is not None:
         if action.description:
@@ -93,6 +104,7 @@ def build_plan(
     dep_payloads: dict[str, str] | None = None,
     consume_stats: dict | None = None,
     instruction_item: PoolItem | None = None,
+    stage_blocks: list[str] | None = None,
 ) -> TurnPlan:
     sop_on = subsystems in ("sop", "both")
     retrieval_on = subsystems in ("retrieval", "both")
@@ -110,6 +122,7 @@ def build_plan(
                 chosen_action,
                 context_block=context_block,
                 dep_payloads=dep_payloads,
+                stage_blocks=stage_blocks,
             )
     return TurnPlan(
         turn_index=turn_index,
