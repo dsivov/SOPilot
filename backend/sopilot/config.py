@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # Runtime classify/respond model for the TEXT channel. Strong by default — the
     # research (and our bench rerun) showed cheap classify models collapsing success.
     runtime_model: str = "gpt-4o"
+    # Voice channel: OpenAI Realtime speech model + voice. The supervisor steers it
+    # per turn via session.update; it never sees the SOP whole.
+    realtime_model: str = "gpt-realtime"
+    realtime_voice: str = "marin"
 
     # PASTE-style scheduler: max concurrent speculative LLM calls per worker.
     speculative_budget: int = 4

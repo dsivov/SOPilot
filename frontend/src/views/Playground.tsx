@@ -1,6 +1,7 @@
-import { CircleStop, MessageSquarePlus, Send } from "lucide-react";
+import { CircleStop, MessageSquarePlus, Mic, MicOff, Send } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api";
+import { VoiceCall } from "./voiceCall";
 
 type SopMeta = { id: string; name: string; latest_version: number };
 type Msg = { role: "user" | "assistant"; content: string };
@@ -26,6 +27,8 @@ export default function PlaygroundView() {
   const [poolSize, setPoolSize] = useState(0);
   const [terminal, setTerminal] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [voice, setVoice] = useState<VoiceCall | null>(null);
+  const [voiceStatus, setVoiceStatus] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,15 +53,65 @@ export default function PlaygroundView() {
     }
   }, [sopId]);
 
+  const stopVoice = useCallback(() => {
+    voice?.stop();
+    setVoice(null);
+    setVoiceStatus("");
+  }, [voice]);
+
+  const startVoice = useCallback(async () => {
+    if (!sessionId || voice) return;
+    setError("");
+    const call = new VoiceCall(sessionId, {
+      onStatus: setVoiceStatus,
+      onUserUtterance: (text) => setMsgs((m) => [...m, { role: "user", content: text }]),
+      onAgentReply: (text) => setMsgs((m) => [...m, { role: "assistant", content: text }]),
+      onTurnResult: (r) => {
+        setTraces((t) => [
+          {
+            turn_index: r.turn.turn_index,
+            chosen_action: r.turn.chosen_action,
+            classification: r.classification,
+            picks: r.turn.picks,
+            consume_stats: r.turn.consume_stats,
+            instruction_hit: r.turn.instruction_hit,
+            rerank_ms: r.turn.rerank_ms,
+            total_ms: r.plan_ms,
+          },
+          ...t,
+        ]);
+        api("GET", `/sessions/${sessionId}/pool`).then((snap) => setPoolSize(snap.size)).catch(() => undefined);
+        if (r.terminal) setTerminal(r.terminal);
+      },
+      onEnded: (reason) => {
+        setVoiceStatus(`call ended (${reason})`);
+        setVoice(null);
+        if (reason.startsWith("terminal:")) {
+          const outcome = reason.split(":")[1].trim();
+          api("POST", `/sessions/${sessionId}/outcome`, { outcome }).catch(() => undefined);
+          api("POST", `/sessions/${sessionId}/end`, {}).catch(() => undefined);
+        }
+      },
+    });
+    try {
+      await call.start();
+      setVoice(call);
+    } catch (e) {
+      setError(`voice: ${e}`);
+      call.stop();
+    }
+  }, [sessionId, voice]);
+
   const endSession = useCallback(
     async (outcome: string | null) => {
       if (!sessionId) return;
+      stopVoice();
       if (outcome) await api("POST", `/sessions/${sessionId}/outcome`, { outcome }).catch(() => undefined);
       await api("POST", `/sessions/${sessionId}/end`, {}).catch(() => undefined);
       setSessionId("");
       setTerminal(null);
     },
-    [sessionId],
+    [sessionId, stopVoice],
   );
 
   const send = async () => {
@@ -137,7 +190,19 @@ export default function PlaygroundView() {
           <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="chead">
               <h3>Conversation</h3>
-              <span className="sub mono">{sessionId.slice(0, 12)}…</span>
+              {voiceStatus && <span className="chip accent"><span className="cd" />{voiceStatus}</span>}
+              <span className="sub" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {!voice ? (
+                  <button className="btn sm" title="Start a live voice call on this session" onClick={startVoice} disabled={!!terminal}>
+                    <Mic /> Voice call
+                  </button>
+                ) : (
+                  <button className="btn sm" title="Hang up" onClick={stopVoice}>
+                    <MicOff /> Hang up
+                  </button>
+                )}
+                <span className="mono" style={{ fontSize: 11 }}>{sessionId.slice(0, 10)}…</span>
+              </span>
             </div>
             <div className="cbody" style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
               <div className="chatlog" ref={logRef} style={{ maxHeight: 440, minHeight: 260 }}>
