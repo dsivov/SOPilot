@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     redis_url: str = "redis://127.0.0.1:6380/0"
 
     admin_token: str = ""
+    # Deployment key for encrypting tenant connector secrets at rest (Fernet).
+    # Empty = dev-only fallback key (a startup warning is logged).
+    secret_key: str = ""
 
     # Which subsystems new projects run by default: "sop" (prompt/instruction
     # management only, live data resolution), "retrieval" (prediction + prefetch +

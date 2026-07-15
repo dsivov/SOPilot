@@ -13,7 +13,7 @@ from ..fetchers.mcp import McpFetcher
 from ..pool import SessionPool
 from ..prefetch import PrefetchManager
 from ..supervisor import SupervisorWorker
-from . import admin, metrics, prompt_blocks, runtime, sessions, sops, voice
+from . import admin, metrics, prompt_blocks, runtime, secrets, sessions, sops, voice
 
 
 def create_app() -> FastAPI:
@@ -31,7 +31,7 @@ def create_app() -> FastAPI:
         app.state.prefetch = PrefetchManager(pool, get_sessionmaker(), embedder)
         register_fetcher("mock", MockFetcher())
         register_fetcher("rag", PgVectorRagFetcher(get_sessionmaker(), embedder))
-        register_fetcher("mcp", McpFetcher())
+        register_fetcher("mcp", McpFetcher(get_sessionmaker()))
         for kind in ("kg", "db", "api"):
             register_fetcher(kind, MockFetcher())  # real connectors land with the fetcher SDK P2 work
         # D-1 dev mode: run a supervisor consumer in-process (production runs
@@ -56,6 +56,7 @@ def create_app() -> FastAPI:
     app.include_router(prompt_blocks.router)
     app.include_router(voice.router)
     app.include_router(metrics.router)
+    app.include_router(secrets.router)
 
     @app.get("/health")
     async def health() -> dict:
