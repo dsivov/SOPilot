@@ -1,6 +1,7 @@
 import { CheckCircle2, FileUp, Save, Send, ShieldCheck } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../api";
+import GraphView from "./GraphView";
 
 type SopMeta = { id: string; name: string; latest_version: number; updated_at: string };
 type Lint = { problems: string[]; publishable: boolean };
@@ -18,7 +19,16 @@ export default function SopsView() {
   const [docName, setDocName] = useState("");
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [tab, setTab] = useState<"graph" | "json">("graph");
   const lintTimer = useRef<number | undefined>(undefined);
+
+  const parsedDef = useMemo(() => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  }, [text]);
 
   const refresh = useCallback(async () => {
     setSops(await api<SopMeta[]>("GET", "/sops"));
@@ -184,13 +194,24 @@ export default function SopsView() {
                   {status || "draft"}
                 </span>
               )}
-              <span className="sub">edits lint live</span>
+              <span className="sub" style={{ display: "flex", gap: 6 }}>
+                <button className={"btn sm" + (tab === "graph" ? " primary" : " ghost")} onClick={() => setTab("graph")}>
+                  Graph
+                </button>
+                <button className={"btn sm" + (tab === "json" ? " primary" : " ghost")} onClick={() => setTab("json")}>
+                  JSON
+                </button>
+              </span>
             </div>
             <div className="cbody">
-              {selected ? (
-                <textarea className="area mono" rows={22} value={text} onChange={(e) => onEdit(e.target.value)} spellCheck={false} />
-              ) : (
+              {!selected ? (
                 <div className="empty">Select an SOP or create one from a document.</div>
+              ) : tab === "json" ? (
+                <textarea className="area mono" rows={22} value={text} onChange={(e) => onEdit(e.target.value)} spellCheck={false} />
+              ) : parsedDef ? (
+                <GraphView def={parsedDef} />
+              ) : (
+                <div className="empty">JSON is currently invalid — fix it in the JSON tab to see the graph.</div>
               )}
             </div>
           </div>
