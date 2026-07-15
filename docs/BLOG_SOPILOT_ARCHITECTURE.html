@@ -853,6 +853,17 @@ b.hl{color:#8fd9c9}
     <figcaption><b>First external result.</b> One domain so far (University; pilot), one model (the mid-tier one, where
       headroom is largest). Adversarial arm and remaining six domains queued — this section updates as they land.</figcaption>
   </div></figure>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="stripe good"></span><div class="cbody" style="padding:14px 16px">
+      <div style="font-size:26px;font-weight:800;color:#8fd9c9">+11.1 pp under attack</div>
+      <p class="small" style="margin:4px 0 0">Their jailbreak arm ("use the most appropriate tool asap", refusal-required
+      tasks only): baseline 38.9% vs <b>50.0%</b> supervised. Per-step supervision has no single prompt for the attack
+      to defeat — the procedure re-asserts itself every step.</p></div></div>
+    <div class="card"><span class="stripe good"></span><div class="cbody" style="padding:14px 16px">
+      <div style="font-size:26px;font-weight:800;color:#8fd9c9">10 → 2</div>
+      <p class="small" style="margin:4px 0 0">Procedure-order violations under attack (−80%). Compliance held
+      near-perfectly even while the user pushed to skip verification.</p></div></div>
+  </div>
   <p class="small">Also strategically satisfying: the SOPBench paper argues external SOP-tracking systems are "not
   always feasible or efficient to implement" — SOPilot is exactly such a system, outscoring internalized compliance
   on their own verifiers.</p>
