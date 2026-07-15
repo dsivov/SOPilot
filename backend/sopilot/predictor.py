@@ -210,6 +210,68 @@ class EmpiricalTrajectoryPredictor:
         return {a: w / total for a, _, w in dist}
 
 
+async def next_state_distribution(
+    db: AsyncSession,
+    scope: Scope,
+    *,
+    sop_id: str,
+    cohort: str,
+    chosen_action: str,
+    offset: int = 1,
+    half_life_days: float | None = None,
+) -> list[tuple[str, float]]:
+    """P(user state at turn N+offset | action at turn N) from this tenant's traces —
+    the keying signal for instruction pre-generation. Cohort-conditioned first,
+    tenant-wide fallback. Returns [(state, normalized_weight)] best-first."""
+    settings = get_settings()
+    hl = settings.predictor_recency_half_life_days if half_life_days is None else half_life_days
+    decay = (
+        "exp(-(EXTRACT(EPOCH FROM (now() - p.created_at)) / 86400.0) / :half_life)" if hl > 0 else "1.0"
+    )
+
+    async def _run(with_cohort: bool) -> list[tuple[str, float]]:
+        params: dict[str, object] = {
+            "tenant_id": scope.tenant_id,
+            "project_id": scope.project_id,
+            "sop_id": sop_id,
+            "chosen_action": chosen_action,
+            "offset": offset,
+            "neutral_reward": EmpiricalTrajectoryPredictor.NEUTRAL_REWARD,
+        }
+        if hl > 0:
+            params["half_life"] = float(hl)
+        cohort_clause = ""
+        if with_cohort and cohort:
+            cohort_clause = "AND p.cohort = :cohort"
+            params["cohort"] = cohort
+        sql = text(
+            f"""
+            SELECT next_p.immediate_state,
+                   SUM(COALESCE(next_p.terminal_reward, :neutral_reward) * {decay}) AS wsum
+            FROM precedent_traces p
+            JOIN precedent_traces next_p
+              ON next_p.session_id = p.session_id
+             AND next_p.turn_index = p.turn_index + :offset
+            WHERE p.tenant_id = :tenant_id
+              AND p.project_id = :project_id
+              AND p.sop_id = :sop_id
+              AND p.action = :chosen_action
+              AND next_p.immediate_state <> ''
+              {cohort_clause}
+            GROUP BY next_p.immediate_state
+            ORDER BY wsum DESC
+            """
+        )
+        rows = (await db.execute(sql, params)).all()
+        total = sum(float(r[1] or 0.0) for r in rows) or 1.0
+        return [(r[0], float(r[1] or 0.0) / total) for r in rows]
+
+    dist = await _run(with_cohort=True)
+    if not dist:
+        dist = await _run(with_cohort=False)
+    return dist
+
+
 def build_prefetch_plan(
     predictions: list[TrajectoryPrediction],
     *,

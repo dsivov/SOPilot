@@ -114,6 +114,10 @@ async def plan_turn(
             instruction_item = await pool.lookup_instruction(
                 scope, session.id, chosen_action=chosen, classified_state=body.state
             )
+            if instruction_item is not None and instruction_item.fetch_id:
+                await request.app.state.prefetch._mark_consumed(
+                    scope, instruction_item.fetch_id, turn_index
+                )
         dep_payloads, consume_stats = await request.app.state.prefetch.consume(
             scope=scope,
             session_id=session.id,

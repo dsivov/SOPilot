@@ -98,6 +98,41 @@ async def classify_and_propose(
     }
 
 
+async def pre_generate_reply(
+    prompt_text: str,
+    history: list[dict],
+    predicted_state: str,
+    state_description: str = "",
+) -> str:
+    """Milestone B: draft the agent's next reply BEFORE the user speaks, for a
+    predicted (action, state). Runs on the speculative budget (yields to the live
+    path); a wrong prediction just ages out of the pool unused.
+    """
+    from .scheduler import speculative_slot
+
+    settings = get_settings()
+    system = (
+        "You draft the live agent's NEXT reply in advance. The customer has not spoken yet; the "
+        f"prediction is that their next message will express: {predicted_state}"
+        + (f" ({state_description})" if state_description else "")
+        + ". Write exactly the reply the agent should give in that situation — natural, 1-3 short "
+        "sentences, following the instructions below (including any MUST INCLUDE wording). Output "
+        "ONLY the reply text.\n\n"
+        + (prompt_text or "Respond helpfully and professionally.")
+    )
+    msgs: list[dict] = [{"role": "system", "content": system}]
+    for h in history[-8:]:
+        msgs.append({"role": "assistant" if h["role"] == "assistant" else "user", "content": h["content"]})
+    async with speculative_slot():
+        res = await _get_client().chat.completions.create(
+            model=settings.runtime_model,
+            messages=msgs,
+            temperature=0.5,
+            max_tokens=200,
+        )
+    return (res.choices[0].message.content or "").strip()
+
+
 async def respond(prompt_text: str, history: list[dict], user_message: str) -> str:
     """The live agent's reply from the plan-turn instruction payload (text channel)."""
     settings = get_settings()

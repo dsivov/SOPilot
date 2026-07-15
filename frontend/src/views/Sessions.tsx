@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { CircleStop, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 
@@ -57,7 +57,7 @@ export default function SessionsView() {
               <div className="tablewrap" style={{ border: 0, borderRadius: 0, maxHeight: 420 }}>
                 <table className="table">
                   <thead>
-                    <tr><th>Session</th><th>Channel</th><th>Status</th><th>Outcome</th><th>Started</th></tr>
+                    <tr><th>Session</th><th>Channel</th><th>Status</th><th>Outcome</th><th>Started</th><th></th></tr>
                   </thead>
                   <tbody>
                     {sessions.map((s) => (
@@ -73,6 +73,22 @@ export default function SessionsView() {
                           )}
                         </td>
                         <td style={{ color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>{s.started_at.slice(0, 16).replace("T", " ")}</td>
+                        <td style={{ width: 34 }}>
+                          {s.status === "active" && (
+                            <button
+                              className="btn ghost sm"
+                              title="End this session (marks it abandoned)"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await api("POST", `/sessions/${s.session_id}/outcome`, { outcome: "abandoned" }).catch(() => undefined);
+                                await api("POST", `/sessions/${s.session_id}/end`, {});
+                                await refresh();
+                              }}
+                            >
+                              <CircleStop size={14} />
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

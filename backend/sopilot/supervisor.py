@@ -138,6 +138,155 @@ class SupervisorWorker:
                 "session %s turn %d: %d speculative fetches launched",
                 event.session_id, event.turn_index, launched,
             )
+        # Milestone B: pre-draft replies for the most likely next (action, state).
+        settings = get_settings()
+        if settings.instruction_prefetch and scope.sop_enabled:
+            try:
+                await self._pregenerate_instructions(event, task_def, predictions)
+            except Exception:
+                log.exception("instruction pre-generation failed (best-effort)")
+
+    async def _pregenerate_instructions(self, event: TurnEvent, task_def, predictions) -> None:
+        """Draft verbatim replies for top (next-action, next-state) combos and pool
+        them as kind="instruction" (exact-match consumption at plan-turn). Wrong
+        guesses expire; every draft is audited like a fetch."""
+        from datetime import timedelta
+
+        from sqlalchemy import select as _select
+
+        from .models import ConversationSession, DataFetchAudit, Turn
+        from .pool import PoolItem, utcnow
+        from .predictor import next_state_distribution
+        from .runtime import assemble_stage_prompt
+
+        settings = get_settings()
+        scope = event.scope()
+        top_actions = [p for p in predictions if p.offset == 1][:2]
+        if not top_actions:
+            return
+
+        async with get_sessionmaker()() as db:
+            session_row = (
+                await db.execute(
+                    _select(ConversationSession).where(ConversationSession.id == event.session_id)
+                )
+            ).scalar_one_or_none()
+            turns = (
+                (
+                    await db.execute(
+                        _select(Turn).where(Turn.session_id == event.session_id).order_by(Turn.turn_index)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            states = await next_state_distribution(
+                db, scope, sop_id=event.sop_id, cohort=event.cohort,
+                chosen_action=event.action, offset=1,
+            )
+            combos: list[tuple[str, str, float]] = []
+            for pred in top_actions:
+                for state, weight in states[:2]:
+                    combos.append((pred.action, state, round(pred.probability * weight, 4)))
+        combos.sort(key=lambda c: -c[2])
+        combos = combos[: settings.instruction_prefetch_max_pergen]
+        if not combos:
+            return
+
+        history: list[dict] = []
+        for t in turns:
+            if t.user_message:
+                history.append({"role": "user", "content": t.user_message})
+            if t.assistant_message:
+                history.append({"role": "assistant", "content": t.assistant_message})
+        bindings = (session_row.prompt_bindings or {}) if session_row else {}
+        state_desc = {s.name: s.description for s in task_def.user_states}
+        pool_items = await self.pool.get_pool(scope, event.session_id)
+
+        from .agent import pre_generate_reply
+
+        for action_name, state, confidence in combos:
+            # already have a live draft for this exact pair? skip
+            if any(
+                p.kind == "instruction" and p.source_action == action_name and p.predicted_user_state == state
+                for p in pool_items
+            ):
+                continue
+            action_obj = next((a for a in task_def.agent_actions if a.name == action_name), None)
+            if action_obj is None:
+                continue
+            stage_blocks = [bindings[n]["content"] for n in (action_obj.prompt_blocks or []) if n in bindings]
+            # POC Fix A: bake the pool's relevant data into the draft so a hit
+            # doesn't orphan the data path.
+            deps = set(action_obj.data_dependencies or [])
+            data_ctx = {
+                p.dependency_name: p.payload_summary
+                for p in pool_items
+                if p.kind == "data" and (p.dependency_name in deps or p.source_action == action_name)
+            }
+            prompt_text = assemble_stage_prompt(
+                task_def, action_name, dep_payloads=data_ctx or None, stage_blocks=stage_blocks
+            )
+            try:
+                draft = await pre_generate_reply(prompt_text, history, state, state_desc.get(state, ""))
+            except Exception:
+                log.exception("pre-generation call failed for (%s, %s)", action_name, state)
+                continue
+            if not draft:
+                continue
+            now = utcnow()
+            fetch_id = ""
+            try:
+                async with get_sessionmaker()() as db:
+                    row = DataFetchAudit(
+                        tenant_id=scope.tenant_id,
+                        project_id=scope.project_id,
+                        session_id=event.session_id,
+                        dependency_name=f"instruction:{action_name}",
+                        action_name=action_name,
+                        kind="instruction",
+                        speculative=True,
+                        predictor_source="pregen",
+                        confidence=confidence,
+                        issued_at_turn=event.turn_index,
+                        predicted_turn=event.turn_index + 1,
+                        started_at=now,
+                        completed_at=now,
+                        payload_summary=draft[:500],
+                    )
+                    db.add(row)
+                    await db.commit()
+                    fetch_id = row.id
+            except Exception:
+                log.exception("instruction audit write failed (draft continues)")
+            summary_emb = None
+            try:
+                summary_emb = await self.embedder.embed(draft[:200])
+            except Exception:
+                summary_emb = None
+            await self.pool.insert(
+                scope,
+                event.session_id,
+                PoolItem(
+                    fetch_id=fetch_id,
+                    fetched_at=now,
+                    expires_at=now + timedelta(seconds=settings.instruction_ttl_s),
+                    dependency_name=f"instruction:{action_name}",
+                    source_action=action_name,
+                    payload=draft,
+                    payload_summary=draft[:200],
+                    confidence=confidence,
+                    predictor_source="pregen",
+                    predicted_user_state=state,
+                    kind="instruction",
+                    instr_data_count=len(data_ctx),
+                    summary_embedding=summary_emb,
+                ),
+            )
+            log.info(
+                "session %s: pre-drafted reply for (%s, %s) conf=%.3f data=%d",
+                event.session_id, action_name, state, confidence, len(data_ctx),
+            )
 
     async def _load_sop(self, event: TurnEvent) -> TaskDefinition | None:
         key = (event.sop_id, event.sop_version)

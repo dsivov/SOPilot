@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     pool_max_items: int = 30
     session_ttl_s: int = 7200
 
+    # Milestone B: instruction pre-generation (the pre-committed-criteria bet:
+    # ship-claim requires hit>=70% + no success regression; audit rows measure it).
+    instruction_prefetch: bool = True
+    instruction_prefetch_max_pergen: int = 3  # (action,state) drafts per turn event
+    instruction_ttl_s: int = 180
+
     # Empirical predictor defaults (locked config from the research).
     predictor_recency_half_life_days: float = 30.0
     predictor_shrinkage_kappa: float = 2.0
