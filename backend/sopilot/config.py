@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     pool_max_items: int = 30
     session_ttl_s: int = 7200
 
+    # Per-tenant turn-rate quota (fixed one-minute window, Redis-counted).
+    # 0 disables. One tenant's burst must not starve another's supervisor lane.
+    quota_turns_per_min: int = 120
+
     # Milestone B: instruction pre-generation (the pre-committed-criteria bet:
     # ship-claim requires hit>=70% + no success regression; audit rows measure it).
     instruction_prefetch: bool = True

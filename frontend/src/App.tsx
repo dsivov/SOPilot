@@ -169,6 +169,14 @@ export default function App() {
   const [dark, setDark] = useState(document.documentElement.classList.contains("dark"));
   const [connected, setConnected] = useState(Boolean(getCreds().key && getCreds().project));
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [tenantSlug, setTenantSlug] = useState("");
+
+  useEffect(() => {
+    if (!connected) return;
+    api<{ tenant_slug: string }>("GET", "/admin/whoami")
+      .then((w) => setTenantSlug(w.tenant_slug))
+      .catch(() => setTenantSlug(""));
+  }, [connected]);
 
   useEffect(() => {
     const onAuthFail = () => setConnected(false); // stale/typo'd key → back to Connect with the error visible
@@ -235,7 +243,7 @@ export default function App() {
           <div className="foot">
             <div className="avatar">{project.slice(0, 2).toUpperCase()}</div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{project}</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{tenantSlug ? `${tenantSlug} · ${project}` : project}</div>
               <button
                 className="btn ghost sm"
                 style={{ padding: 0, fontSize: 11.5 }}
@@ -253,7 +261,7 @@ export default function App() {
           <header className="topbar">
             <button className="ctx" title="Switch project" style={{ cursor: "pointer" }} onClick={() => setSwitcherOpen(true)}>
               <span className="dot" />
-              {project} ▾
+              {tenantSlug ? `${tenantSlug} · ${project}` : project} ▾
             </button>
             <div style={{ flex: 1 }} />
             <button className="iconbtn" title="Toggle theme" onClick={toggleTheme}>

@@ -161,6 +161,19 @@ class SessionPool:
     async def clear(self, scope: Scope, session_id: str) -> None:
         await self.redis.delete(self._key(scope, session_id))
 
+    # ----- per-tenant turn quota (fixed 1-minute window) -----
+
+    async def count_turn(self, scope: Scope) -> int:
+        """Increment and return this tenant's turn count for the current minute."""
+        import time as _time
+
+        minute = int(_time.time() // 60)
+        key = f"sop:{scope.tenant_id}:quota:turns:{minute}"
+        n = await self.redis.incr(key)
+        if n == 1:
+            await self.redis.expire(key, 120)
+        return int(n)
+
     # ----- in-flight dedup markers (cross-worker) -----
 
     def _inflight_key(self, scope: Scope, session_id: str, fetch_key: str) -> str:

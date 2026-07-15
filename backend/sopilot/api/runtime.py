@@ -64,6 +64,17 @@ async def plan_turn(
     session = await _get_session(db, scope, session_id)
     if session.status != "active":
         raise HTTPException(status_code=409, detail="session has ended")
+    from ..config import get_settings as _gs
+
+    limit = _gs().quota_turns_per_min
+    if limit > 0 and not getattr(request.state, "quota_counted", False):
+        request.state.quota_counted = True  # converse/voice call through here once
+        n = await request.app.state.pool.count_turn(scope)
+        if n > limit:
+            raise HTTPException(
+                status_code=429,
+                detail=f"tenant turn quota exceeded ({limit}/min) — retry shortly",
+            )
     version = (
         await db.execute(
             select(SopVersion).where(
@@ -257,6 +268,17 @@ async def converse(
     session = await _get_session(db, scope, session_id)
     if session.status != "active":
         raise HTTPException(status_code=409, detail="session has ended")
+    from ..config import get_settings as _gs
+
+    limit = _gs().quota_turns_per_min
+    if limit > 0 and not getattr(request.state, "quota_counted", False):
+        request.state.quota_counted = True  # converse/voice call through here once
+        n = await request.app.state.pool.count_turn(scope)
+        if n > limit:
+            raise HTTPException(
+                status_code=429,
+                detail=f"tenant turn quota exceeded ({limit}/min) — retry shortly",
+            )
     version = (
         await db.execute(
             select(SopVersion).where(

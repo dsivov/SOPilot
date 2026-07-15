@@ -90,3 +90,11 @@ async def test_clear(pool, scope_a):
     await pool.insert(scope_a, "sess1", make_item("dep1", 0.5))
     await pool.clear(scope_a, "sess1")
     assert await pool.get_pool(scope_a, "sess1") == []
+
+
+async def test_turn_quota_counter(pool, scope_a, scope_b):
+    assert await pool.count_turn(scope_a) == 1
+    assert await pool.count_turn(scope_a) == 2
+    assert await pool.count_turn(scope_a) == 3
+    # tenant isolation: B's counter is independent
+    assert await pool.count_turn(scope_b) == 1
