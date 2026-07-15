@@ -19,6 +19,8 @@ type Trace = {
 export default function PlaygroundView() {
   const [sops, setSops] = useState<SopMeta[]>([]);
   const [sopId, setSopId] = useState("");
+  const [mode, setMode] = useState("");
+  const [sessionMode, setSessionMode] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [traces, setTraces] = useState<Trace[]>([]);
@@ -41,8 +43,9 @@ export default function PlaygroundView() {
   const start = useCallback(async () => {
     setError("");
     try {
-      const r = await api("POST", "/sessions", { sop_id: sopId });
+      const r = await api("POST", "/sessions", { sop_id: sopId, subsystems: mode });
       setSessionId(r.session_id);
+      setSessionMode(mode);
       setMsgs([]);
       setTraces([]);
       setTerminal(null);
@@ -179,6 +182,12 @@ export default function PlaygroundView() {
                 <option key={s.id} value={s.id}>{s.name} (v{s.latest_version})</option>
               ))}
             </select>
+            <select className="qinput" value={mode} onChange={(e) => setMode(e.target.value)} style={{ flex: "none" }} title="Which subsystems run for this session (D-9)">
+              <option value="">subsystems: project default</option>
+              <option value="both">both — SOP management + predicted retrieval</option>
+              <option value="sop">sop only — prompts/tracking, live data, no speculation</option>
+              <option value="retrieval">retrieval only — prediction + context block, no prompt management</option>
+            </select>
             {error && <span className="chip crit" style={{ whiteSpace: "normal" }}><span className="cd" />{error}</span>}
             <button className="btn primary" disabled={!sopId} onClick={start}>
               <MessageSquarePlus /> Start session
@@ -238,6 +247,7 @@ export default function PlaygroundView() {
             <div className="card">
               <div className="chead">
                 <h3>Supervisor X-ray</h3>
+                {sessionMode && <span className="chip comm"><span className="cd" />{sessionMode} mode</span>}
                 <span className="sub num">pool: {poolSize} items</span>
               </div>
               <div className="cbody">

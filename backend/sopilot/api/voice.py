@@ -190,7 +190,7 @@ async def voice_turn(
     )
     # Voice instruction: the plan payload plus voice-specific delivery rules.
     instructions = (
-        (plan["prompt_text"] or "Respond helpfully and professionally.")
+        (plan["prompt_text"] or plan["context_block"] or "Respond helpfully and professionally.")
         + "\n\nDELIVERY: You are speaking on a live phone call. Reply in 1-3 short natural sentences. "
         "Do not read lists or headings aloud; weave the facts into speech."
     )

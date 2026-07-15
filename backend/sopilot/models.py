@@ -163,6 +163,8 @@ class ConversationSession(Base):
     sop_version: Mapped[int] = mapped_column(Integer, default=0)
     channel: Mapped[str] = mapped_column(String(32), default="text")  # text | realtime_voice | bench
     status: Mapped[str] = mapped_column(String(16), default="active")  # active | ended
+    # D-9 per-session override: "sop" | "retrieval" | "both" | "" (project default).
+    subsystems_override: Mapped[str] = mapped_column(String(16), default="")
     # D-7: prompt-block bindings snapshotted at session start —
     # {block_name: {"version": int, "content": str}}. A mid-conversation block
     # publish never lands mid-call.

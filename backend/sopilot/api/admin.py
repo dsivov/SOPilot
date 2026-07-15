@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pydantic import BaseModel
+
 from ..config import get_settings
 from ..db import get_db
 from ..models import ApiKey, Project, Tenant
@@ -55,6 +57,29 @@ async def create_project(
     db.add(project)
     await db.commit()
     return {"project_id": project.id, "slug": project.slug, "subsystems": project.subsystems or "default"}
+
+
+class ProjectUpdateRequest(BaseModel):
+    subsystems: str
+
+
+@router.patch("/projects/{slug}")
+async def update_project(
+    slug: str,
+    req: ProjectUpdateRequest,
+    tenant: Tenant = Depends(resolve_tenant),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    if req.subsystems not in ("", *VALID_SUBSYSTEMS):
+        raise HTTPException(status_code=422, detail=f"subsystems must be one of {VALID_SUBSYSTEMS} or ''")
+    project = (
+        await db.execute(select(Project).where(Project.tenant_id == tenant.id, Project.slug == slug))
+    ).scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"project '{slug}' not found")
+    project.subsystems = req.subsystems
+    await db.commit()
+    return {"slug": slug, "subsystems": project.subsystems or "default"}
 
 
 @router.get("/whoami")

@@ -64,6 +64,10 @@ async def plan_turn(
     session = await _get_session(db, scope, session_id)
     if session.status != "active":
         raise HTTPException(status_code=409, detail="session has ended")
+    if session.subsystems_override:
+        from dataclasses import replace as _replace
+
+        scope = _replace(scope, subsystems=session.subsystems_override)
     from ..config import get_settings as _gs
 
     limit = _gs().quota_turns_per_min
@@ -268,6 +272,10 @@ async def converse(
     session = await _get_session(db, scope, session_id)
     if session.status != "active":
         raise HTTPException(status_code=409, detail="session has ended")
+    if session.subsystems_override:
+        from dataclasses import replace as _replace
+
+        scope = _replace(scope, subsystems=session.subsystems_override)
     from ..config import get_settings as _gs
 
     limit = _gs().quota_turns_per_min
@@ -337,8 +345,9 @@ async def converse(
         db,
     )
 
+    payload_for_agent = plan["prompt_text"] or plan["context_block"]
     reply = plan["prompt_text"] if plan["instruction_hit"] else await respond(
-        plan["prompt_text"], history, body.user_message
+        payload_for_agent, history, body.user_message
     )
     await db.execute(
         update(Turn)

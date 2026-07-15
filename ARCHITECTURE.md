@@ -232,7 +232,7 @@ sessions/turns per tenant contract.
 | D-6 | Lint is a publish blocker (structural → semantic over time) | credit-card SOP post-mortem |
 | D-7 | Prompt blocks versioned separately from SOPs; bindings pinned at session start | governance requirement |
 | D-8 | Pondering behind a flag, off by default, pause-aware | mistested at zero-pause (86% with think-time) |
-| D-9 | Per-project subsystem modes: `sop` \| `retrieval` \| `both` (`projects.subsystems`, deployment default `SOPILOT_SUBSYSTEMS`) | customers can buy either half alone; `sop` = prompt/instruction management with live data resolution (no speculation, no pool); `retrieval` = prediction + prefetch + context selection only (customer owns prompting); position tracking always on — both halves key off it |
+| D-9 | Subsystem modes `sop` \| `retrieval` \| `both` at THREE levels: deployment default (`SOPILOT_SUBSYSTEMS`) → project (`projects.subsystems`, editable via `PATCH /admin/projects/{slug}`) → **session override** (`POST /sessions {subsystems}`, wins when set; also a Playground selector) | customers can buy either half alone AND A/B per session; `sop` = prompt/instruction management with live data resolution (no speculation, no pool); `retrieval` = prediction + prefetch + context selection only (customer owns prompting — converse/voice fall back to serving the context block as the payload); position tracking always on — both halves key off it |
 
 Conventions: online migrations follow **expand → migrate → contract** (never
 destructive in one step); embedding model changes require corpus re-embed (vector
@@ -248,12 +248,17 @@ search breaks silently otherwise).
   XAUTOCLAIM; poison events are logged + dropped — live fallback covers them).
 - **Dev single-process:** `SOPILOT_EMBEDDED_SUPERVISOR=true` runs one consumer
   inside the API process. Same code path, same stream.
-- **Subsystem modes (D-9):** per project via
-  `POST /admin/projects {"slug": ..., "subsystems": "sop"|"retrieval"|"both"}`;
-  empty = deployment default (`SOPILOT_SUBSYSTEMS`, default `both`). Gating:
-  plan-turn assembles the stage prompt only when SOP management is on, returns
-  the speculative context block only when retrieval is on; the supervisor skips
-  prediction/prefetch for `sop`-mode projects (events still flow for audit).
+- **Subsystem modes (D-9):** three levels, most specific wins —
+  1. deployment default `SOPILOT_SUBSYSTEMS` (default `both`);
+  2. project: `POST /admin/projects {"subsystems": ...}` at creation, or
+     `PATCH /admin/projects/{slug} {"subsystems": "sop"|"retrieval"|"both"|""}`;
+  3. session: `POST /sessions {"sop_id": ..., "subsystems": "sop"}` overrides
+     for that session only (exposed in the Playground's start card; the
+     effective mode shows in session lists and the X-ray chip).
+  Gating: plan-turn assembles the stage prompt only when SOP management is on,
+  returns the speculative context block only when retrieval is on; the
+  supervisor skips prediction/prefetch when retrieval is off (events still
+  flow for audit).
 - **E2E check:** `scripts/e2e_check.py` (train precedents → supervisor prefetch →
   speculative consume; verifies all three modes over HTTP).
 

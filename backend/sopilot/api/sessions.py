@@ -53,6 +53,7 @@ async def list_sessions(
             "sop_id": s.sop_id,
             "sop_version": s.sop_version,
             "channel": s.channel,
+            "subsystems": s.subsystems_override or scope.subsystems,
             "status": s.status,
             "terminal_outcome": s.terminal_outcome,
             "started_at": s.started_at.isoformat(),
@@ -104,6 +105,7 @@ async def start_session(
         sop_id=sop.id,
         sop_version=version.version,
         channel=req.channel,
+        subsystems_override=req.subsystems,
         prompt_bindings=bindings or None,
     )
     db.add(session)

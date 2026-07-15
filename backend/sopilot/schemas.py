@@ -127,6 +127,8 @@ class SopMeta(BaseModel):
 class SessionStartRequest(BaseModel):
     sop_id: str
     channel: Literal["text", "realtime_voice", "bench"] = "text"
+    # D-9 override for THIS session only; empty = project default.
+    subsystems: Literal["", "sop", "retrieval", "both"] = ""
 
 
 class SessionStartResponse(BaseModel):

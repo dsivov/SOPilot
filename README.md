@@ -28,10 +28,13 @@ SOPILOT_EMBEDDED_SUPERVISOR=true .venv/bin/uvicorn sopilot.api.app:app --port 81
 .venv/bin/sopilot-supervisor
 ```
 
-Subsystem modes (D-9): create a project with
-`{"slug": "x", "subsystems": "sop"|"retrieval"|"both"}` — `sop` = prompt and
-instruction management with live data resolution; `retrieval` = prediction +
-prefetch + per-turn context block only; `both` (default) = full system.
+Subsystem modes (D-9), most specific wins: deployment default
+(`SOPILOT_SUBSYSTEMS`) → project (`POST /admin/projects {"subsystems": ...}`,
+change later with `PATCH /admin/projects/{slug}`) → per-session override
+(`POST /sessions {"sop_id": ..., "subsystems": "sop"}`; also a selector in the
+Playground). `sop` = prompt/instruction management with live data resolution;
+`retrieval` = prediction + prefetch + per-turn context block only (no prompt
+management); `both` (default) = full system.
 End-to-end check: `.venv/bin/python ../scripts/e2e_check.py` (needs the API up).
 
 ## Studio UI (P1)
