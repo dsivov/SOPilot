@@ -37,8 +37,10 @@ INGEST_SYSTEM = (
     "supports — do not invent policy. Return ONE JSON object: a complete TaskDefinition.\n"
     + _SCHEMA_GUIDE
     + "\nGuidelines: 5-12 agent_actions covering the procedure's stages; user_states for the "
-    "customer situations the procedure branches on, including at least one success and one "
-    "failure terminal (listed in success_markers/failure_markers); ordering edges for mandatory "
+    "customer situations the procedure branches on — INCLUDE INTERMEDIATE states the conversation "
+    "passes through (identity verified, choosing options, disputing, hardship, frustrated) and not "
+    "only endings; plus at least one success and one failure terminal (listed in "
+    "success_markers/failure_markers); ordering edges for mandatory "
     "sequence (e.g. identity verification before account discussion); trigger edges for "
     "conditional stages (objection handling, escalation, polite close); data_dependencies for "
     "every external lookup the document implies (account data, price tables, availability), "

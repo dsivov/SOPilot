@@ -1,4 +1,4 @@
-import { CheckCircle2, FileUp, Save, Send, ShieldCheck } from "lucide-react";
+import { CheckCircle2, FileUp, Save, Send, ShieldCheck, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, apiUpload } from "../api";
 import GraphView from "./GraphView";
@@ -175,7 +175,7 @@ export default function SopsView() {
                 <div className="tablewrap" style={{ border: 0, borderRadius: 0, maxHeight: 180 }}>
                   <table className="table">
                     <thead>
-                      <tr><th>Name</th><th>Version</th><th>Updated</th></tr>
+                      <tr><th>Name</th><th>Version</th><th>Updated</th><th></th></tr>
                     </thead>
                     <tbody>
                       {sops.map((s) => (
@@ -183,6 +183,26 @@ export default function SopsView() {
                           <td style={{ fontWeight: 600 }}>{s.name}</td>
                           <td className="mono num">v{s.latest_version}</td>
                           <td style={{ color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>{s.updated_at.slice(0, 16).replace("T", " ")}</td>
+                          <td style={{ width: 34 }}>
+                            <button
+                              className="btn ghost sm"
+                              title={`Delete ${s.name}`}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!window.confirm(`Delete SOP “${s.name}” and all its versions? This cannot be undone.`)) return;
+                                await api("DELETE", `/sops/${s.id}`);
+                                if (selected?.id === s.id) {
+                                  setSelected(null);
+                                  setText("");
+                                  setLint(null);
+                                  setSource(null);
+                                }
+                                await refresh();
+                              }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -228,7 +248,7 @@ export default function SopsView() {
                   <textarea className="area mono" rows={20} value={source.text} readOnly spellCheck={false} />
                 </div>
               ) : parsedDef ? (
-                <GraphView def={parsedDef} />
+                <GraphView def={parsedDef} sopId={selected.id} />
               ) : (
                 <div className="empty">JSON is currently invalid — fix it in the JSON tab to see the graph.</div>
               )}

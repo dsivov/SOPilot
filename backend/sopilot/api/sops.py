@@ -184,6 +184,16 @@ async def list_sops(scope: Scope = Depends(resolve_scope), db: AsyncSession = De
     ]
 
 
+@router.delete("/{sop_id}")
+async def delete_sop(
+    sop_id: str, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
+) -> dict:
+    sop = await _get_sop(db, scope, sop_id)
+    await db.delete(sop)  # versions cascade via FK
+    await db.commit()
+    return {"deleted": sop_id}
+
+
 @router.get("/{sop_id}")
 async def get_sop(
     sop_id: str, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)

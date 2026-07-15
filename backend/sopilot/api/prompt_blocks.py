@@ -122,6 +122,16 @@ async def get_block(
     }
 
 
+@router.delete("/{name}")
+async def delete_block(
+    name: str, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
+) -> dict:
+    block = await _get_block(db, scope, name)
+    await db.delete(block)  # versions cascade; running sessions keep their pinned copies
+    await db.commit()
+    return {"deleted": name}
+
+
 @router.post("/{name}/publish")
 async def publish_block(
     name: str, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)

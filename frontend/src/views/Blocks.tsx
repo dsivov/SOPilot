@@ -1,4 +1,4 @@
-import { BadgeCheck, Save } from "lucide-react";
+import { BadgeCheck, Save, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 
@@ -63,7 +63,7 @@ export default function BlocksView() {
               <div className="tablewrap" style={{ border: 0, borderRadius: 0 }}>
                 <table className="table">
                   <thead>
-                    <tr><th>Name</th><th>Kind</th><th>Version</th><th>Status</th></tr>
+                    <tr><th>Name</th><th>Kind</th><th>Version</th><th>Status</th><th></th></tr>
                   </thead>
                   <tbody>
                     {blocks.map((b) => (
@@ -75,6 +75,21 @@ export default function BlocksView() {
                           <span className={"st " + (b.latest_status === "published" ? "good" : "warn")}>
                             {b.latest_status}
                           </span>
+                        </td>
+                        <td style={{ width: 34 }}>
+                          <button
+                            className="btn ghost sm"
+                            title={`Delete ${b.name}`}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!window.confirm(`Delete prompt block “${b.name}”? SOPs binding it will fail their next publish until rebound.`)) return;
+                              await api("DELETE", `/prompt-blocks/${encodeURIComponent(b.name)}`);
+                              if (name === b.name) { setName(""); setContent(""); }
+                              await refresh();
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </td>
                       </tr>
                     ))}

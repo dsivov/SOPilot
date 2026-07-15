@@ -1,11 +1,12 @@
-import { Blocks, FileText, Headphones, Moon, Sun } from "lucide-react";
+import { Blocks, FileText, Headphones, MessagesSquare, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, ApiError, clearCreds, getCreds, setCreds } from "./api";
 import SopsView from "./views/Sops";
 import BlocksView from "./views/Blocks";
 import SessionsView from "./views/Sessions";
+import PlaygroundView from "./views/Playground";
 
-type ViewId = "sops" | "blocks" | "sessions";
+type ViewId = "sops" | "blocks" | "playground" | "sessions";
 
 function BrandMark() {
   // four token-colored dots joined by line2 edges (per the design guide §11)
@@ -104,7 +105,10 @@ export default function App() {
     },
     {
       grp: "Operations",
-      items: [{ id: "sessions", label: "Sessions", icon: <Headphones /> }],
+      items: [
+        { id: "playground", label: "Playground", icon: <MessagesSquare /> },
+        { id: "sessions", label: "Sessions", icon: <Headphones /> },
+      ],
     },
   ];
 
@@ -167,6 +171,7 @@ export default function App() {
           <div className="content">
             {view === "sops" && <SopsView />}
             {view === "blocks" && <BlocksView />}
+            {view === "playground" && <PlaygroundView />}
             {view === "sessions" && <SessionsView />}
           </div>
         </div>

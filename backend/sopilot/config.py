@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     embedding_dim: int = 1536
     # Authoring-time model (SOP ingestion + conversational builder). Never on the turn path.
     builder_model: str = "gpt-4o"
+    # Runtime classify/respond model for the TEXT channel. Strong by default — the
+    # research (and our bench rerun) showed cheap classify models collapsing success.
+    runtime_model: str = "gpt-4o"
 
     # PASTE-style scheduler: max concurrent speculative LLM calls per worker.
     speculative_budget: int = 4

@@ -225,6 +225,100 @@ async def plan_turn(
     }
 
 
+class ConverseRequest(BaseModel):
+    user_message: str
+
+
+@router.post("/{session_id}/converse")
+async def converse(
+    session_id: str,
+    body: ConverseRequest,
+    request: Request,
+    scope: Scope = Depends(resolve_scope),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Full text-channel turn: classify+propose (one strong-model call) →
+    plan-turn (pool, prompts, event) → respond from the instruction payload.
+    The voice channel reuses everything except the respond step."""
+    import time as _time
+
+    from ..agent import classify_and_propose, respond
+    from ..sop_graph import SOPGraph
+
+    t0 = _time.perf_counter()
+    session = await _get_session(db, scope, session_id)
+    if session.status != "active":
+        raise HTTPException(status_code=409, detail="session has ended")
+    version = (
+        await db.execute(
+            select(SopVersion).where(
+                SopVersion.sop_id == session.sop_id, SopVersion.version == session.sop_version
+            )
+        )
+    ).scalar_one()
+    task_def = TaskDefinition.model_validate(version.definition)
+    graph = SOPGraph(task_def)
+
+    prior_turns = (
+        (await db.execute(select(Turn).where(Turn.session_id == session.id).order_by(Turn.turn_index)))
+        .scalars()
+        .all()
+    )
+    history: list[dict] = []
+    for t in prior_turns:
+        if t.user_message:
+            history.append({"role": "user", "content": t.user_message})
+        if t.assistant_message:
+            history.append({"role": "assistant", "content": t.assistant_message})
+
+    visited = graph.visited_from_history(
+        [{"action": t.action} for t in prior_turns], [t.state for t in prior_turns if t.state]
+    )
+    allowed = graph.allowed_actions(visited)
+    proposal = await classify_and_propose(
+        task_def, history, body.user_message, allowed,
+        prior_cohort=prior_turns[-1].cohort if prior_turns else "",
+    )
+
+    plan = await plan_turn(
+        session_id,
+        PlanTurnRequest(
+            user_message=body.user_message,
+            cohort=proposal["cohort"],
+            mood=proposal["mood"],
+            state=proposal["state"],
+            action=proposal["action"] or None,
+        ),
+        request,
+        scope,
+        db,
+    )
+
+    reply = plan["prompt_text"] if plan["instruction_hit"] else await respond(
+        plan["prompt_text"], history, body.user_message
+    )
+    await db.execute(
+        update(Turn)
+        .where(Turn.session_id == session.id, Turn.turn_index == plan["turn_index"])
+        .values(assistant_message=reply, duration_ms=int((_time.perf_counter() - t0) * 1000))
+    )
+    await db.commit()
+
+    cp = task_def.conversation_profile
+    terminal = (
+        "success" if proposal["state"] in set(cp.success_markers)
+        else "failure" if proposal["state"] in set(cp.failure_markers)
+        else None
+    )
+    return {
+        "reply": reply,
+        "terminal": terminal,
+        "classification": proposal,
+        "turn": plan,
+        "total_ms": int((_time.perf_counter() - t0) * 1000),
+    }
+
+
 @router.post("/{session_id}/outcome")
 async def record_outcome(
     session_id: str,

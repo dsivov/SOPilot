@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/api.ts","./src/main.tsx","./src/views/Blocks.tsx","./src/views/GraphView.tsx","./src/views/Sessions.tsx","./src/views/Sops.tsx"],"version":"5.9.3"}
+{"root":["./src/App.tsx","./src/api.ts","./src/main.tsx","./src/views/Blocks.tsx","./src/views/GraphView.tsx","./src/views/Playground.tsx","./src/views/Sessions.tsx","./src/views/Sops.tsx"],"version":"5.9.3"}

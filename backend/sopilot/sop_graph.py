@@ -94,8 +94,16 @@ class SOPGraph:
                     frontier = True
         for a in sorted(self.action_names - reachable):
             problems.append(f"action '{a}' unreachable (unsatisfiable ordering prereqs)")
-        # Terminal markers must be declared user states.
+        # Terminal markers must be declared user states — and the vocabulary must
+        # contain non-terminal states, or per-turn tracking degenerates (the
+        # classifier can only ever pick conversation-enders).
         cp = self.task.conversation_profile
+        markers = set(cp.success_markers) | set(cp.failure_markers)
+        if markers and self.state_names and self.state_names <= markers:
+            problems.append(
+                "all user_states are terminal markers — add intermediate states "
+                "(e.g. identity verified, choosing, objecting) for turn tracking"
+            )
         for marker in list(cp.success_markers) + list(cp.failure_markers):
             if marker not in self.state_names:
                 problems.append(f"terminal marker '{marker}' is not a declared user_state")
