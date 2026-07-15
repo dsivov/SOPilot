@@ -107,6 +107,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#data">Data architecture</a></li>
     <li><a href="#tenancy">Tenancy &amp; security</a></li>
     <li><a href="#slis">How we measure success</a></li>
+    <li><a href="#results">First measurements</a></li>
     <li><a href="#phases">Phase plan &amp; open risks</a></li>
     <li><a href="#decisions">Decision log</a></li>
   </ol>
@@ -664,6 +665,98 @@ b.hl{color:#8fd9c9}
   tables.</p>
 </section>
 
+<!-- 9b -->
+<section id="results">
+  <div class="kicker">First results</div>
+  <h2>The first measurements, in plain words</h2>
+  <p class="lead-p">The platform is no longer a plan — we replayed <b>33 full simulated customer calls</b> against the
+  built system (research-grade harness: an AI plays the customer, another plays the agent, the platform supervises in
+  between). The question that matters: <i>when the agent needed a piece of customer data, was it already waiting?</i></p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 236" role="img" aria-label="Bar chart: share of data lookups ready before needed — prototype 91%, platform first run 90.7%, platform after learning 96.3%, against a 70% commitment line">
+      <style>
+        .axl{fill:#7b8499;font:10.5px "Segoe UI",sans-serif;text-anchor:middle}
+        .cat{fill:#aab3c5;font:12px "Segoe UI",sans-serif}
+        .catsub{fill:#7b8499;font:10px "Segoe UI",sans-serif}
+        .val{fill:#e7ebf3;font:12.5px "Segoe UI",sans-serif;font-weight:700;font-variant-numeric:tabular-nums}
+        .grid{stroke:#2c3346;stroke-width:1}
+        .ref{stroke:#f0a73c;stroke-width:1.5;stroke-dasharray:5 4}
+        .refl{fill:#ffce86;font:10.5px "Segoe UI",sans-serif}
+        .ttl{fill:#e7ebf3;font:13px "Segoe UI",sans-serif;font-weight:700}
+      </style>
+      <text class="ttl" x="16" y="22">Customer data ready before it was needed — share of all lookups</text>
+      <!-- grid -->
+      <line class="grid" x1="210" y1="44" x2="210" y2="188"/>
+      <line class="grid" x1="330" y1="44" x2="330" y2="188"/>
+      <line class="grid" x1="450" y1="44" x2="450" y2="188"/>
+      <line class="grid" x1="570" y1="44" x2="570" y2="188"/>
+      <line class="grid" x1="690" y1="44" x2="690" y2="188"/>
+      <text class="axl" x="210" y="204">0%</text><text class="axl" x="330" y="204">25%</text>
+      <text class="axl" x="450" y="204">50%</text><text class="axl" x="570" y="204">75%</text>
+      <text class="axl" x="690" y="204">100%</text>
+      <!-- commitment reference -->
+      <line class="ref" x1="546" y1="40" x2="546" y2="188"/>
+      <text class="refl" x="466" y="36">our commitment: ≥ 70%</text>
+      <!-- bars (teal #14a087; prototype = outline reference) -->
+      <g>
+        <title>Research prototype (reference): 91% of lookups pre-staged</title>
+        <text class="cat" x="16" y="66">Research prototype</text>
+        <text class="catsub" x="16" y="79">(reference result)</text>
+        <path d="M210,58 h432.8 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-432.8 z"
+              fill="none" stroke="#14a087" stroke-width="1.6"/>
+        <text class="val" x="655" y="73">91%</text>
+      </g>
+      <g>
+        <title>This platform, first 20 calls (little history to learn from): 90.7%</title>
+        <text class="cat" x="16" y="112">This platform — first calls</text>
+        <text class="catsub" x="16" y="125">(almost no history yet)</text>
+        <path d="M210,104 h431.4 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-431.4 z" fill="#14a087"/>
+        <text class="val" x="653" y="119">90.7%</text>
+      </g>
+      <g>
+        <title>This platform after learning from 23 prior calls: 96.3%</title>
+        <text class="cat" x="16" y="158">This platform — after learning</text>
+        <text class="catsub" x="16" y="171">(23 calls of history)</text>
+        <path d="M210,150 h458.2 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-458.2 z" fill="#14a087"/>
+        <text class="val" x="662" y="165" text-anchor="end" style="fill:#0f1117;font-weight:800">96.3%</text>
+      </g>
+      <text class="catsub" x="16" y="226">Source: bench/BENCH_P0_PARITY.md — 33 sessions, car-insurance renewal SOP, live supervisor and pool.</text>
+    </svg>
+    <figcaption><b>The core promise, measured.</b> We committed to 70%; the platform delivered 90.7% with almost no
+      history and 96.3% once it had 23 calls to learn from — matching, then beating, the research prototype. The gain
+      from "first calls" to "after learning" is the system doing what it's designed to do: every conversation makes
+      the next one better prepared.</figcaption>
+  </div></figure>
+
+  <div class="grid g2" style="margin:18px 0">
+    <div class="card"><div style="font-size:30px;font-weight:800;color:#8fd9c9">~36 s</div>
+      <p class="small" style="margin-top:4px"><b>of lookup waiting removed per call.</b> Database and document
+      lookups that would have played out as silence in the caller's ear ran in the background instead — the caller
+      felt none of it.</p></div>
+    <div class="card"><div style="font-size:30px;font-weight:800;color:#8fd9c9">0.23 s</div>
+      <p class="small" style="margin-top:4px"><b>median cost of choosing what to say next.</b> The on-path work —
+      picking the best pre-staged material for this exact moment — stays around a quarter of a second.</p></div>
+    <div class="card"><div style="font-size:30px;font-weight:800;color:#8fd9c9">9.3% → 3.7%</div>
+      <p class="small" style="margin-top:4px"><b>lookups the caller actually had to wait for</b> — cut by more than
+      half between the first batch and the warmed-up batch, purely from accumulated history. No code changed between
+      the two runs.</p></div>
+    <div class="card"><div style="font-size:30px;font-weight:800;color:#8fd9c9">2 bugs</div>
+      <p class="small" style="margin-top:4px"><b>found by the benchmark, both fixed same-day</b> — including proof
+      that the system degrades gracefully: with its similarity engine accidentally disabled, it quietly fell back to
+      a simpler ordering and kept every call running.</p></div>
+  </div>
+
+  <div class="callout caveat"><div class="clabel">◆ What is not green yet — said plainly</div>
+    <b>One call in twenty saw its preparation window exceed half a second</b> (0.89 s at the 95th percentile vs the
+    0.5 s target for voice). The cause is known and benign — the system sometimes briefly waits for an
+    almost-finished background lookup rather than redoing it — and the fixes are scheduled before the voice channel
+    ships. And <b>call success rates from this harness don't mean anything yet</b>: both sides of the conversation
+    were stand-in AIs with a hard turn cap, so "did the customer renew?" will only be measured honestly once the real
+    conversation runtime (P2) and human trials (P3) exist. We publish both caveats now so nobody discovers them
+    later.</div>
+</section>
+
 <!-- 10 -->
 <section id="phases">
   <div class="kicker">The plan, honestly</div>
@@ -673,8 +766,7 @@ b.hl{color:#8fd9c9}
     <tbody>
       <tr><td><b>P0 — substrate</b> <span class="pill win">done</span></td>
         <td>core engine ported to Postgres + Redis; tenancy; versioned SOPs + linter; fetcher SDK; audit schema</td>
-        <td>✅ unit + isolation suites green (29 + 14 checks). ⏳ one item open: reproducing the prototype's measured numbers on this stack (needs model-backed
-        sessions; runs with the P1 bench harness)</td></tr>
+        <td>✅ unit + isolation suites green (43 + 14 checks) · ✅ prototype parity reproduced — see §First measurements</td></tr>
       <tr><td><b>P1 — authoring &amp; rails</b></td>
         <td>two-deployable split + event bus; bench harness; CI; prompt-block library; document→draft-SOP ingestion
         with continuous linting</td>
