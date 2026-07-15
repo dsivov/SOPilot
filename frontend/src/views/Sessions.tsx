@@ -11,6 +11,12 @@ type PoolItem = {
   payload_summary: string; confidence: number; predictor_source: string;
   predicted_user_state: string | null; fetched_at: string; expires_at: string;
 };
+type FetchRow = {
+  kind: string; dependency_name: string; action_name: string; predictor_source: string;
+  speculative: boolean; consumed: boolean; wasted: boolean; confidence: number;
+  fetch_duration_ms: number; issued_at_turn: number; consumed_at_turn: number | null;
+  payload_summary: string; error: boolean;
+};
 
 const OUTCOME_TONE: Record<string, string> = { success: "good", failure: "crit", abandoned: "warn" };
 
@@ -18,6 +24,8 @@ export default function SessionsView() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [pool, setPool] = useState<PoolItem[] | null>(null);
+  const [audit, setAudit] = useState<FetchRow[] | null>(null);
+  const [auditNote, setAuditNote] = useState("");
 
   const refresh = useCallback(async () => setSessions(await api<Session[]>("GET", "/sessions")), []);
   useEffect(() => {
@@ -28,6 +36,14 @@ export default function SessionsView() {
     setSelected(id);
     const snap = await api("GET", `/sessions/${id}/pool`);
     setPool(snap.items);
+    setAudit(null);
+    setAuditNote("");
+    try {
+      const a = await api("GET", `/sessions/${id}/fetches`);
+      setAudit(a.fetches);
+    } catch {
+      setAuditNote("audit endpoint activates on the next backend restart");
+    }
   };
 
   return (
@@ -100,13 +116,16 @@ export default function SessionsView() {
         <div className="card">
           <div className="chead">
             <h3>Pool X-ray</h3>
-            {pool && <span className="sub num">{pool.length} live items</span>}
+            {pool && <span className="sub num">{pool.length} live · {audit ? `${audit.length} audited` : ""}</span>}
           </div>
           <div className="cbody" style={{ padding: pool && pool.length ? 0 : undefined }}>
             {!pool ? (
               <div className="empty">Select a session to inspect its pool.</div>
             ) : pool.length === 0 ? (
-              <div className="empty">Pool is empty (session ended or nothing pre-staged yet).</div>
+              <div className="empty">
+                No LIVE pool items — the pool is cleared when a session ends and items expire by TTL.
+                The permanent prefetch record is below.
+              </div>
             ) : (
               <div className="tablewrap" style={{ border: 0, borderRadius: 0, maxHeight: 420 }}>
                 <table className="table">
@@ -129,6 +148,60 @@ export default function SessionsView() {
           </div>
         </div>
       </div>
+
+      {selected && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="chead">
+            <h3>Prefetch audit — the permanent record</h3>
+            {audit && (
+              <span className="sub num">
+                {audit.filter((f) => f.consumed).length} served · {audit.filter((f) => f.wasted).length} unused ·{" "}
+                {audit.length} total
+              </span>
+            )}
+          </div>
+          <div className="cbody" style={{ padding: audit && audit.length ? 0 : undefined }}>
+            {auditNote ? (
+              <div className="empty">{auditNote}</div>
+            ) : !audit ? (
+              <div className="spin" />
+            ) : audit.length === 0 ? (
+              <div className="empty">No fetches were made for this session.</div>
+            ) : (
+              <div className="tablewrap" style={{ border: 0, borderRadius: 0, maxHeight: 340 }}>
+                <table className="table">
+                  <thead>
+                    <tr><th>Kind</th><th>Dependency</th><th>Source</th><th>Fate</th><th>ms</th><th>Turn</th><th>Summary</th></tr>
+                  </thead>
+                  <tbody>
+                    {audit.map((f, i) => (
+                      <tr key={i}>
+                        <td><span className={"chip " + (f.kind === "instruction" ? "comm" : "accent")}>{f.kind}</span></td>
+                        <td className="mono" style={{ fontSize: 12 }}>{f.dependency_name}</td>
+                        <td><span className="chip">{f.predictor_source}</span></td>
+                        <td>
+                          {f.error ? (
+                            <span className="st crit">error</span>
+                          ) : f.consumed ? (
+                            <span className="st good">served{f.consumed_at_turn !== null ? ` @${f.consumed_at_turn}` : ""}</span>
+                          ) : f.wasted ? (
+                            <span className="st warn">unused</span>
+                          ) : (
+                            <span className="st accent">pending</span>
+                          )}
+                        </td>
+                        <td className="mono num">{f.fetch_duration_ms}</td>
+                        <td className="mono num">{f.issued_at_turn}</td>
+                        <td style={{ fontSize: 12, color: "var(--text2)" }}>{f.payload_summary.slice(0, 60)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -151,10 +151,23 @@ async def voice_turn(
         [{"action": t.action} for t in prior_turns], [t.state for t in prior_turns if t.state]
     )
     allowed = graph.allowed_actions(visited)
-    proposal = await classify_and_propose(
-        task_def, history, body.user_message, allowed,
-        prior_cohort=prior_turns[-1].cohort if prior_turns else "",
+
+    async def _embed_query():
+        try:
+            return await request.app.state.embedder.embed(body.user_message)
+        except Exception:
+            return None
+
+    import asyncio as _asyncio
+
+    proposal, query_emb = await _asyncio.gather(
+        classify_and_propose(
+            task_def, history, body.user_message, allowed,
+            prior_cohort=prior_turns[-1].cohort if prior_turns else "",
+        ),
+        _embed_query(),
     )
+    request.state.query_emb = query_emb
     plan = await plan_turn(
         session_id,
         PlanTurnRequest(

@@ -8,6 +8,14 @@ const PROJECT = "sopilot-project";
 const params = new URLSearchParams(window.location.search);
 if (params.get("key")) localStorage.setItem(KEY, params.get("key")!);
 if (params.get("project")) localStorage.setItem(PROJECT, params.get("project")!);
+// consume once — otherwise a bookmarked ?project=... silently re-overrides every
+// later project switch on reload
+if (params.get("key") || params.get("project")) {
+  params.delete("key");
+  params.delete("project");
+  const qs = params.toString();
+  window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+}
 
 export function getCreds(): { key: string; project: string } {
   return { key: localStorage.getItem(KEY) || "", project: localStorage.getItem(PROJECT) || "" };
@@ -31,6 +39,25 @@ export class ApiError extends Error {
     this.status = status;
     this.detail = detail;
   }
+}
+
+export async function apiRaw<T = any>(
+  method: string,
+  path: string,
+  creds: { key: string; project?: string },
+): Promise<T> {
+  const res = await fetch("/api" + path, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${creds.key}`,
+      ...(creds.project ? { "X-Project": creds.project } : {}),
+    },
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!res.ok) throw new ApiError(res.status, data.detail ?? data);
+  return data as T;
 }
 
 export async function apiUpload<T = any>(path: string, file: File, fields: Record<string, string> = {}): Promise<T> {

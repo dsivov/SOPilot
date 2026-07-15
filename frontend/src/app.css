@@ -1,6 +1,12 @@
 /* SOPilot Studio — the shared design system (see /storage/Work/UI_DESIGN_GUIDE.md).
    Tokens copied verbatim, scope class .sopilot. No CSS framework by design. */
 
+/* page canvas: kill the browser's default body margin (the "white border") and
+   keep the canvas color in sync with the theme even beyond the app shell */
+html, body, #root { margin: 0; padding: 0; height: 100%; }
+html { background: #f6f8fb; }
+html.dark { background: #0e1117; }
+
 .sopilot {
   /* light (default) — neutrals with a slight blue bias */
   --bg:#f6f8fb; --surface:#ffffff; --surface2:#eef1f6; --raise:#ffffff;
@@ -44,6 +50,7 @@
 .sopilot .side{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .sopilot .brand{display:flex;align-items:center;gap:10px;padding:16px 18px 14px}
 .sopilot .brand .mark{width:26px;height:26px;flex:0 0 26px}
+.sopilot .mark{width:26px;height:26px;flex:0 0 26px}
 .sopilot .brand .name{font-weight:700;letter-spacing:-.2px;font-size:15px}
 .sopilot .brand .name small{display:block;font-weight:500;font-size:10.5px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-top:1px}
 .sopilot .nav{padding:6px 10px;overflow-y:auto;flex:1;min-height:0}
@@ -71,7 +78,8 @@
 .sopilot .phead p{margin:0;color:var(--muted);font-size:13px}
 .sopilot .phead .actions{display:flex;gap:8px}
 .sopilot .grid2{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
-@media(max-width:920px){.sopilot .grid2{grid-template-columns:1fr}}
+.sopilot .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+@media(max-width:920px){.sopilot .grid2{grid-template-columns:1fr}.sopilot .kpis{grid-template-columns:repeat(2,1fr)}}
 
 /* ── components ── */
 .sopilot .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:var(--r-sm);border:1px solid var(--line2);background:var(--surface);color:var(--text);font-weight:600;font-size:13px;transition:background .12s,border-color .12s}

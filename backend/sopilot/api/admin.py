@@ -57,6 +57,11 @@ async def create_project(
     return {"project_id": project.id, "slug": project.slug, "subsystems": project.subsystems or "default"}
 
 
+@router.get("/whoami")
+async def whoami(tenant: Tenant = Depends(resolve_tenant)) -> dict:
+    return {"tenant_slug": tenant.slug, "tenant_name": tenant.name}
+
+
 @router.get("/projects")
 async def list_projects(tenant: Tenant = Depends(resolve_tenant), db: AsyncSession = Depends(get_db)) -> list[dict]:
     rows = (await db.execute(select(Project).where(Project.tenant_id == tenant.id))).scalars().all()

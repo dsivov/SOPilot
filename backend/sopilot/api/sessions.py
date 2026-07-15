@@ -145,6 +145,54 @@ async def get_pool_snapshot(
     }
 
 
+@router.get("/{session_id}/fetches")
+async def get_fetch_audit(
+    session_id: str,
+    scope: Scope = Depends(resolve_scope),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """The permanent record of what the supervisor did for this session — unlike
+    the live pool (which is cleared at session end and TTL-bound), this survives."""
+    from ..models import DataFetchAudit
+
+    await _get_session(db, scope, session_id)
+    rows = (
+        (
+            await db.execute(
+                select(DataFetchAudit)
+                .where(
+                    DataFetchAudit.tenant_id == scope.tenant_id,
+                    DataFetchAudit.session_id == session_id,
+                )
+                .order_by(DataFetchAudit.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "session_id": session_id,
+        "fetches": [
+            {
+                "kind": r.kind,
+                "dependency_name": r.dependency_name,
+                "action_name": r.action_name,
+                "predictor_source": r.predictor_source,
+                "speculative": r.speculative,
+                "consumed": r.consumed,
+                "wasted": r.wasted,
+                "confidence": r.confidence,
+                "fetch_duration_ms": r.fetch_duration_ms,
+                "issued_at_turn": r.issued_at_turn,
+                "consumed_at_turn": r.consumed_at_turn,
+                "payload_summary": (r.payload_summary or "")[:120],
+                "error": bool(r.fetch_error),
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.post("/{session_id}/end")
 async def end_session(
     session_id: str,

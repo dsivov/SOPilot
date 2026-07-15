@@ -278,8 +278,21 @@ search breaks silently otherwise).
    (design-guide shell: SOPs editor + live lint + ingest + chat refinement,
    prompt-block library, sessions pool X-ray; vite dev on 0.0.0.0:5174,
    `/api` proxy to the backend).
-6. Next: SOP graph visualization in the editor, PDF upload, then P2
-   (voice/chat adapters, instruction pre-generation, per-turn classifier).
+6. ~~SOP graph visualization~~ ✅ (draggable, click→stage inspector with
+   prompt-block bind/unbind); ~~PDF upload~~ ✅ (+ example asset, provenance
+   Source tab).
+7. **P2 shipped:** text channel (`/converse`: classify+propose → plan →
+   respond, strong-model classifier per the collapse evidence) + voice
+   channel (`/realtime-token` GA-minted ephemeral secret, `/voice-turn`,
+   Playground WebRTC call with per-turn session.update steering — live mic
+   test passed) + **Milestone B instruction pre-generation** (supervisor
+   drafts replies for top (next-action, next-state) combos on the
+   speculative budget; verbatim serving on exact match; first live e2e 3/4
+   hits, fastest hit 1.28 s). Latency remediation: classify ∥ query-embed.
+8. Next: instruction-hit bench N≥20 (claim gate), Ops dashboard
+   (`/metrics/summary` + Dashboard view), per-tenant quotas + connector
+   secrets, then P3 proof work (SOPBench harness — NOT SOP-Maze, which is
+   Chinese-only; decision 2026-07-15).
 
 Production gap ledger (ranked): durable background work (→ #1), benchmark parity
 (→ #2), CI/load profile (→ #3), migration discipline at scale, secrets for

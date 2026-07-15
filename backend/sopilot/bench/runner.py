@@ -27,6 +27,19 @@ from .sim import propose, respond_as_agent, sample_cohort_and_mood, simulate_use
 
 MAX_TURNS = 12
 
+PERSONAS = [
+    "Busy working parent; efficient, slightly impatient, wants the earliest possible slot.",
+    "Elderly caller; polite but easily confused, asks the agent to repeat details.",
+    "Price-sensitive; asks about costs and missed-appointment fees before committing.",
+    "Wants to RESCHEDULE an existing appointment, not book a new one.",
+    "Mentions symptoms got noticeably worse in the last two days (urgent path).",
+    "Chatty and friendly; drifts off-topic once before getting to the point.",
+    "Skeptical; had a bad experience last time and needs reassurance before booking.",
+    "Calling on behalf of their mother (proxy caller).",
+    "Straightforward booking; cooperative and quick to confirm.",
+    "Undecided; hesitates about committing to a date and asks about the waiting list.",
+]
+
 
 def _call(base: str, method: str, path: str, body: dict | None, headers: dict) -> dict:
     req = urllib.request.Request(
@@ -37,6 +50,59 @@ def _call(base: str, method: str, path: str, body: dict | None, headers: dict) -
     )
     with urllib.request.urlopen(req) as resp:
         return json.loads(resp.read() or b"{}")
+
+
+async def run_converse_session(
+    base: str, headers: dict, sop_id: str, task_def: TaskDefinition, persona: str
+) -> dict:
+    """Drive the REAL runtime (/converse): the bench only simulates the caller.
+    Instruction hits, classification, and replies all come from the server."""
+    sess = _call(base, "POST", "/sessions", {"sop_id": sop_id}, headers)["session_id"]
+    history: list[dict] = []
+    turns: list[dict] = []
+    outcome = "abandoned"
+    for _ in range(MAX_TURNS):
+        user_message = await simulate_user_turn(task_def, "", "", history, persona=persona)
+        history.append({"role": "user_sim", "text": user_message})
+        t0 = time.perf_counter()
+        r = _call(base, "POST", f"/sessions/{sess}/converse", {"user_message": user_message}, headers)
+        wall_ms = int((time.perf_counter() - t0) * 1000)
+        history.append({"role": "agent", "text": r["reply"]})
+        turns.append(
+            {
+                "turn_index": r["turn"]["turn_index"],
+                "action": r["turn"]["chosen_action"],
+                "state": r["classification"]["state"],
+                "picks": len(r["turn"].get("picks", [])),
+                "instruction_hit": bool(r["turn"].get("instruction_hit")),
+                "rerank_ms": r["turn"].get("rerank_ms", 0),
+                "plan_ms": wall_ms,
+                "server_ms": r.get("total_ms", 0),
+                "consume_stats": r["turn"].get("consume_stats", {}),
+            }
+        )
+        if r.get("terminal"):
+            outcome = r["terminal"]
+            break
+        await asyncio.sleep(2.0)  # inter-turn think-time: lets the supervisor land its work
+    _call(base, "POST", f"/sessions/{sess}/outcome", {"outcome": outcome}, headers)
+    _call(base, "POST", f"/sessions/{sess}/end", {}, headers)
+    consumed = sum(t["consume_stats"].get("consumed", 0) for t in turns)
+    live = sum(t["consume_stats"].get("live", 0) for t in turns)
+    eligible = [t for t in turns if t["turn_index"] >= 1]
+    return {
+        "session_id": sess,
+        "persona": persona[:60],
+        "outcome": outcome,
+        "turns": len(turns),
+        "consumed": consumed,
+        "live": live,
+        "instruction_hits": sum(1 for t in turns if t["instruction_hit"]),
+        "eligible_turns": len(eligible),
+        "latency_hidden_ms": sum(t["consume_stats"].get("latency_hidden_ms", 0) for t in turns),
+        "live_latency_ms": sum(t["consume_stats"].get("live_latency_ms", 0) for t in turns),
+        "turn_details": turns,
+    }
 
 
 async def run_session(
@@ -147,10 +213,15 @@ def summarize(sessions: list[dict], label: str) -> dict:
     def pct(xs: list, q: float) -> float:
         return xs[min(len(xs) - 1, int(q * len(xs)))] if xs else 0.0
 
+    instr_hits = sum(s.get("instruction_hits", 0) for s in sessions)
+    eligible = sum(s.get("eligible_turns", 0) for s in sessions)
     return {
         "label": label,
         "sessions": len(sessions),
         "success_rate": round(sum(1 for s in sessions if s["outcome"] == "success") / len(sessions), 3),
+        "instruction_hit_rate": round(instr_hits / eligible, 3) if eligible else None,
+        "instruction_hits": instr_hits,
+        "eligible_turns": eligible,
         "mean_turns": round(statistics.mean(s["turns"] for s in sessions), 1),
         "speculative_hit_rate": round(consumed / (consumed + live), 3) if consumed + live else None,
         "live_fallback_rate": round(live / (consumed + live), 3) if consumed + live else None,
@@ -175,15 +246,19 @@ async def amain(args: argparse.Namespace) -> None:
     for i in range(total):
         phase = "warmup" if i < args.warmup else "measured"
         t0 = time.perf_counter()
-        s = await run_session(
-            args.base, headers, args.sop_id, task_def, rng, proposer_model=args.proposer_model
-        )
+        if args.mode == "converse":
+            persona = PERSONAS[i % len(PERSONAS)]
+            s = await run_converse_session(args.base, headers, args.sop_id, task_def, persona)
+        else:
+            s = await run_session(
+                args.base, headers, args.sop_id, task_def, rng, proposer_model=args.proposer_model
+            )
         s["phase"] = phase
         results.append(s)
         print(
             f"[{i + 1}/{total}] {phase} outcome={s['outcome']} turns={s['turns']} "
-            f"consumed={s['consumed']} live={s['live']} hidden={s['latency_hidden_ms']}ms "
-            f"({time.perf_counter() - t0:.1f}s)"
+            f"consumed={s['consumed']} live={s['live']} instr={s.get('instruction_hits', 0)}/{s.get('eligible_turns', 0)} "
+            f"hidden={s['latency_hidden_ms']}ms ({time.perf_counter() - t0:.1f}s)"
         )
 
     with open(args.out, "w") as f:
@@ -208,6 +283,8 @@ def main() -> None:
     p.add_argument("--warmup", type=int, default=3)
     p.add_argument("--seed", type=int, default=17)
     p.add_argument("--proposer-model", default="", help="stronger model for state/action classification")
+    p.add_argument("--mode", choices=["converse", "plan"], default="converse",
+                   help="converse = drive the real runtime; plan = legacy bench-side roles")
     p.add_argument("--out", default="bench_results.jsonl")
     args = p.parse_args()
     asyncio.run(amain(args))

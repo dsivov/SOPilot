@@ -29,13 +29,16 @@ async def simulate_user_turn(
     cohort: str,
     mood: str,
     history: list[dict],
+    persona: str = "",
 ) -> str:
     system = (
         "You are role-playing a customer on a phone call. Stay fully in character; reply with ONLY the "
         "customer's next utterance (1-2 sentences, natural spoken language).\n"
         f"Customer profile: {task_def.user_profile.description}\n"
-        f"You are of type '{cohort}' feeling '{mood}'. The call is about: {task_def.description}\n"
-        "React realistically to the agent: ask questions, raise concerns fitting your type and mood, and if "
+        + (f"Persona for this call: {persona}\n" if persona else "")
+        + (f"You are of type '{cohort}' feeling '{mood}'. " if cohort or mood else "")
+        + f"The call is about: {task_def.description}\n"
+        "React realistically to the agent: ask questions, raise concerns fitting your persona, and if "
         "the agent has genuinely addressed your needs, move toward accepting; if handled badly repeatedly, "
         "decline firmly."
     )

@@ -107,7 +107,10 @@ async def plan_turn(
     if scope.retrieval_enabled:
         pool_items = await pool.get_pool(scope, session.id)
         rerank = await rerank_pool_for_turn(
-            pool_items, live_user_message=body.user_message, embedder=request.app.state.embedder
+            pool_items,
+            live_user_message=body.user_message,
+            embedder=request.app.state.embedder,
+            query_emb=getattr(request.state, "query_emb", None),
         )
         picks = rerank.picks
         if scope.sop_enabled:
@@ -180,6 +183,7 @@ async def plan_turn(
             mood=body.mood,
             state=body.state,
             action=chosen,
+            instruction_hit=plan.instruction_hit,
         )
     )
     db.add(
@@ -279,10 +283,23 @@ async def converse(
         [{"action": t.action} for t in prior_turns], [t.state for t in prior_turns if t.state]
     )
     allowed = graph.allowed_actions(visited)
-    proposal = await classify_and_propose(
-        task_def, history, body.user_message, allowed,
-        prior_cohort=prior_turns[-1].cohort if prior_turns else "",
+
+    async def _embed_query():
+        try:
+            return await request.app.state.embedder.embed(body.user_message)
+        except Exception:
+            return None
+
+    import asyncio as _asyncio
+
+    proposal, query_emb = await _asyncio.gather(
+        classify_and_propose(
+            task_def, history, body.user_message, allowed,
+            prior_cohort=prior_turns[-1].cohort if prior_turns else "",
+        ),
+        _embed_query(),
     )
+    request.state.query_emb = query_emb
 
     plan = await plan_turn(
         session_id,

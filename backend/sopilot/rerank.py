@@ -65,12 +65,14 @@ async def rerank_pool_for_turn(
     live_user_message: str,
     embedder: EmbeddingProvider,
     max_picks: int = 3,
+    query_emb: np.ndarray | None = None,
 ) -> RerankResult:
     if not pool:
         return RerankResult([], "", 0)
     t0 = time.perf_counter()
-    query_emb: np.ndarray | None = None
-    if live_user_message.strip():
+    if query_emb is None and live_user_message.strip():
+        # voice/converse paths precompute this CONCURRENTLY with classification —
+        # the embed round-trip disappears from the serial window.
         try:
             query_emb = await embedder.embed(live_user_message)
         except Exception:
