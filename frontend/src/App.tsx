@@ -1,6 +1,6 @@
 import { Blocks, FileText, Headphones, Moon, Sun } from "lucide-react";
-import { useState } from "react";
-import { clearCreds, getCreds, setCreds } from "./api";
+import { useEffect, useState } from "react";
+import { api, ApiError, clearCreds, getCreds, setCreds } from "./api";
 import SopsView from "./views/Sops";
 import BlocksView from "./views/Blocks";
 import SessionsView from "./views/Sessions";
@@ -21,12 +21,32 @@ function BrandMark() {
 }
 
 function Connect({ onDone }: { onDone: () => void }) {
-  const [key, setKey] = useState("");
-  const [project, setProject] = useState("");
+  const [key, setKey] = useState(getCreds().key);
+  const [project, setProject] = useState(getCreds().project);
+  const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
+
+  const connect = async () => {
+    setChecking(true);
+    setError("");
+    setCreds(key.trim(), project.trim());
+    try {
+      await api("GET", "/sops"); // validates key + project before entering
+      onDone();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) setError("API key rejected (401) — check for typos or missing characters.");
+      else if (e instanceof ApiError && e.status === 404) setError(`Project “${project.trim()}” not found in this tenant (404).`);
+      else setError(`Cannot reach the API: ${e}`);
+    } finally {
+      setChecking(false);
+    }
+  };
+
   return (
     <div className="sopilot">
       <div className="connect">
-        <div className="card" style={{ width: 420 }}>
+        <div className="card" style={{ width: 440 }}>
+          {error && <span className="stripe crit" />}
           <div className="chead" style={{ paddingBottom: 0 }}>
             <BrandMark />
             <h3>Connect to SOPilot</h3>
@@ -37,15 +57,14 @@ function Connect({ onDone }: { onDone: () => void }) {
             </p>
             <input className="qinput mono" placeholder="sop_…" value={key} onChange={(e) => setKey(e.target.value)} />
             <input className="qinput" placeholder="project slug" value={project} onChange={(e) => setProject(e.target.value)} />
-            <button
-              className="btn primary"
-              disabled={!key || !project}
-              onClick={() => {
-                setCreds(key.trim(), project.trim());
-                onDone();
-              }}
-            >
-              Connect
+            {error && (
+              <span className="chip crit" style={{ whiteSpace: "normal" }}>
+                <span className="cd" />
+                {error}
+              </span>
+            )}
+            <button className="btn primary" disabled={!key || !project || checking} onClick={connect}>
+              {checking ? "Checking…" : "Connect"}
             </button>
           </div>
         </div>
@@ -58,6 +77,12 @@ export default function App() {
   const [view, setView] = useState<ViewId>("sops");
   const [dark, setDark] = useState(document.documentElement.classList.contains("dark"));
   const [connected, setConnected] = useState(Boolean(getCreds().key && getCreds().project));
+
+  useEffect(() => {
+    const onAuthFail = () => setConnected(false); // stale/typo'd key → back to Connect with the error visible
+    window.addEventListener("sopilot-auth-failed", onAuthFail);
+    return () => window.removeEventListener("sopilot-auth-failed", onAuthFail);
+  }, []);
 
   if (!connected) return <Connect onDone={() => setConnected(true)} />;
   const { project } = getCreds();

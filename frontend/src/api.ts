@@ -45,6 +45,7 @@ export async function apiUpload<T = any>(path: string, file: File, fields: Recor
   });
   const text = await res.text();
   const data = text ? JSON.parse(text) : {};
+  if (res.status === 401) window.dispatchEvent(new Event("sopilot-auth-failed"));
   if (!res.ok) throw new ApiError(res.status, data.detail ?? data);
   return data as T;
 }
@@ -62,6 +63,7 @@ export async function api<T = any>(method: string, path: string, body?: unknown)
   });
   const text = await res.text();
   const data = text ? JSON.parse(text) : {};
+  if (res.status === 401) window.dispatchEvent(new Event("sopilot-auth-failed"));
   if (!res.ok) throw new ApiError(res.status, data.detail ?? data);
   return data as T;
 }
