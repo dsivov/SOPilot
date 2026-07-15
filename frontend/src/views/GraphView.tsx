@@ -26,9 +26,9 @@ function storageKey(sopId: string): string {
   return `sopilot-graph-layout-${sopId}`;
 }
 
-export default function GraphView({ def, sopId }: { def: Def; sopId: string }) {
+export default function GraphView({ def, sopId, onSelect }: { def: Def; sopId: string; onSelect?: (name: string, kind: "action" | "state") => void }) {
   const [overrides, setOverrides] = useState<Record<string, XY>>({});
-  const drag = useRef<{ name: string; dx: number; dy: number } | null>(null);
+  const drag = useRef<{ name: string; dx: number; dy: number; moved: boolean; kind: string } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -144,25 +144,34 @@ export default function GraphView({ def, sopId }: { def: Def; sopId: string }) {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
-  const onPointerDown = (name: string) => (e: React.PointerEvent) => {
+  const onPointerDown = (name: string, kind: string) => (e: React.PointerEvent) => {
     const p = svgPoint(e);
     const node = posOf(name)!;
-    drag.current = { name, dx: p.x - node.x, dy: p.y - node.y };
+    drag.current = { name, dx: p.x - node.x, dy: p.y - node.y, moved: false, kind };
     (e.target as Element).setPointerCapture(e.pointerId);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag.current) return;
     const p = svgPoint(e);
     const { name, dx, dy } = drag.current;
-    setOverrides((o) => ({ ...o, [name]: { x: Math.max(0, p.x - dx), y: Math.max(0, p.y - dy) } }));
+    const nx = Math.max(0, p.x - dx);
+    const ny = Math.max(0, p.y - dy);
+    const cur = posOf(name)!;
+    if (Math.abs(nx - cur.x) + Math.abs(ny - cur.y) > 3) drag.current.moved = true;
+    if (drag.current.moved) setOverrides((o) => ({ ...o, [name]: { x: nx, y: ny } }));
   };
   const onPointerUp = () => {
     if (!drag.current) return;
+    const { name, moved, kind } = drag.current;
     drag.current = null;
-    setOverrides((o) => {
-      localStorage.setItem(storageKey(sopId), JSON.stringify(o));
-      return o;
-    });
+    if (moved) {
+      setOverrides((o) => {
+        localStorage.setItem(storageKey(sopId), JSON.stringify(o));
+        return o;
+      });
+    } else {
+      onSelect?.(name, kind as "action" | "state");
+    }
   };
 
   const resetLayout = () => {
@@ -173,7 +182,7 @@ export default function GraphView({ def, sopId }: { def: Def; sopId: string }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span style={{ color: "var(--muted)", fontSize: 11.5 }}>drag nodes to arrange — layout is saved in this browser</span>
+        <span style={{ color: "var(--muted)", fontSize: 11.5 }}>click a node for its stage details · drag to arrange (layout saved in this browser)</span>
         {Object.keys(overrides).length > 0 && (
           <button className="btn ghost sm" onClick={resetLayout}>Reset layout</button>
         )}
@@ -219,7 +228,7 @@ export default function GraphView({ def, sopId }: { def: Def; sopId: string }) {
             const stroke = isAction ? "var(--comm)" : isGood ? "var(--good)" : isBad ? "var(--crit)" : "var(--accent)";
             const fill = isAction ? "var(--comm-dim)" : isGood ? "var(--good-dim)" : isBad ? "var(--crit-dim)" : "var(--accent-dim)";
             return (
-              <g key={name} onPointerDown={onPointerDown(name)} style={{ cursor: "grab" }}>
+              <g key={name} onPointerDown={onPointerDown(name, p.kind)} style={{ cursor: "grab" }}>
                 <title>{name}{isAction && layout.hasData.get(name) ? " — needs external data" : isGood ? " — ends: success" : isBad ? " — ends: failure" : ""}</title>
                 <rect x={p.x} y={p.y} width={p.w} height={NODE_H} rx={9} fill={fill} stroke={stroke} strokeWidth={1.2} />
                 <text x={p.x + p.w / 2} y={p.y + 21} textAnchor="middle" style={{ fill: "var(--text)", fontSize: 12, fontWeight: 600, pointerEvents: "none", userSelect: "none" }}>

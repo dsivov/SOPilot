@@ -21,6 +21,8 @@ export default function SopsView() {
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [tab, setTab] = useState<"graph" | "json" | "source">("graph");
+  const [selectedNode, setSelectedNode] = useState<{ name: string; kind: "action" | "state" } | null>(null);
+  const [blockLib, setBlockLib] = useState<string[]>([]);
   const [source, setSource] = useState<{ text: string; filename: string | null } | null>(null);
   const lintTimer = useRef<number | undefined>(undefined);
 
@@ -37,6 +39,9 @@ export default function SopsView() {
   }, []);
   useEffect(() => {
     refresh().catch((e) => setStatus(String(e)));
+    api<Array<{ name: string }>>("GET", "/prompt-blocks")
+      .then((bs) => setBlockLib(bs.map((b) => b.name)))
+      .catch(() => undefined);
   }, [refresh]);
 
   const openSop = async (meta: SopMeta) => {
@@ -45,6 +50,7 @@ export default function SopsView() {
     setStatus(full.status);
     setChat([]);
     setSource(full.source_document ? { text: full.source_document, filename: full.source_filename } : null);
+    setSelectedNode(null);
     setText(JSON.stringify(full.definition, null, 2));
     runLint(JSON.stringify(full.definition));
   };
@@ -248,7 +254,110 @@ export default function SopsView() {
                   <textarea className="area mono" rows={20} value={source.text} readOnly spellCheck={false} />
                 </div>
               ) : parsedDef ? (
-                <GraphView def={parsedDef} sopId={selected.id} />
+                <div>
+                  <GraphView def={parsedDef} sopId={selected.id} onSelect={(name, kind) => setSelectedNode({ name, kind })} />
+                  {selectedNode && (() => {
+                    const isAction = selectedNode.kind === "action";
+                    const item = (isAction ? parsedDef.agent_actions : parsedDef.user_states)?.find(
+                      (x: any) => x.name === selectedNode.name,
+                    );
+                    if (!item) return null;
+                    const cp = parsedDef.conversation_profile ?? {};
+                    const terminal = (cp.success_markers ?? []).includes(item.name)
+                      ? "success"
+                      : (cp.failure_markers ?? []).includes(item.name)
+                        ? "failure"
+                        : null;
+                    const mutate = (fn: (d: any) => void) => {
+                      const d = JSON.parse(text);
+                      fn(d);
+                      const raw = JSON.stringify(d, null, 2);
+                      setText(raw);
+                      runLint(raw);
+                    };
+                    return (
+                      <div style={{ borderTop: "1px solid var(--line)", marginTop: 12, paddingTop: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                          <span className={"chip " + (isAction ? "comm" : terminal === "success" ? "good" : terminal === "failure" ? "crit" : "accent")}>
+                            <span className="cd" />{item.name}
+                          </span>
+                          <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                            {isAction ? "agent stage" : terminal ? `terminal state — ends: ${terminal}` : "user state"}
+                          </span>
+                          <button className="btn ghost sm" style={{ marginLeft: "auto" }} onClick={() => setSelectedNode(null)}>close</button>
+                        </div>
+                        {item.description && <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--text2)" }}>{item.description}</p>}
+                        {isAction && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {(item.must_say ?? []).length > 0 && (
+                              <div style={{ fontSize: 12.5 }}>
+                                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)" }}>Must say</span>
+                                {(item.must_say ?? []).map((m: string, i: number) => (
+                                  <div key={i} className="lintline">“{m}”</div>
+                                ))}
+                              </div>
+                            )}
+                            {(item.data_dependencies ?? []).length > 0 && (
+                              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)" }}>Data</span>
+                                {(item.data_dependencies ?? []).map((dep: string) => (
+                                  <span key={dep} className="chip warn">{dep}</span>
+                                ))}
+                              </div>
+                            )}
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                              <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)" }}>Prompt blocks</span>
+                              {(item.prompt_blocks ?? []).map((b: string) => (
+                                <span key={b} className="chip comm">
+                                  {b}
+                                  <button
+                                    className="btn ghost sm"
+                                    style={{ padding: "0 2px", fontSize: 11 }}
+                                    title={`Unbind ${b}`}
+                                    onClick={() =>
+                                      mutate((d) => {
+                                        const a = d.agent_actions.find((x: any) => x.name === item.name);
+                                        a.prompt_blocks = (a.prompt_blocks ?? []).filter((n: string) => n !== b);
+                                      })
+                                    }
+                                  >
+                                    ✕
+                                  </button>
+                                </span>
+                              ))}
+                              {(item.prompt_blocks ?? []).length === 0 && (
+                                <span style={{ color: "var(--muted)", fontSize: 12 }}>none bound</span>
+                              )}
+                              <select
+                                className="qinput"
+                                style={{ flex: "none", padding: "3px 8px", fontSize: 12 }}
+                                value=""
+                                onChange={(e) => {
+                                  const b = e.target.value;
+                                  if (!b) return;
+                                  mutate((d) => {
+                                    const a = d.agent_actions.find((x: any) => x.name === item.name);
+                                    a.prompt_blocks = [...new Set([...(a.prompt_blocks ?? []), b])];
+                                  });
+                                }}
+                              >
+                                <option value="">+ bind block…</option>
+                                {blockLib
+                                  .filter((b) => !(item.prompt_blocks ?? []).includes(b))
+                                  .map((b) => (
+                                    <option key={b} value={b}>{b}</option>
+                                  ))}
+                              </select>
+                            </div>
+                            <span style={{ color: "var(--muted)", fontSize: 11.5 }}>
+                              bindings resolve to the newest published block version and are pinned when a session starts — Save draft + Publish to apply
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
               ) : (
                 <div className="empty">JSON is currently invalid — fix it in the JSON tab to see the graph.</div>
               )}
