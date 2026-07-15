@@ -154,6 +154,18 @@ def merge_patch(current: dict, patch: dict) -> dict:
     return out
 
 
+def extract_document_text(filename: str, data: bytes) -> str:
+    """PDF → text via pypdf; anything else is treated as UTF-8 text."""
+    if filename.lower().endswith(".pdf") or data[:5] == b"%PDF-":
+        import io
+
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(data))
+        return "\n\n".join((page.extract_text() or "") for page in reader.pages).strip()
+    return data.decode("utf-8", errors="replace").strip()
+
+
 async def ingest_document(text: str, *, name_hint: str = "") -> TaskDefinition:
     user = (f"Suggested SOP name: {name_hint}\n\n" if name_hint else "") + "PROCEDURE DOCUMENT:\n" + text
     raw = await chat_json(INGEST_SYSTEM, user)

@@ -87,6 +87,18 @@ def test_inline_dep_objects_hoisted_to_catalog():
     TaskDefinition.model_validate(out)
 
 
+def test_extract_document_text_pdf_and_plain():
+    from pathlib import Path
+
+    from sopilot.builder import extract_document_text
+
+    pdf = Path(__file__).resolve().parents[2] / "docs" / "examples" / "appointment_scheduling_sop.pdf"
+    text = extract_document_text("appointment_scheduling_sop.pdf", pdf.read_bytes())
+    assert "Verify the patient's identity" in text
+    assert "cancellations are released at 8am" in text  # mandated wording survives extraction
+    assert extract_document_text("notes.txt", "plain body".encode()) == "plain body"
+
+
 def test_empty_patch_is_identity_plus_nodes():
     out = merge_patch(base(), {})
     assert out["name"] == "renewal"

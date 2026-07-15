@@ -1,6 +1,6 @@
 import { CheckCircle2, FileUp, Save, Send, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError } from "../api";
+import { api, ApiError, apiUpload } from "../api";
 import GraphView from "./GraphView";
 
 type SopMeta = { id: string; name: string; latest_version: number; updated_at: string };
@@ -17,6 +17,7 @@ export default function SopsView() {
   const [ingestOpen, setIngestOpen] = useState(false);
   const [doc, setDoc] = useState("");
   const [docName, setDocName] = useState("");
+  const [docFile, setDocFile] = useState<File | null>(null);
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [tab, setTab] = useState<"graph" | "json">("graph");
@@ -98,9 +99,12 @@ export default function SopsView() {
   const ingest = async () => {
     setBusy("ingest");
     try {
-      const r = await api("POST", "/sops/ingest", { text: doc, name_hint: docName });
+      const r = docFile
+        ? await apiUpload("/sops/ingest-file", docFile, { name_hint: docName })
+        : await api("POST", "/sops/ingest", { text: doc, name_hint: docName });
       setIngestOpen(false);
       setDoc("");
+      setDocFile(null);
       await refresh();
       setSelected({ id: r.id, name: r.name, latest_version: r.version, updated_at: "" });
       setStatus("draft");
@@ -293,10 +297,37 @@ export default function SopsView() {
             </div>
             <div className="mbody" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <input className="qinput" placeholder="SOP name (optional)" value={docName} onChange={(e) => setDocName(e.target.value)} />
-              <textarea className="area" rows={14} placeholder="Paste the procedure text here…" value={doc} onChange={(e) => setDoc(e.target.value)} />
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <label className="btn sm" style={{ margin: 0 }}>
+                  <FileUp /> Upload PDF / text
+                  <input
+                    type="file"
+                    accept=".pdf,.txt,.md"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      setDocFile(f);
+                      if (f && !docName) setDocName(f.name.replace(/\.(pdf|txt|md)$/i, "").replace(/[_-]+/g, " "));
+                    }}
+                  />
+                </label>
+                {docFile ? (
+                  <span className="chip accent"><span className="cd" />{docFile.name}</span>
+                ) : (
+                  <span style={{ color: "var(--muted)", fontSize: 12.5 }}>or paste text below</span>
+                )}
+              </div>
+              <textarea
+                className="area"
+                rows={12}
+                placeholder="Paste the procedure text here…"
+                value={doc}
+                disabled={!!docFile}
+                onChange={(e) => setDoc(e.target.value)}
+              />
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                 <button className="btn ghost" disabled={busy === "ingest"} onClick={() => setIngestOpen(false)}>Cancel</button>
-                <button className="btn primary" disabled={!doc.trim() || busy === "ingest"} onClick={ingest}>
+                <button className="btn primary" disabled={(!doc.trim() && !docFile) || busy === "ingest"} onClick={ingest}>
                   {busy === "ingest" ? "Drafting…" : "Create draft"}
                 </button>
               </div>

@@ -33,6 +33,22 @@ export class ApiError extends Error {
   }
 }
 
+export async function apiUpload<T = any>(path: string, file: File, fields: Record<string, string> = {}): Promise<T> {
+  const { key, project } = getCreds();
+  const form = new FormData();
+  form.append("file", file);
+  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+  const res = await fetch("/api" + path, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "X-Project": project },
+    body: form,
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!res.ok) throw new ApiError(res.status, data.detail ?? data);
+  return data as T;
+}
+
 export async function api<T = any>(method: string, path: string, body?: unknown): Promise<T> {
   const { key, project } = getCreds();
   const res = await fetch("/api" + path, {

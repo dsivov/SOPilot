@@ -3,7 +3,7 @@ publish blockers (the credit-card-SOP lesson from the research).
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -79,6 +79,28 @@ async def ingest(
         "definition": task_def.model_dump(),
         "lint": {"problems": problems, "publishable": not problems},
     }
+
+
+@router.post("/ingest-file")
+async def ingest_file(
+    file: UploadFile,
+    name_hint: str = Form(default=""),
+    scope: Scope = Depends(resolve_scope),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Document upload (PDF / txt / md) → draft SOP. Same pipeline as /ingest."""
+    from ..builder import extract_document_text
+
+    data = await file.read()
+    if len(data) > 2_000_000:
+        raise HTTPException(status_code=413, detail="document too large (2 MB max)")
+    try:
+        text = extract_document_text(file.filename or "upload", data)
+    except Exception as e:  # noqa: BLE001 — corrupt uploads are a user error, not a 500
+        raise HTTPException(status_code=422, detail=f"could not extract text: {e}") from e
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="no extractable text in the document")
+    return await ingest(IngestRequest(text=text, name_hint=name_hint), scope, db)
 
 
 @router.post("/build-turn")
