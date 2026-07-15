@@ -1,0 +1,141 @@
+/* SOPilot Studio — the shared design system (see /storage/Work/UI_DESIGN_GUIDE.md).
+   Tokens copied verbatim, scope class .sopilot. No CSS framework by design. */
+
+.sopilot {
+  /* light (default) — neutrals with a slight blue bias */
+  --bg:#f6f8fb; --surface:#ffffff; --surface2:#eef1f6; --raise:#ffffff;
+  --line:#e2e6ee; --line2:#d3d9e5;
+  --text:#161c28; --text2:#43506a; --muted:#6b7688;
+  --accent:#3f66e0; --accent-ink:#12224e; --accent-dim:rgba(63,102,224,.10);
+  --good:#0e9d84;  --good-dim:rgba(14,157,132,.12);
+  --warn:#c67c12;  --warn-dim:rgba(198,124,18,.12);
+  --crit:#d23e6a;  --crit-dim:rgba(210,62,106,.10);
+  --comm:#8a52d8;  --comm-dim:rgba(138,82,216,.10);
+  --shadow:0 1px 2px rgba(16,24,40,.06), 0 12px 28px -16px rgba(16,24,40,.22);
+  --r:12px; --r-sm:8px;
+  --sans:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+
+  color:var(--text); font-family:var(--sans); font-size:14px; line-height:1.5;
+  height:100vh; width:100%; overflow:hidden;
+}
+.dark .sopilot {
+  --bg:#0e1117; --surface:#161b24; --surface2:#1b212c; --raise:#222a38;
+  --line:#28303f; --line2:#333d4f;
+  --text:#e7ebf3; --text2:#aeb8c9; --muted:#8791a3;
+  --accent:#5b8def; --accent-ink:#dbe6ff; --accent-dim:rgba(91,141,239,.14);
+  --good:#22c3a6;  --good-dim:rgba(34,195,166,.14);
+  --warn:#f0a73c;  --warn-dim:rgba(240,167,60,.14);
+  --crit:#e5678a;  --crit-dim:rgba(229,103,138,.14);
+  --comm:#a974f0;  --comm-dim:rgba(169,116,240,.14);
+  --shadow:0 1px 0 rgba(255,255,255,.02), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+/* base hygiene */
+.sopilot, .sopilot *{box-sizing:border-box}
+.sopilot .num{font-variant-numeric:tabular-nums}
+.sopilot .mono{font-family:var(--mono)}
+.sopilot button{font-family:inherit;cursor:pointer}
+@media (prefers-reduced-motion:reduce){.sopilot *{animation:none!important;transition:none!important}}
+.sopilot :is(button,input,textarea,select):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── app shell ── */
+.sopilot .app{display:grid;grid-template-columns:232px 1fr;height:100vh;overflow:hidden;background:var(--bg)}
+.sopilot .side{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.sopilot .brand{display:flex;align-items:center;gap:10px;padding:16px 18px 14px}
+.sopilot .brand .mark{width:26px;height:26px;flex:0 0 26px}
+.sopilot .brand .name{font-weight:700;letter-spacing:-.2px;font-size:15px}
+.sopilot .brand .name small{display:block;font-weight:500;font-size:10.5px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin-top:1px}
+.sopilot .nav{padding:6px 10px;overflow-y:auto;flex:1;min-height:0}
+.sopilot .nav .grp{margin:14px 8px 6px;font-size:10.5px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+.sopilot .nav button.navitem{width:100%;text-align:left;display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:var(--r-sm);color:var(--text2);border:0;background:transparent;font-weight:500;font-size:13.5px;position:relative;transition:background .12s,color .12s}
+.sopilot .nav button.navitem svg{width:17px;height:17px;flex:0 0 17px;opacity:.85}
+.sopilot .nav button.navitem .badge{margin-left:auto;font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:999px;background:var(--surface2);color:var(--text2)}
+.sopilot .nav button.navitem:hover{background:var(--surface2);color:var(--text)}
+.sopilot .nav button.navitem.active{background:var(--accent-dim);color:var(--text)}
+.sopilot .nav button.navitem.active svg{opacity:1;color:var(--accent)}
+.sopilot .nav button.navitem.active::before{content:"";position:absolute;left:-10px;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+.sopilot .side .foot{border-top:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px}
+.sopilot .avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--comm));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;flex:0 0 28px}
+.sopilot .main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
+.sopilot .topbar{height:52px;flex:0 0 52px;border-bottom:1px solid var(--line);background:var(--surface);display:flex;align-items:center;gap:14px;padding:0 20px}
+.sopilot .ctx{display:inline-flex;align-items:center;gap:8px;padding:5px 13px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-weight:600;font-size:13px}
+.sopilot .ctx .dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 3px var(--good-dim)}
+.sopilot .content{flex:1;overflow-y:auto;min-height:0}
+.sopilot .view{padding:22px 24px 40px;max-width:1180px;margin:0 auto}
+
+/* ── page anatomy ── */
+.sopilot .phead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
+.sopilot .phead .eyebrow{font-size:11px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--accent)}
+.sopilot .phead h1{margin:2px 0 3px;font-size:23px;letter-spacing:-.4px;text-wrap:balance;color:var(--text)}
+.sopilot .phead p{margin:0;color:var(--muted);font-size:13px}
+.sopilot .phead .actions{display:flex;gap:8px}
+.sopilot .grid2{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
+@media(max-width:920px){.sopilot .grid2{grid-template-columns:1fr}}
+
+/* ── components ── */
+.sopilot .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:var(--r-sm);border:1px solid var(--line2);background:var(--surface);color:var(--text);font-weight:600;font-size:13px;transition:background .12s,border-color .12s}
+.sopilot .btn:hover{background:var(--surface2)}
+.sopilot .btn svg{width:15px;height:15px}
+.sopilot .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.sopilot .btn.primary:hover{filter:brightness(1.07)}
+.sopilot .btn.ghost{border-color:transparent;background:transparent;color:var(--text2)}
+.sopilot .btn.sm{padding:5px 10px;font-size:12px}
+.sopilot .btn:disabled{opacity:.55;cursor:default}
+.sopilot .iconbtn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);color:var(--text2)}
+.sopilot .iconbtn svg{width:17px;height:17px}
+
+.sopilot .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);position:relative;overflow:hidden}
+.sopilot .card .chead{display:flex;align-items:center;gap:10px;padding:14px 17px 0}
+.sopilot .card .chead h3{margin:0;font-size:14px;font-weight:650;letter-spacing:-.1px}
+.sopilot .card .chead .sub{color:var(--muted);font-size:12px;margin-left:auto}
+.sopilot .card .cbody{padding:16px 17px}
+.sopilot .stripe{position:absolute;left:0;top:0;bottom:0;width:3px}
+.sopilot .stripe.good{background:var(--good)}
+.sopilot .stripe.warn{background:var(--warn)}
+.sopilot .stripe.crit{background:var(--crit)}
+.sopilot .stripe.accent{background:var(--accent)}
+
+.sopilot .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface2);color:var(--text2);white-space:nowrap}
+.sopilot .chip .cd{width:6px;height:6px;border-radius:50%;background:currentColor}
+.sopilot .chip.good{background:var(--good-dim);color:var(--good)}
+.sopilot .chip.warn{background:var(--warn-dim);color:var(--warn)}
+.sopilot .chip.crit{background:var(--crit-dim);color:var(--crit)}
+.sopilot .chip.accent{background:var(--accent-dim);color:var(--accent)}
+.sopilot .chip.comm{background:var(--comm-dim);color:var(--comm)}
+
+.sopilot .tablewrap{min-height:0;overflow:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.sopilot .table{width:100%;border-collapse:collapse;font-size:13px}
+.sopilot .table thead th{position:sticky;top:0;background:var(--surface2);color:var(--muted);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
+.sopilot .table tbody td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.sopilot .table tbody tr:hover{background:var(--surface2)}
+.sopilot .table tbody tr.sel{background:var(--accent-dim)}
+.sopilot .st{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.sopilot .st::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.sopilot .st.good{color:var(--good)} .sopilot .st.warn{color:var(--warn)}
+.sopilot .st.crit{color:var(--crit)} .sopilot .st.accent{color:var(--accent)}
+
+.sopilot .qinput{flex:1;min-width:0;padding:7px 11px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg);color:var(--text);font:inherit;outline:none}
+.sopilot .qinput:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px}
+.sopilot .area{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg);color:var(--text);font:inherit;resize:vertical}
+.sopilot .area.mono{font-family:var(--mono);font-size:12.5px;line-height:1.55}
+
+.sopilot .modal-overlay{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(6,9,16,.6);backdrop-filter:blur(2px);animation:sopfade .15s ease}
+.sopilot .modal{background:var(--surface);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 24px 60px -20px rgba(0,0,0,.7);width:100%;max-width:680px;max-height:82vh;display:flex;flex-direction:column;overflow:hidden}
+.sopilot .modal .mhead{display:flex;align-items:flex-start;gap:12px;padding:15px 18px;border-bottom:1px solid var(--line)}
+.sopilot .modal .mhead h3{margin:0;font-size:15px}
+.sopilot .modal .mbody{overflow:auto;padding:18px}
+@keyframes sopfade{from{opacity:0}to{opacity:1}}
+
+.sopilot .empty{padding:26px;text-align:center;color:var(--muted);font-size:13px}
+.sopilot .spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line2);border-top-color:var(--accent);animation:sopspin .7s linear infinite;margin:24px auto}
+@keyframes sopspin{to{transform:rotate(360deg)}}
+
+/* studio-specific composits (built from tokens only) */
+.sopilot .lintline{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:12.5px;color:var(--text2)}
+.sopilot .lintline:first-child{border-top:0}
+.sopilot .chatlog{display:flex;flex-direction:column;gap:10px;max-height:340px;overflow-y:auto;padding-right:4px}
+.sopilot .msg{padding:9px 12px;border-radius:var(--r-sm);font-size:13px;max-width:92%}
+.sopilot .msg.user{align-self:flex-end;background:var(--accent-dim);color:var(--text)}
+.sopilot .msg.assistant{align-self:flex-start;background:var(--surface2);color:var(--text2)}
+.sopilot .connect{height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)}

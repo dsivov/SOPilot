@@ -34,6 +34,18 @@ instruction management with live data resolution; `retrieval` = prediction +
 prefetch + per-turn context block only; `both` (default) = full system.
 End-to-end check: `.venv/bin/python ../scripts/e2e_check.py` (needs the API up).
 
+## Studio UI (P1)
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://0.0.0.0:5174 (remote-friendly; /api proxied to :8100)
+```
+
+Connect with a tenant API key + project slug (stored in the browser). Views:
+SOPs (new-from-document ingestion, JSON editor with live lint, chat refinement,
+publish gate), Prompt blocks (versioned library), Sessions (pool X-ray).
+
 ## Tests
 
 ```bash

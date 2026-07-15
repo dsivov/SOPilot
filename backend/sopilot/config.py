@@ -43,6 +43,8 @@ class Settings(BaseSettings):
 
     embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = 1536
+    # Authoring-time model (SOP ingestion + conversational builder). Never on the turn path.
+    builder_model: str = "gpt-4o"
 
     # PASTE-style scheduler: max concurrent speculative LLM calls per worker.
     speculative_budget: int = 4

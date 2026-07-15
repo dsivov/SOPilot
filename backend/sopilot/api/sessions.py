@@ -28,6 +28,39 @@ async def _get_session(db: AsyncSession, scope: Scope, session_id: str) -> Conve
     return row
 
 
+@router.get("")
+async def list_sessions(
+    scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db), limit: int = 50
+) -> list[dict]:
+    rows = (
+        (
+            await db.execute(
+                select(ConversationSession)
+                .where(
+                    ConversationSession.tenant_id == scope.tenant_id,
+                    ConversationSession.project_id == scope.project_id,
+                )
+                .order_by(ConversationSession.started_at.desc())
+                .limit(min(limit, 200))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "session_id": s.id,
+            "sop_id": s.sop_id,
+            "sop_version": s.sop_version,
+            "channel": s.channel,
+            "status": s.status,
+            "terminal_outcome": s.terminal_outcome,
+            "started_at": s.started_at.isoformat(),
+        }
+        for s in rows
+    ]
+
+
 @router.post("", response_model=SessionStartResponse)
 async def start_session(
     req: SessionStartRequest,
