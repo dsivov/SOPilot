@@ -271,7 +271,15 @@ search breaks silently otherwise).
    stage constraints.
 3. **CI** — ruff + unit + compose-based integration on push.
 4. **Prompt-block model + stage bindings** (D-7).
-5. **Document → draft-SOP ingestion** + continuous editor linting.
+5. ~~**Document → draft-SOP ingestion + continuous editor linting**~~ ✅ done —
+   `/sops/ingest` (policy text → lint-clean draft, ~10 s), `/sops/build-turn`
+   (conversational refinement, smallest-patch merge), `/sops/lint-definition`
+   (stateless, powers live editor linting); **Studio UI v1** in `frontend/`
+   (design-guide shell: SOPs editor + live lint + ingest + chat refinement,
+   prompt-block library, sessions pool X-ray; vite dev on 0.0.0.0:5174,
+   `/api` proxy to the backend).
+6. Next: SOP graph visualization in the editor, PDF upload, then P2
+   (voice/chat adapters, instruction pre-generation, per-turn classifier).
 
 Production gap ledger (ranked): durable background work (→ #1), benchmark parity
 (→ #2), CI/load profile (→ #3), migration discipline at scale, secrets for
