@@ -21,6 +21,7 @@ router = APIRouter(prefix="/sops", tags=["sops"])
 class IngestRequest(BaseModel):
     text: str
     name_hint: str = ""
+    source_filename: str = ""
 
 
 class BuildTurnRequest(BaseModel):
@@ -69,7 +70,12 @@ async def ingest(
     sop = Sop(tenant_id=scope.tenant_id, project_id=scope.project_id, name=task_def.name, latest_version=1)
     db.add(sop)
     await db.flush()
-    db.add(SopVersion(sop_id=sop.id, version=1, status="draft", definition=task_def.model_dump()))
+    db.add(
+        SopVersion(
+            sop_id=sop.id, version=1, status="draft", definition=task_def.model_dump(),
+            source_document=req.text, source_filename=req.source_filename or None,
+        )
+    )
     await db.commit()
     problems = SOPGraph(task_def).lint()
     return {
@@ -100,7 +106,9 @@ async def ingest_file(
         raise HTTPException(status_code=422, detail=f"could not extract text: {e}") from e
     if not text.strip():
         raise HTTPException(status_code=422, detail="no extractable text in the document")
-    return await ingest(IngestRequest(text=text, name_hint=name_hint), scope, db)
+    return await ingest(
+        IngestRequest(text=text, name_hint=name_hint, source_filename=file.filename or ""), scope, db
+    )
 
 
 @router.post("/build-turn")
@@ -195,6 +203,8 @@ async def get_sop(
         "version": version.version,
         "status": version.status,
         "definition": version.definition,
+        "source_document": version.source_document,
+        "source_filename": version.source_filename,
     }
 
 
@@ -206,12 +216,20 @@ async def update_sop(
     db: AsyncSession = Depends(get_db),
 ) -> SopMeta:
     sop = await _get_sop(db, scope, sop_id)
+    prev = (
+        await db.execute(
+            select(SopVersion).where(SopVersion.sop_id == sop.id).order_by(SopVersion.version.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
     sop.latest_version += 1
     sop.name = req.definition.name
     sop.updated_at = utcnow()
     db.add(
         SopVersion(
-            sop_id=sop.id, version=sop.latest_version, status="draft", definition=req.definition.model_dump()
+            sop_id=sop.id, version=sop.latest_version, status="draft",
+            definition=req.definition.model_dump(),
+            source_document=prev.source_document if prev else None,
+            source_filename=prev.source_filename if prev else None,
         )
     )
     await db.commit()

@@ -129,6 +129,10 @@ class SopVersion(Base):
     version: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(16), default="draft")  # draft | published | retired
     definition: Mapped[dict] = mapped_column(JSON)  # TaskDefinition payload
+    # Provenance: the document this version was drafted from (extracted text) and
+    # where it came from. Kept with the version — the SOP's auditable origin.
+    source_document: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_filename: Mapped[str | None] = mapped_column(String(300), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

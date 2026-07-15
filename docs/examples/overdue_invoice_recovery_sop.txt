@@ -1,0 +1,16 @@
+Collections call procedure - Overdue invoice recovery (v3, Finance Dept)
+
+1. The agent must greet the customer and confirm they are speaking with the account
+   holder before any account details are discussed. Identity is confirmed with the
+   invoice number or registered email.
+2. Once verified, state the outstanding balance and the days overdue (from the
+   billing system) and ask when payment can be expected.
+3. If the customer disputes the invoice, do not argue; record the dispute reason and
+   inform them the billing team will review within 5 business days.
+4. If the customer cites financial hardship, offer the standard installment plan
+   (3 monthly payments, no fee). Wording required by legal: "This arrangement does
+   not affect your credit standing with us."
+5. If the customer refuses to pay or requests no further contact, politely end the
+   call and mark the account for escalation. Never threaten legal action.
+6. A promise to pay by a specific date, an agreed installment plan, or immediate
+   payment ends the call successfully. Thank the customer either way.

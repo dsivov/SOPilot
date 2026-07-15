@@ -20,7 +20,8 @@ export default function SopsView() {
   const [docFile, setDocFile] = useState<File | null>(null);
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [tab, setTab] = useState<"graph" | "json">("graph");
+  const [tab, setTab] = useState<"graph" | "json" | "source">("graph");
+  const [source, setSource] = useState<{ text: string; filename: string | null } | null>(null);
   const lintTimer = useRef<number | undefined>(undefined);
 
   const parsedDef = useMemo(() => {
@@ -43,6 +44,7 @@ export default function SopsView() {
     setSelected(meta);
     setStatus(full.status);
     setChat([]);
+    setSource(full.source_document ? { text: full.source_document, filename: full.source_filename } : null);
     setText(JSON.stringify(full.definition, null, 2));
     runLint(JSON.stringify(full.definition));
   };
@@ -110,6 +112,7 @@ export default function SopsView() {
       setStatus("draft");
       setText(JSON.stringify(r.definition, null, 2));
       setLint(r.lint);
+      setSource(docFile ? { text: "(uploaded — reopen the SOP to view extracted text)", filename: docFile.name } : { text: doc, filename: null });
       setChat([{ role: "assistant", content: "Draft created from your document. Tell me what to adjust — stages, wording, triggers, data lookups." }]);
     } catch (e) {
       alert(String(e));
@@ -205,6 +208,11 @@ export default function SopsView() {
                 <button className={"btn sm" + (tab === "json" ? " primary" : " ghost")} onClick={() => setTab("json")}>
                   JSON
                 </button>
+                {source && (
+                  <button className={"btn sm" + (tab === "source" ? " primary" : " ghost")} onClick={() => setTab("source")}>
+                    Source
+                  </button>
+                )}
               </span>
             </div>
             <div className="cbody">
@@ -212,6 +220,13 @@ export default function SopsView() {
                 <div className="empty">Select an SOP or create one from a document.</div>
               ) : tab === "json" ? (
                 <textarea className="area mono" rows={22} value={text} onChange={(e) => onEdit(e.target.value)} spellCheck={false} />
+              ) : tab === "source" && source ? (
+                <div>
+                  <p style={{ margin: "0 0 8px", color: "var(--muted)", fontSize: 12.5 }}>
+                    Document this SOP was drafted from{source.filename ? <> — <span className="mono">{source.filename}</span></> : " (pasted text)"}. Read-only provenance, kept with every version.
+                  </p>
+                  <textarea className="area mono" rows={20} value={source.text} readOnly spellCheck={false} />
+                </div>
               ) : parsedDef ? (
                 <GraphView def={parsedDef} />
               ) : (
