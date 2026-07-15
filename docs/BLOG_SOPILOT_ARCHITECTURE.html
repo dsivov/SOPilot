@@ -868,11 +868,12 @@ b.hl{color:#8fd9c9}
       <tr><td><b>P0 — substrate</b> <span class="pill win">done</span></td>
         <td>core engine ported to Postgres + Redis; tenancy; versioned SOPs + linter; fetcher SDK; audit schema</td>
         <td>✅ unit + isolation suites green (43 + 14 checks) · ✅ prototype parity reproduced — see §First measurements</td></tr>
-      <tr><td><b>P1 — authoring &amp; rails</b></td>
-        <td>two-deployable split + event bus; bench harness; CI; prompt-block library; document→draft-SOP ingestion
-        with continuous linting</td>
-        <td>a non-engineer goes from pasted policy doc to lint-clean published SOP in one sitting; prototype parity
-        numbers reproduced (20+ sessions per configuration)</td></tr>
+      <tr><td><b>P1 — authoring &amp; rails</b> <span class="pill win">done</span></td>
+        <td>two-deployable split + event bus ✅; bench harness ✅; prompt-block library with session pinning ✅;
+        document→draft-SOP ingestion (text + PDF) with continuous linting and the Studio UI ✅; hosted CI descoped by
+        decision — replaced with local pre-push checks</td>
+        <td>✅ pasted doc → lint-clean published SOP in one sitting (the Studio flow, demonstrated on both packaged
+        examples); ✅ prototype parity reproduced at 20+ sessions (see First measurements)</td></tr>
       <tr><td><b>P2 — realtime runtime</b> <span class="pill win">done</span></td>
         <td>text channel (converse) + live voice (realtime speech model steered per turn — mic-tested); instruction
         pre-generation shipped behind its measurement gate; per-tenant quotas; encrypted connector secrets + a real
