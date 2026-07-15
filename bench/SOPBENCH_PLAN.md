@@ -112,6 +112,37 @@ re-asserts itself on every step regardless of what the user appended, so the
 attack has no single prompt to defeat. Procedure-order compliance under attack
 was near-perfect (2 violations in 36 adversarial tasks).
 
-Next: (1) Bank domain (153 cases) transfer check — running; (2) full 7-domain
-run + writeup if transfer holds; (3) stronger-model arms (does supervision
-still add on top of GPT-4.1-class baselines?).
+## Transfer check — Bank domain, same model/flags (2026-07-15)
+
+Bank is the benchmark's largest domain (14 services, 134 released task
+instances — the paper's "153 cases" counts pre-filter variants). Identical
+harness, gpt-4o-mini, fc mode, their unmodified evaluator:
+
+| Metric | Arm A (baseline) | Arm B (+SOPilot) | Δ |
+|---|---|---|---|
+| **Mean pass rate** | **36.6%** | **68.7%** | **+32.1 pp (+88% rel)** |
+| total failures | 85 | 42 | **−51%** |
+| dirgraph violations | 71 | 24 | **−66%** |
+| constraint violations | 58 | 30 | −48% |
+| database mismatches | 31 | 12 | −61% |
+| incorrect action calls | 38 | 30 | −21% |
+
+The effect roughly doubled versus University (+16.7 pp → +32.1 pp), and the
+reason is visible in the baseline's failure mix: Bank SOPs are deeper (chained
+verification: authentication → ownership → balance …), so the unsupervised
+model skips steps far more often (71 dirgraph violations vs 13 in University).
+The harder the procedure, the more per-step supervision buys — the scaling
+direction the product thesis needs.
+
+Cross-domain summary so far (gpt-4o-mini, their verifiers, zero SOPBench code
+modified):
+
+| Setting | Arm A | Arm B | Δ |
+|---|---|---|---|
+| University, standard (42) | 40.5% | 57.1% | +16.7 pp |
+| University, adversarial (36) | 38.9% | 50.0% | +11.1 pp |
+| Bank, standard (134) | 36.6% | 68.7% | **+32.1 pp** |
+
+Next: (1) full 7-domain run + writeup; (2) stronger-model arms (does
+supervision still add on top of GPT-4.1-class baselines?); (3) human A/B
+harness.

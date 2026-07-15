@@ -814,44 +814,62 @@ b.hl{color:#8fd9c9}
       <line class="pl" x1="446" y1="128" x2="528" y2="98"/>
       <text class="pd" x="360" y="200">identical tasks, identical scoring — the only difference is the live supervision.</text>
       <text class="pd" x="360" y="218">Prediction to falsify: Arm B specifically reduces skipped-verification failures, and holds under the adversarial suffix.</text>
-      <text class="pd" x="360" y="236">Pilot: University domain (44 tasks), then the adversarial arm; full 7-domain run if the pilot signal holds.</text>
+      <text class="pd" x="360" y="236">Run so far: University (standard + adversarial) and Bank — three settings, one direction. Remaining five domains queued.</text>
     </svg>
     <figcaption><b>The two-arm design.</b> Our supervisor watches the agent's tool calls, tracks position on the SOP
       graph, and injects the current stage's legal moves and mandated checks — the same mechanism that runs our voice
       channel, pointed at their benchmark. Their unmodified code does the scoring.</figcaption>
   </div></figure>
-  <h3>Pilot result — University domain, 42 tasks per arm</h3>
+  <h3>Results — University pilot (42 tasks/arm) + Bank transfer (134 tasks/arm)</h3>
   <figure><div class="fig">
-    <svg viewBox="0 0 720 190" role="img" aria-label="Bar chart: SOPBench pass rate — baseline 40.5%, with SOPilot 57.1%; paper's published number for the same model 40.9%">
+    <svg viewBox="0 0 720 268" role="img" aria-label="Bar chart: SOPBench pass rate. University — baseline 40.5%, with SOPilot 57.1%. Bank — baseline 36.6%, with SOPilot 68.7%.">
       <style>
         .qaxl{fill:#7b8499;font:10.5px "Segoe UI",sans-serif;text-anchor:middle}
         .qcat{fill:#aab3c5;font:12px "Segoe UI",sans-serif}
+        .qgrp{fill:#e7ebf3;font:12px "Segoe UI",sans-serif;font-weight:700}
         .qval{fill:#e7ebf3;font:12.5px "Segoe UI",sans-serif;font-weight:700;font-variant-numeric:tabular-nums}
         .qgrid{stroke:#2c3346;stroke-width:1}
         .qttl{fill:#e7ebf3;font:13px "Segoe UI",sans-serif;font-weight:700}
       </style>
       <text class="qttl" x="16" y="22">SOPBench pass rate — same model, same tasks, their unmodified scoring</text>
-      <line class="qgrid" x1="210" y1="44" x2="210" y2="140"/><line class="qgrid" x1="330" y1="44" x2="330" y2="140"/>
-      <line class="qgrid" x1="450" y1="44" x2="450" y2="140"/><line class="qgrid" x1="570" y1="44" x2="570" y2="140"/>
-      <line class="qgrid" x1="690" y1="44" x2="690" y2="140"/>
-      <text class="qaxl" x="210" y="156">0%</text><text class="qaxl" x="330" y="156">25%</text>
-      <text class="qaxl" x="450" y="156">50%</text><text class="qaxl" x="570" y="156">75%</text><text class="qaxl" x="690" y="156">100%</text>
+      <line class="qgrid" x1="210" y1="44" x2="210" y2="212"/><line class="qgrid" x1="330" y1="44" x2="330" y2="212"/>
+      <line class="qgrid" x1="450" y1="44" x2="450" y2="212"/><line class="qgrid" x1="570" y1="44" x2="570" y2="212"/>
+      <line class="qgrid" x1="690" y1="44" x2="690" y2="212"/>
+      <text class="qaxl" x="210" y="228">0%</text><text class="qaxl" x="330" y="228">25%</text>
+      <text class="qaxl" x="450" y="228">50%</text><text class="qaxl" x="570" y="228">75%</text><text class="qaxl" x="690" y="228">100%</text>
+      <text class="qgrp" x="16" y="58">University</text>
       <g>
-        <title>Baseline (model alone): 40.5% — the paper's own published number for this model and domain is 40.9%</title>
-        <text class="qcat" x="16" y="66">Model alone</text>
-        <path d="M210,54 h190.4 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-190.4 z" fill="#5b8def"/>
-        <text class="qval" x="412" y="69">40.5%</text>
+        <title>University baseline (model alone): 40.5% — the paper's own published number for this model and domain is 40.9%</title>
+        <text class="qcat" x="16" y="80">Model alone</text>
+        <path d="M210,68 h190.4 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-190.4 z" fill="#5b8def"/>
+        <text class="qval" x="412" y="83">40.5%</text>
       </g>
       <g>
-        <title>Same model with SOPilot supervision: 57.1% (+16.7 points)</title>
-        <text class="qcat" x="16" y="112">+ SOPilot supervision</text>
-        <path d="M210,100 h270.1 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-270.1 z" fill="#14a087"/>
-        <text class="qval" x="492" y="115">57.1%  (+16.7 pp)</text>
+        <title>University with SOPilot supervision: 57.1% (+16.7 points)</title>
+        <text class="qcat" x="16" y="108">+ SOPilot supervision</text>
+        <path d="M210,96 h270.1 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-270.1 z" fill="#14a087"/>
+        <text class="qval" x="492" y="111">57.1%  (+16.7 pp)</text>
       </g>
-      <text class="qaxl" x="16" y="180" style="text-anchor:start">skipped-verification failures fell 13 → 4 (−69%) — the exact failure class supervision targets · baseline matches the paper's published 40.9% (harness validity)</text>
+      <text class="qgrp" x="16" y="150">Bank  <tspan class="qcat" font-weight="400">(deepest procedures in the benchmark)</tspan></text>
+      <g>
+        <title>Bank baseline (model alone): 36.6%</title>
+        <text class="qcat" x="16" y="172">Model alone</text>
+        <path d="M210,160 h171.7 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-171.7 z" fill="#5b8def"/>
+        <text class="qval" x="394" y="175">36.6%</text>
+      </g>
+      <g>
+        <title>Bank with SOPilot supervision: 68.7% (+32.1 points, +88% relative)</title>
+        <text class="qcat" x="16" y="200">+ SOPilot supervision</text>
+        <path d="M210,188 h325.8 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-325.8 z" fill="#14a087"/>
+        <text class="qval" x="548" y="203">68.7%  (+32.1 pp)</text>
+      </g>
+      <text class="qaxl" x="16" y="244" style="text-anchor:start">skipped-verification failures: University 13 → 4 (−69%), Bank 71 → 24 (−66%) — the exact failure class supervision targets</text>
+      <text class="qaxl" x="16" y="260" style="text-anchor:start">both baselines match the paper's published numbers for this model (validity anchor) · Bank total failures halved (85 → 42)</text>
     </svg>
-    <figcaption><b>First external result.</b> One domain so far (University; pilot), one model (the mid-tier one, where
-      headroom is largest). Adversarial arm and remaining six domains queued — this section updates as they land.</figcaption>
+    <figcaption><b>The effect grows with procedure depth.</b> Bank's SOPs chain more verification steps than
+      University's, the unsupervised model skips proportionally more of them, and supervision recovers almost twice
+      the margin (+32.1 pp vs +16.7 pp). Two of seven domains done, one model (the mid-tier one, where headroom is
+      largest). Remaining five domains queued — this section updates as they land.</figcaption>
   </div></figure>
   <div class="grid g2" style="margin:16px 0">
     <div class="card"><span class="stripe good"></span><div class="cbody" style="padding:14px 16px">

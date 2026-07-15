@@ -1,0 +1,286 @@
+Loaded 134 results from ./output/armA/bank/ast_gpt-4o-mini-mode_fc-dep_full-fmt_structured-tool_full-shuffle_False.json
+Evaluating task simulations: 0it [00:00, ?it/s]Evaluating task simulations: 19it [00:00, 183.29it/s]Evaluating task simulations: 38it [00:00, 184.52it/s]Evaluating task simulations: 58it [00:00, 189.32it/s]Evaluating task simulations: 77it [00:00, 182.23it/s]Evaluating task simulations: 97it [00:00, 187.14it/s]Evaluating task simulations: 117it [00:00, 190.77it/s]Evaluating task simulations: 134it [00:00, 188.24it/s]
+Saving 134 results. First result has evaluations: True
+Results saved successfully to ./output/armA/bank/ast_gpt-4o-mini-mode_fc-dep_full-fmt_structured-tool_full-shuffle_False.json
+-------------- Overall domain statistics for bank --------------
+assistant_model                       ('gpt-4o-mini',)
+avg_num_constraints                   3.03731
+avg_num_constraints_expanded          4.0
+avg_num_function_calls                2.85075
+avg_num_messages                      5.96269
+domain                                bank
+mean_pass_rate                        0.3656716417910448
+percentage_action_called_correctly    0.71642
+percentage_action_should_succeed      0.35821
+percentage_action_successfully_called 0.37313
+percentage_constraint_not_violated    0.56716
+percentage_database_match             0.76866
+percentage_dirgraph_satisfied         0.47015
+percentage_no_tool_call_error         1.0
+percentage_success                    0.36567
+std_pass_rate                         0.0
+total_action_called_correctly         96
+total_action_should_succeed           48
+total_action_successfully_called      50
+total_constraint_not_violated         76
+total_database_match                  103
+total_dirgraph_satisfied              63
+total_interactions                    134
+total_no_tool_call_error              134
+total_num_constraints                 407
+total_num_constraints_expanded        536
+total_num_function_calls              382
+total_num_messages                    799
+total_pass@1                          49
+total_success                         49
+total_tasks                           134
+user_model                            (None,)
+
+----------------------- Distr User Goal ------------------------
+apply_credit_card         9
+cancel_credit_card        17
+close_account             2
+deposit_funds             5
+exchange_foreign_currency 4
+get_account_owed_balance  2
+get_loan                  12
+open_account              5
+pay_bill                  5
+pay_bill_with_credit_card 5
+pay_loan                  8
+set_account_information   2
+set_safety_box            35
+transfer_funds            23
+
+----------------------- Group Statistics -----------------------
+1 {
+    "total_tasks": 6,
+    "total_interactions": 6,
+    "distr_user_goal": {
+      "apply_credit_card": 2,
+      "exchange_foreign_currency": 2,
+      "open_account": 2
+    },
+    "total_action_should_succeed": 3,
+    "total_num_messages": 29,
+    "total_num_function_calls": 11,
+    "total_num_constraints": 6,
+    "total_num_constraints_expanded": 6,
+    "total_no_tool_call_error": 6,
+    "total_constraint_not_violated": 5,
+    "total_database_match": 5,
+    "total_action_successfully_called": 3,
+    "total_dirgraph_satisfied": 5,
+    "total_action_called_correctly": 4,
+    "total_success": 4,
+    "total_pass@1": 4,
+    "per_run_pass_rates": {
+      "run_1_pass": 0.6666666666666666
+    },
+    "mean_pass_rate": 0.6666666666666666,
+    "std_pass_rate": 0.0,
+    "percentage_action_should_succeed": 0.5,
+    "avg_num_messages": 4.83333,
+    "avg_num_function_calls": 1.83333,
+    "avg_num_constraints": 1.0,
+    "avg_num_constraints_expanded": 1.0,
+    "percentage_no_tool_call_error": 1.0,
+    "percentage_constraint_not_violated": 0.83333,
+    "percentage_database_match": 0.83333,
+    "percentage_action_successfully_called": 0.5,
+    "percentage_dirgraph_satisfied": 0.83333,
+    "percentage_action_called_correctly": 0.66667,
+    "percentage_success": 0.66667
+  }
+2 {
+    "total_tasks": 33,
+    "total_interactions": 33,
+    "distr_user_goal": {
+      "apply_credit_card": 4,
+      "cancel_credit_card": 5,
+      "close_account": 2,
+      "deposit_funds": 2,
+      "exchange_foreign_currency": 2,
+      "get_account_owed_balance": 2,
+      "get_loan": 2,
+      "open_account": 2,
+      "pay_bill": 2,
+      "pay_bill_with_credit_card": 2,
+      "set_account_information": 2,
+      "set_safety_box": 2,
+      "transfer_funds": 4
+    },
+    "total_action_should_succeed": 14,
+    "total_num_messages": 180,
+    "total_num_function_calls": 79,
+    "total_num_constraints": 66,
+    "total_num_constraints_expanded": 80,
+    "total_no_tool_call_error": 33,
+    "total_constraint_not_violated": 21,
+    "total_database_match": 27,
+    "total_action_successfully_called": 13,
+    "total_dirgraph_satisfied": 19,
+    "total_action_called_correctly": 22,
+    "total_success": 13,
+    "total_pass@1": 13,
+    "per_run_pass_rates": {
+      "run_1_pass": 0.3939393939393939
+    },
+    "mean_pass_rate": 0.3939393939393939,
+    "std_pass_rate": 0.0,
+    "percentage_action_should_succeed": 0.42424,
+    "avg_num_messages": 5.45455,
+    "avg_num_function_calls": 2.39394,
+    "avg_num_constraints": 2.0,
+    "avg_num_constraints_expanded": 2.42424,
+    "percentage_no_tool_call_error": 1.0,
+    "percentage_constraint_not_violated": 0.63636,
+    "percentage_database_match": 0.81818,
+    "percentage_action_successfully_called": 0.39394,
+    "percentage_dirgraph_satisfied": 0.57576,
+    "percentage_action_called_correctly": 0.66667,
+    "percentage_success": 0.39394
+  }
+3 {
+    "total_tasks": 52,
+    "total_interactions": 52,
+    "distr_user_goal": {
+      "apply_credit_card": 3,
+      "cancel_credit_card": 9,
+      "deposit_funds": 3,
+      "get_loan": 6,
+      "open_account": 1,
+      "pay_bill": 3,
+      "pay_bill_with_credit_card": 3,
+      "pay_loan": 3,
+      "set_safety_box": 14,
+      "transfer_funds": 7
+    },
+    "total_action_should_succeed": 18,
+    "total_num_messages": 314,
+    "total_num_function_calls": 147,
+    "total_num_constraints": 156,
+    "total_num_constraints_expanded": 208,
+    "total_no_tool_call_error": 52,
+    "total_constraint_not_violated": 26,
+    "total_database_match": 39,
+    "total_action_successfully_called": 18,
+    "total_dirgraph_satisfied": 19,
+    "total_action_called_correctly": 36,
+    "total_success": 14,
+    "total_pass@1": 14,
+    "per_run_pass_rates": {
+      "run_1_pass": 0.2692307692307692
+    },
+    "mean_pass_rate": 0.2692307692307692,
+    "std_pass_rate": 0.0,
+    "percentage_action_should_succeed": 0.34615,
+    "avg_num_messages": 6.03846,
+    "avg_num_function_calls": 2.82692,
+    "avg_num_constraints": 3.0,
+    "avg_num_constraints_expanded": 4.0,
+    "percentage_no_tool_call_error": 1.0,
+    "percentage_constraint_not_violated": 0.5,
+    "percentage_database_match": 0.75,
+    "percentage_action_successfully_called": 0.34615,
+    "percentage_dirgraph_satisfied": 0.36538,
+    "percentage_action_called_correctly": 0.69231,
+    "percentage_success": 0.26923
+  }
+4 {
+    "total_tasks": 36,
+    "total_interactions": 36,
+    "distr_user_goal": {
+      "cancel_credit_card": 3,
+      "get_loan": 4,
+      "pay_loan": 5,
+      "set_safety_box": 15,
+      "transfer_funds": 9
+    },
+    "total_action_should_succeed": 11,
+    "total_num_messages": 227,
+    "total_num_function_calls": 117,
+    "total_num_constraints": 144,
+    "total_num_constraints_expanded": 196,
+    "total_no_tool_call_error": 36,
+    "total_constraint_not_violated": 21,
+    "total_database_match": 27,
+    "total_action_successfully_called": 13,
+    "total_dirgraph_satisfied": 17,
+    "total_action_called_correctly": 28,
+    "total_success": 15,
+    "total_pass@1": 15,
+    "per_run_pass_rates": {
+      "run_1_pass": 0.4166666666666667
+    },
+    "mean_pass_rate": 0.4166666666666667,
+    "std_pass_rate": 0.0,
+    "percentage_action_should_succeed": 0.30556,
+    "avg_num_messages": 6.30556,
+    "avg_num_function_calls": 3.25,
+    "avg_num_constraints": 4.0,
+    "avg_num_constraints_expanded": 5.44444,
+    "percentage_no_tool_call_error": 1.0,
+    "percentage_constraint_not_violated": 0.58333,
+    "percentage_database_match": 0.75,
+    "percentage_action_successfully_called": 0.36111,
+    "percentage_dirgraph_satisfied": 0.47222,
+    "percentage_action_called_correctly": 0.77778,
+    "percentage_success": 0.41667
+  }
+5 {
+    "total_tasks": 7,
+    "total_interactions": 7,
+    "distr_user_goal": {
+      "set_safety_box": 4,
+      "transfer_funds": 3
+    },
+    "total_action_should_succeed": 2,
+    "total_num_messages": 49,
+    "total_num_function_calls": 28,
+    "total_num_constraints": 35,
+    "total_num_constraints_expanded": 46,
+    "total_no_tool_call_error": 7,
+    "total_constraint_not_violated": 3,
+    "total_database_match": 5,
+    "total_action_successfully_called": 3,
+    "total_dirgraph_satisfied": 3,
+    "total_action_called_correctly": 6,
+    "total_success": 3,
+    "total_pass@1": 3,
+    "per_run_pass_rates": {
+      "run_1_pass": 0.42857142857142855
+    },
+    "mean_pass_rate": 0.42857142857142855,
+    "std_pass_rate": 0.0,
+    "percentage_action_should_succeed": 0.28571,
+    "avg_num_messages": 7.0,
+    "avg_num_function_calls": 4.0,
+    "avg_num_constraints": 5.0,
+    "avg_num_constraints_expanded": 6.57143,
+    "percentage_no_tool_call_error": 1.0,
+    "percentage_constraint_not_violated": 0.42857,
+    "percentage_database_match": 0.71429,
+    "percentage_action_successfully_called": 0.42857,
+    "percentage_dirgraph_satisfied": 0.42857,
+    "percentage_action_called_correctly": 0.85714,
+    "percentage_success": 0.42857
+  }
+
+----------------------- Error Statistics -----------------------
+error_causes      {
+                    "tool_call_errors": 0,
+                    "constraint_violations": 58,
+                    "database_mismatches": 31,
+                    "dirgraph_violations": 71,
+                    "incorrect_action_calls": 38
+                  }
+total_evaluations 134
+total_failures    85
+
+---------------------- Per Run Pass Rates ----------------------
+{
+  "run_1_pass": 0.3656716417910448
+}
+Mean Pass Rate: 0.3657
+Standard Deviation: 0.0000
