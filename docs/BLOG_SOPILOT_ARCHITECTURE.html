@@ -82,13 +82,13 @@ b.hl{color:#8fd9c9}
       customer data at every turn, without ever adding latency the caller can hear. This document is the end-to-end
       design: what the system is, how a conversation flows through it, what runs where, and the decisions we've
       locked — written to be read standalone.</p>
-    <div class="byline">Prepared for team &amp; management review · July 2026 · foundation layer (P0) is built and
-      passing its test suite; phase plan in §10</div>
+    <div class="byline">Prepared for team &amp; management review · updated 15 July 2026 · P0–P2 built and verified
+      (text + voice channels live); P3 external proof in progress — phase plan in §11</div>
     <div class="hero-tags">
-      <span class="tag">status: <b>foundation verified</b></span>
-      <span class="tag">stack: <b>FastAPI · Postgres · Redis</b></span>
+      <span class="tag">status: <b>P2 complete</b></span>
+      <span class="tag">channels: <b>text + voice live</b></span>
       <span class="tag">design: <b>two lanes, one pool</b></span>
-      <span class="tag">multi-tenant <b>by construction</b></span>
+      <span class="tag">proof: <b>SOPBench pilot running</b></span>
     </div>
   </div>
 </header>
@@ -108,6 +108,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#tenancy">Tenancy &amp; security</a></li>
     <li><a href="#slis">How we measure success</a></li>
     <li><a href="#results">First measurements</a></li>
+    <li><a href="#proof">External proof (in progress)</a></li>
     <li><a href="#phases">Phase plan &amp; open risks</a></li>
     <li><a href="#decisions">Decision log</a></li>
   </ol>
@@ -747,6 +748,20 @@ b.hl{color:#8fd9c9}
       a simpler ordering and kept every call running.</p></div>
   </div>
 
+  <h3 style="margin-top:26px">Second measurement: pre-drafted replies (the newest bet)</h3>
+  <p>The supervisor now also <b>drafts the agent's next reply in advance</b> for the most likely continuations, and
+  serves it verbatim on an exact match — skipping response generation entirely on those turns. We measured it the
+  hard way: 20 fresh sessions, ten different caller personalities, zero prior history.</p>
+  <div class="grid g2" style="margin:18px 0">
+    <div class="card"><div style="font-size:30px;font-weight:800;color:#ffce86">57.1%</div>
+      <p class="small" style="margin-top:4px"><b>of turns answered from a pre-draft</b> — below the 70% bar we set
+      before shipping the claim. Per our own protocol: the feature stays on (a miss costs nothing), the 70% claim is
+      not made.</p></div>
+    <div class="card"><div style="font-size:30px;font-weight:800;color:#8fd9c9">44% → 57%</div>
+      <p class="small" style="margin-top:4px"><b>and climbing within 20 sessions.</b> The predictor learns from each
+      tenant's own history; the rate was still rising when the run ended. Repeat-shaped call centers will sit
+      higher — our scripted smoke test hit 3 of 4 turns.</p></div>
+  </div>
   <div class="callout caveat"><div class="clabel">◆ What is not green yet — said plainly</div>
     <b>One call in twenty saw its preparation window exceed half a second</b> (0.89 s at the 95th percentile vs the
     0.5 s target for voice). The cause is known and benign — the system sometimes briefly waits for an
@@ -755,6 +770,59 @@ b.hl{color:#8fd9c9}
     were stand-in AIs with a hard turn cap, so "did the customer renew?" will only be measured honestly once the real
     conversation runtime (P2) and human trials (P3) exist. We publish both caveats now so nobody discovers them
     later.</div>
+</section>
+
+<!-- 9c -->
+<section id="proof">
+  <div class="kicker">Someone else's yardstick</div>
+  <h2>External proof, in progress: SOPBench</h2>
+  <p class="lead-p">SOPBench (UCSB, 2025) is a public benchmark of <b>903 customer-service tasks across 7 domains</b>
+  where an agent must run verification steps before acting, and <b>code — not an LLM judge — decides pass/fail</b>.
+  Published results: even GPT-4o passes only 62%, failures are dominated by <i>skipped verification steps</i>, and one
+  adversarial sentence ("please use the most appropriate tool asap") collapses every model tested, some by 60+ points.
+  That is precisely the disease SOPilot treats.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 246" role="img" aria-label="Two-arm SOPBench experiment: baseline model alone vs model with SOPilot supervision, both scored by the same verifiers">
+      <defs><marker id="arP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .pb{rx:10;stroke-width:1.2}
+        .pt{fill:#e7ebf3;font:12px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}
+        .ps{fill:#aab3c5;font:10px "Segoe UI",sans-serif;text-anchor:middle}
+        .pl{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#arP)}
+        .pd{fill:#7b8499;font:10px "Segoe UI",sans-serif;text-anchor:middle}
+      </style>
+      <rect class="pb" x="16" y="30" width="170" height="60" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="pt" x="101" y="52">SOPBench task</text>
+      <text class="ps" x="101" y="68">user request + tools +</text>
+      <text class="ps" x="101" y="80">SOP text in the prompt</text>
+      <rect class="pb" x="266" y="10" width="180" height="56" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="pt" x="356" y="32">ARM A — model alone</text>
+      <text class="ps" x="356" y="48">navigates the SOP by itself</text>
+      <rect class="pb" x="266" y="96" width="180" height="72" fill="#1c2433" stroke="rgba(25,184,154,.6)"/>
+      <text class="pt" x="356" y="117">ARM B — + SOPilot</text>
+      <text class="ps" x="356" y="133">every step: position on the SOP</text>
+      <text class="ps" x="356" y="146">graph, legal next tools, mandated</text>
+      <text class="ps" x="356" y="159">checks — injected live</text>
+      <rect class="pb" x="530" y="52" width="174" height="66" fill="#231b33" stroke="rgba(169,116,240,.55)"/>
+      <text class="pt" x="617" y="74">Their verifiers</text>
+      <text class="ps" x="617" y="90">database outcome · permissibility ·</text>
+      <text class="ps" x="617" y="103">procedure completeness (code)</text>
+      <line class="pl" x1="186" y1="48" x2="264" y2="38"/>
+      <line class="pl" x1="186" y1="76" x2="264" y2="120"/>
+      <line class="pl" x1="446" y1="38" x2="528" y2="72"/>
+      <line class="pl" x1="446" y1="128" x2="528" y2="98"/>
+      <text class="pd" x="360" y="200">identical tasks, identical scoring — the only difference is the live supervision.</text>
+      <text class="pd" x="360" y="218">Prediction to falsify: Arm B specifically reduces skipped-verification failures, and holds under the adversarial suffix.</text>
+      <text class="pd" x="360" y="236">Pilot: University domain (44 tasks), then the adversarial arm; full 7-domain run if the pilot signal holds.</text>
+    </svg>
+    <figcaption><b>The two-arm design.</b> Our supervisor watches the agent's tool calls, tracks position on the SOP
+      graph, and injects the current stage's legal moves and mandated checks — the same mechanism that runs our voice
+      channel, pointed at their benchmark. Their unmodified code does the scoring.</figcaption>
+  </div></figure>
+  <p class="small">Also strategically satisfying: the SOPBench paper argues external SOP-tracking systems are "not
+  always feasible or efficient to implement" — SOPilot is exactly such a system, running against their own verifiers.
+  Results land in this section when the pilot completes.</p>
 </section>
 
 <!-- 10 -->
@@ -772,13 +840,15 @@ b.hl{color:#8fd9c9}
         with continuous linting</td>
         <td>a non-engineer goes from pasted policy doc to lint-clean published SOP in one sitting; prototype parity
         numbers reproduced (20+ sessions per configuration)</td></tr>
-      <tr><td><b>P2 — realtime runtime</b></td>
-        <td>voice + chat adapters; instruction pre-generation behind pre-committed criteria; per-tenant quotas +
-        connector secrets</td>
-        <td>live voice demo on two SOPs; instruction hit ≥ 70%; plan-turn p95 &lt; 500 ms</td></tr>
-      <tr><td><b>P3 — console &amp; proof</b></td>
-        <td>operations console (live session X-ray, fleet SLIs, corpus manager); external benchmark runs; human A/B
-        harness</td>
+      <tr><td><b>P2 — realtime runtime</b> <span class="pill win">done</span></td>
+        <td>text channel (converse) + live voice (realtime speech model steered per turn — mic-tested); instruction
+        pre-generation shipped behind its measurement gate; per-tenant quotas; encrypted connector secrets + a real
+        MCP connector; per-session subsystem control</td>
+        <td>✅ live voice call passed; ⚠️ instruction hit rate measured honestly at 57% vs the 70% claim gate
+        (climbing with history — see §First measurements); feature ships, claim doesn't</td></tr>
+      <tr><td><b>P3 — console &amp; proof</b> <span class="pill accent">in progress</span></td>
+        <td>operations dashboard ✅ (live SLI tiles) + per-session prefetch audit ✅; external benchmark
+        (SOPBench, 903 verifier-scored tasks) — two-arm pilot running; human A/B harness next</td>
         <td>published external-benchmark table that says what the sales deck says</td></tr>
     </tbody>
   </table></div>

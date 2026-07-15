@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOPilot — Integration Guide</title>
+<style>
+:root{
+  --bg:#0f1117; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.11), transparent 60%),var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono);font-size:.9em}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;font-size:13px;line-height:1.55}
+code{background:var(--panel2);padding:1px 6px;border-radius:6px}
+pre code{background:none;padding:0}
+svg{max-width:100%;height:auto}
+.hero{padding:64px 22px 30px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(91,141,239,.08),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(28px,4.5vw,44px);line-height:1.05;margin:.3em 0 .25em;background:linear-gradient(92deg,#cfe0ff,#8fd9c9 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(16px,2vw,20px);color:var(--ink-soft)}
+.byline{margin-top:12px;color:var(--ink-faint);font-size:13.5px}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}
+main{min-width:0;max-width:772px}article section{margin:0 0 50px;scroll-margin-top:20px}
+h2{font-size:clamp(22px,3vw,29px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:18px;margin:26px 0 8px}p{margin:.7em 0}.lead-p{font-size:18.5px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.key{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.1)}.callout.key .clabel{color:#9cc0ff}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink-soft)}
+td{padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.footer{max-width:var(--maxw);margin:0 auto;padding:26px 22px 60px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">SOPilot · product line · integration guide</div>
+    <h1>Integrating SOPilot</h1>
+    <p class="lede">How to wire a product into SOPilot: bootstrap a tenant, turn a written procedure into a published
+      SOP, and run supervised conversations over text or live voice — or plug only the predicted-retrieval half into
+      an agent you already own. Copy-paste ready; the machine-readable twin of this document is
+      <span class="mono">INTEGRATION.md</span>.</p>
+    <div class="byline">Updated 15 July 2026 · applies to SOPilot main (P2-complete)</div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this guide</div>
+  <ol>
+    <li><a href="#flow">The integration at a glance</a></li>
+    <li><a href="#bootstrap">Bootstrap &amp; auth</a></li>
+    <li><a href="#author">Author &amp; publish an SOP</a></li>
+    <li><a href="#text">Text channel</a></li>
+    <li><a href="#voice">Voice channel</a></li>
+    <li><a href="#retrieval">Retrieval-only mode</a></li>
+    <li><a href="#observe">Observability</a></li>
+    <li><a href="#rules">The five invariants</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<section id="flow">
+  <div class="kicker">Orientation</div>
+  <h2>The integration at a glance</h2>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 210" role="img" aria-label="Integration flow: bootstrap, author, publish, run sessions, report outcomes">
+      <defs><marker id="arI" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .ib{rx:10;stroke-width:1.2}.it{fill:#e7ebf3;font:11.5px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}
+        .is{fill:#aab3c5;font:9.8px "Segoe UI",sans-serif;text-anchor:middle}
+        .il{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#arI)}
+        .id{fill:#7b8499;font:10px "Segoe UI",sans-serif;text-anchor:middle}
+      </style>
+      <rect class="ib" x="16" y="36" width="120" height="52" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="it" x="76" y="58">1 · Bootstrap</text><text class="is" x="76" y="74">tenant key + project</text>
+      <rect class="ib" x="166" y="36" width="140" height="52" fill="#231b33" stroke="rgba(169,116,240,.55)"/>
+      <text class="it" x="236" y="58">2 · Author</text><text class="is" x="236" y="74">doc → SOP · prompt blocks</text>
+      <rect class="ib" x="336" y="36" width="110" height="52" fill="#2b2113" stroke="rgba(240,167,60,.55)"/>
+      <text class="it" x="391" y="58">3 · Publish</text><text class="is" x="391" y="74">lint gate (422 if broken)</text>
+      <rect class="ib" x="476" y="36" width="120" height="52" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="it" x="536" y="58">4 · Run</text><text class="is" x="536" y="74">sessions · turns</text>
+      <rect class="ib" x="626" y="36" width="78" height="52" fill="#132a24" stroke="rgba(25,184,154,.5)"/>
+      <text class="it" x="665" y="58">5 · Report</text><text class="is" x="665" y="74">outcome</text>
+      <line class="il" x1="136" y1="62" x2="164" y2="62"/><line class="il" x1="306" y1="62" x2="334" y2="62"/>
+      <line class="il" x1="446" y1="62" x2="474" y2="62"/><line class="il" x1="596" y1="62" x2="624" y2="62"/>
+      <path class="il" d="M665,88 C665,150 300,160 240,110" fill="none" stroke-dasharray="5 4"/>
+      <text class="id" x="452" y="152">outcomes train the tenant's predictor — every conversation improves the next</text>
+      <text class="id" x="360" y="196">channels: text (converse) · live voice (realtime steering) · retrieval-only (your agent, our context)</text>
+    </svg>
+    <figcaption><b>Five steps, one loop.</b> Steps 1–3 happen once per procedure; steps 4–5 run per conversation and
+      feed the learning loop.</figcaption>
+  </div></figure>
+  <div class="callout key"><div class="clabel">◆ Choose your integration depth (D-9)</div>
+    Every project — and even every single session — can run <b>both</b> subsystems (default),
+    <span class="pill b">sop</span> only (procedure tracking + governed prompts, plain live lookups), or
+    <span class="pill a">retrieval</span> only (prediction + pre-staged context for <i>your</i> agent). Set it at
+    project creation, change it with a PATCH, or override per session at start.</div>
+</section>
+
+<section id="bootstrap">
+  <div class="kicker">Step 1</div>
+  <h2>Bootstrap &amp; auth</h2>
+  <pre><code># tenant — returns the API key EXACTLY ONCE; store it in a secret manager
+curl -X POST $BASE/admin/tenants -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"slug":"acme","name":"Acme"}'
+
+# project (subsystems: "both" | "sop" | "retrieval" | "" = deployment default)
+curl -X POST $BASE/admin/projects -H "Authorization: Bearer $KEY" \
+  -H 'Content-Type: application/json' -d '{"slug":"collections","subsystems":"both"}'</code></pre>
+  <p>Every project-scoped call carries two headers: <code>Authorization: Bearer sop_…</code> and
+  <code>X-Project: collections</code>. Keys are tenant-scoped — cross-tenant access returns 404, never data.
+  Expect: <b>401</b> bad key · <b>404</b> unknown object/project · <b>409</b> state conflict · <b>422</b> validation
+  or lint failure (with <code>problems[]</code>) · <b>429</b> tenant turn quota.</p>
+</section>
+
+<section id="author">
+  <div class="kicker">Steps 2–3</div>
+  <h2>Author &amp; publish an SOP</h2>
+  <p class="lead-p">Paste the written procedure — or upload the PDF — and refine the draft conversationally; publish
+  is gated by a linter that refuses broken graphs.</p>
+  <pre><code># document → draft SOP (also: POST /sops/ingest-file with a PDF, 2 MB cap)
+curl -X POST $BASE/sops/ingest -H "$AUTH" -H "$PROJ" \
+  -d '{"text": "&lt;the procedure text&gt;", "name_hint": "Overdue Invoice Recovery"}'
+# → {"id", "definition", "lint": {"problems": [], "publishable": true}}
+
+# refine (stateless — you hold the working definition, save when happy)
+curl -X POST $BASE/sops/build-turn -H "$AUTH" -H "$PROJ" \
+  -d '{"history":[{"role":"user","content":"add a SmallBusiness cohort"}], "current_definition": {...}}'
+
+curl -X PUT  $BASE/sops/$SOP_ID  -d '{"definition": {...}}'   # save new draft version
+curl -X POST $BASE/sops/$SOP_ID/publish                        # 422 + problems[] if lint fails</code></pre>
+  <h3>Approved wording: prompt blocks</h3>
+  <p>Compliance/legal language lives in a separately-versioned library and is <i>bound</i> to SOP stages; bindings
+  resolve to published versions and are pinned when a session starts — a mid-call wording change never lands mid-call.</p>
+  <pre><code>curl -X POST $BASE/prompt-blocks -d '{"name":"compliance.recording","kind":"compliance","content":"This call may be recorded…"}'
+curl -X POST $BASE/prompt-blocks/compliance.recording/publish
+# bind: add "compliance.recording" to an action's prompt_blocks[] and re-publish the SOP</code></pre>
+  <div class="callout caveat"><div class="clabel">◆ Two authoring rules that bite</div>
+    Mark every mutating data dependency <code>"idempotent": false</code> — the prefetcher trusts the flag and will
+    never speculate on it. And keep at least one non-terminal <code>user_state</code>: an all-terminal vocabulary is
+    a lint error because per-turn tracking degenerates (learned in live testing, now enforced).</div>
+  <h3>External data over MCP</h3>
+  <pre><code># store the credential once per tenant (encrypted at rest; reads return names only)
+curl -X PUT $BASE/secrets -H "Authorization: Bearer $KEY" \
+  -d '{"name":"kr_api_key","value":"&lt;credential&gt;"}'
+
+# then in the SOP's data_dependencies:
+{"name":"kb","kind":"mcp","idempotent":true,
+ "config":{"server":"https://kg.example.com/mcp","tool":"query_knowledge_graph",
+            "query_arg":"query","auth_secret":"kr_api_key","auth_header":"X-API-Key"},
+ "query_template":"customer asks: {user_text}"}</code></pre>
+</section>
+
+<section id="text">
+  <div class="kicker">Step 4a</div>
+  <h2>Text channel</h2>
+  <pre><code>SESSION=$(curl -X POST $BASE/sessions -d '{"sop_id":"'$SOP_ID'"}' | jq -r .session_id)
+
+# one call per user message — classification, planning, and the reply all happen inside
+curl -X POST $BASE/sessions/$SESSION/converse -d '{"user_message":"Hi, about my invoice…"}'
+# → {"reply", "terminal", "classification", "turn": {chosen_action, picks, consume_stats,
+#    instruction_hit, prompt_text, context_block, ...}, "total_ms"}
+
+# when terminal (or your own hangup logic):
+curl -X POST $BASE/sessions/$SESSION/outcome -d '{"outcome":"success"}'
+curl -X POST $BASE/sessions/$SESSION/end</code></pre>
+  <p>Say <code>reply</code> to the user; render the <code>turn</code> object in your own tooling if you want the
+  X-ray. <code>instruction_hit: true</code> means the reply was pre-drafted by the supervisor and served verbatim —
+  no generation latency on that turn. Callers that run their own classifier can use
+  <code>POST /sessions/{id}/plan-turn</code> instead and receive the instruction payload without a generated reply.</p>
+</section>
+
+<section id="voice">
+  <div class="kicker">Step 4b</div>
+  <h2>Voice channel</h2>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 250" role="img" aria-label="Voice integration sequence: token mint, WebRTC, per-turn voice-turn + session.update">
+      <style>
+        .vb{rx:9;stroke-width:1.1}.vt{fill:#e7ebf3;font:11px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}
+        .vs{fill:#aab3c5;font:9.8px "Segoe UI",sans-serif}
+        .vx{stroke:#39425a;stroke-width:1}
+        .vh{fill:#7b8499;font:10.5px "Segoe UI",sans-serif;font-weight:800;letter-spacing:.06em}
+      </style>
+      <text class="vh" x="16" y="20">SETUP (once per call)</text>
+      <rect class="vb" x="16" y="30" width="200" height="30" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="vt" x="116" y="49">POST /sessions → session_id</text>
+      <rect class="vb" x="236" y="30" width="230" height="30" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="vt" x="351" y="49">POST …/realtime-token → client_secret</text>
+      <rect class="vb" x="486" y="30" width="218" height="30" fill="#1c2433" stroke="rgba(25,184,154,.6)"/><text class="vt" x="595" y="49">WebRTC to OpenAI (ephemeral secret)</text>
+      <text class="vs" x="16" y="84">The realtime model runs in MANUAL turn mode — it cannot answer until steered. Your OpenAI key never reaches the browser.</text>
+      <line class="vx" x1="16" y1="98" x2="700" y2="98"/>
+      <text class="vh" x="16" y="120">PER TURN (caller stopped speaking)</text>
+      <rect class="vb" x="16" y="132" width="170" height="30" fill="#1b1f2a" stroke="#39425a"/><text class="vt" x="101" y="151">transcript event (data channel)</text>
+      <rect class="vb" x="206" y="132" width="210" height="30" fill="#1c2433" stroke="rgba(25,184,154,.6)"/><text class="vt" x="311" y="151">POST …/voice-turn → instructions</text>
+      <rect class="vb" x="436" y="132" width="160" height="30" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="vt" x="516" y="151">session.update{instructions}</text>
+      <rect class="vb" x="616" y="132" width="88" height="30" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="vt" x="660" y="151">response.create</text>
+      <text class="vs" x="16" y="190">voice-turn = classification + SOP position + pool context + pinned prompt blocks, compiled into one instruction payload.</text>
+      <text class="vs" x="16" y="208">The speech model never sees the whole SOP — only the current stage. Feed its reply transcript back as prev_assistant_message.</text>
+      <text class="vs" x="16" y="236">Reference client: frontend/src/views/voiceCall.ts (~150 lines, framework-free, portable to any WebRTC runtime).</text>
+    </svg>
+    <figcaption><b>The voice loop.</b> Steering happens in the beat between the caller finishing and the agent
+      speaking; a terminal classification ends the call and records the outcome.</figcaption>
+  </div></figure>
+</section>
+
+<section id="retrieval">
+  <div class="kicker">Step 4c</div>
+  <h2>Retrieval-only: your agent, our context</h2>
+  <p class="lead-p">Already have an agent stack? Run sessions with <code>"subsystems": "retrieval"</code> and take
+  only the pre-staged context.</p>
+  <pre><code>curl -X POST $BASE/sessions -d '{"sop_id":"'$SOP_ID'","subsystems":"retrieval"}'
+# per turn: converse or plan-turn → use turn.context_block in YOUR prompt; prompt_text is empty</code></pre>
+  <div class="callout caveat"><div class="clabel">◆ Keep the framing</div>
+    <code>context_block</code> begins with "speculatively pre-staged — may or may not fit this turn". That wording is
+    measured behavior (it prevents agents from forcing stale data into closing turns). Insert the block verbatim;
+    never re-label it as verified.</div>
+</section>
+
+<section id="observe">
+  <div class="kicker">Step 5 and beyond</div>
+  <h2>Observability</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Endpoint</th><th>What you get</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">GET /metrics/summary?days=N</td><td>the SLIs: pre-staged availability (target ≥70%), caller-felt waits (&lt;10%), instruction turn-hits vs the 70% claim gate, selection p50/p95, supervisor lag, outcomes</td></tr>
+      <tr><td class="mono">GET /sessions/{id}/fetches</td><td>permanent per-session prefetch audit — every fetch/draft marked served · unused · pending · error</td></tr>
+      <tr><td class="mono">GET /sessions/{id}/pool</td><td>the LIVE pool only (cleared at session end; items TTL out — by design)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="rules">
+  <div class="kicker">Contract</div>
+  <h2>The five integration invariants</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>Rule</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Nothing blocking between the user's utterance and converse/voice-turn</td><td>the runtime owns the latency budget; anything you add, the caller hears</td></tr>
+      <tr><td>2</td><td>Insert <code>context_block</code> verbatim, framing included</td><td>the honest label is measured behavior, not boilerplate</td></tr>
+      <tr><td>3</td><td><code>idempotent:false</code> on every mutating dependency</td><td>the prefetcher trusts the flag; a speculative booking is an incident</td></tr>
+      <tr><td>4</td><td>Report <code>outcome</code> on every session you can</td><td>terminal rewards are the predictor's training signal — your hit rates depend on it</td></tr>
+      <tr><td>5</td><td>Tenant keys shown once, stored hashed; OpenAI key server-side only</td><td>browsers only ever hold short-lived realtime secrets</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  SOPilot integration guide — human edition. Machine-readable twin: <span class="mono">docs/INTEGRATION.md</span>.
+  Architecture &amp; decision log: <span class="mono">ARCHITECTURE.md</span> · review narrative:
+  <span class="mono">docs/BLOG_SOPILOT_ARCHITECTURE.html</span>.
+</footer>
+</body>
+</html>
