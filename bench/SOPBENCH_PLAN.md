@@ -70,3 +70,30 @@ wins anyway, that understates the ceiling.
    `SOPILOT_SOPBENCH_HOOK=1` (their repo stays unmodified; the hook
    monkeypatches at import via a `sitecustomize`-style loader).
 3. Pilot numbers table (A vs B, standard + adversarial) in this file.
+
+## Pilot results — University domain, gpt-4o-mini, fc mode (2026-07-15)
+
+42 evaluated interactions per arm (2 of 44 excluded by their retry logic),
+identical flags, scored by their unmodified run_evaluation.py:
+
+| Metric | Arm A (baseline) | Arm B (+SOPilot) | Δ |
+|---|---|---|---|
+| **Mean pass rate** | **40.5%** | **57.1%** | **+16.7 pp (+41% rel)** |
+| total failures | 25 | 18 | −28% |
+| dirgraph violations (skipped/mis-ordered verification) | 13 | **4** | **−69%** |
+| incorrect action calls | 22 | 16 | −27% |
+| constraint violations | 20 | 15 | −25% |
+| tool-call errors | 0 | 0 | — |
+
+Sanity anchor: Arm A's 40.5% matches the paper's published GPT-4o-mini
+University number (40.91%) — the harness reproduces their setup.
+
+The pre-registered prediction held: supervision's largest effect is on
+procedure-order violations, the benchmark's dominant failure class. Remaining
+Arm-B failures skew toward outcome errors (wrong permissibility decision from
+correctly-gathered information) — a reasoning limit supervision doesn't claim
+to fix.
+
+Next: (1) adversarial arm (their jailbreak suffix) A vs B; (2) a second domain
+(Bank, 153 cases) to check transfer; (3) full 7-domain run + writeup if the
+signal holds.

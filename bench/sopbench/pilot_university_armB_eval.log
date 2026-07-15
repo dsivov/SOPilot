@@ -1,0 +1,143 @@
+Loaded 42 results from ./output/armB/university/ast_gpt-4o-mini-mode_fc-dep_full-fmt_structured-tool_full-shuffle_False.json
+Evaluating task simulations: 0it [00:00, ?it/s]Evaluating task simulations: 11it [00:00, 109.33it/s]Evaluating task simulations: 22it [00:00, 103.42it/s]Evaluating task simulations: 33it [00:00, 103.82it/s]Evaluating task simulations: 42it [00:00, 104.79it/s]
+Saving 42 results. First result has evaluations: True
+Results saved successfully to ./output/armB/university/ast_gpt-4o-mini-mode_fc-dep_full-fmt_structured-tool_full-shuffle_False.json
+----------- Overall domain statistics for university -----------
+assistant_model                       ('gpt-4o-mini',)
+avg_num_constraints                   7.47619
+avg_num_constraints_expanded          11.04762
+avg_num_function_calls                5.52381
+avg_num_messages                      8.07143
+domain                                university
+mean_pass_rate                        0.5714285714285714
+percentage_action_called_correctly    0.61905
+percentage_action_should_succeed      0.14286
+percentage_action_successfully_called 0.52381
+percentage_constraint_not_violated    0.64286
+percentage_database_match             0.71429
+percentage_dirgraph_satisfied         0.90476
+percentage_no_tool_call_error         1.0
+percentage_success                    0.57143
+std_pass_rate                         0.0
+total_action_called_correctly         26
+total_action_should_succeed           6
+total_action_successfully_called      22
+total_constraint_not_violated         27
+total_database_match                  30
+total_dirgraph_satisfied              38
+total_interactions                    42
+total_no_tool_call_error              42
+total_num_constraints                 314
+total_num_constraints_expanded        464
+total_num_function_calls              232
+total_num_messages                    339
+total_pass@1                          24
+total_success                         24
+total_tasks                           42
+user_model                            (None,)
+
+----------------------- Distr User Goal ------------------------
+apply_financial_aid 7
+change_major        6
+declare_minor       7
+drop_course         4
+enroll_course       10
+request_graduation  8
+
+----------------------- Group Statistics -----------------------
+4  {
+     "total_tasks": 4,
+     "total_interactions": 4,
+     "distr_user_goal": {
+       "drop_course": 4
+     },
+     "total_action_should_succeed": 1,
+     "total_num_messages": 29,
+     "total_num_function_calls": 19,
+     "total_num_constraints": 16,
+     "total_num_constraints_expanded": 24,
+     "total_no_tool_call_error": 4,
+     "total_constraint_not_violated": 1,
+     "total_database_match": 2,
+     "total_action_successfully_called": 3,
+     "total_dirgraph_satisfied": 0,
+     "total_action_called_correctly": 2,
+     "total_success": 0,
+     "total_pass@1": 0,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.0
+     },
+     "mean_pass_rate": 0.0,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.25,
+     "avg_num_messages": 7.25,
+     "avg_num_function_calls": 4.75,
+     "avg_num_constraints": 4.0,
+     "avg_num_constraints_expanded": 6.0,
+     "percentage_no_tool_call_error": 1.0,
+     "percentage_constraint_not_violated": 0.25,
+     "percentage_database_match": 0.5,
+     "percentage_action_successfully_called": 0.75,
+     "percentage_dirgraph_satisfied": 0.0,
+     "percentage_action_called_correctly": 0.5,
+     "percentage_success": 0.0
+   }
+6+ {
+     "total_tasks": 38,
+     "total_interactions": 38,
+     "distr_user_goal": {
+       "apply_financial_aid": 7,
+       "change_major": 6,
+       "declare_minor": 7,
+       "enroll_course": 10,
+       "request_graduation": 8
+     },
+     "total_action_should_succeed": 5,
+     "total_num_messages": 310,
+     "total_num_function_calls": 213,
+     "total_num_constraints": 298,
+     "total_num_constraints_expanded": 440,
+     "total_no_tool_call_error": 38,
+     "total_constraint_not_violated": 26,
+     "total_database_match": 28,
+     "total_action_successfully_called": 19,
+     "total_dirgraph_satisfied": 38,
+     "total_action_called_correctly": 24,
+     "total_success": 24,
+     "total_pass@1": 24,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.631578947368421
+     },
+     "mean_pass_rate": 0.631578947368421,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.13158,
+     "avg_num_messages": 8.15789,
+     "avg_num_function_calls": 5.60526,
+     "avg_num_constraints": 7.84211,
+     "avg_num_constraints_expanded": 11.57895,
+     "percentage_no_tool_call_error": 1.0,
+     "percentage_constraint_not_violated": 0.68421,
+     "percentage_database_match": 0.73684,
+     "percentage_action_successfully_called": 0.5,
+     "percentage_dirgraph_satisfied": 1.0,
+     "percentage_action_called_correctly": 0.63158,
+     "percentage_success": 0.63158
+   }
+
+----------------------- Error Statistics -----------------------
+error_causes      {
+                    "tool_call_errors": 0,
+                    "constraint_violations": 15,
+                    "database_mismatches": 12,
+                    "dirgraph_violations": 4,
+                    "incorrect_action_calls": 16
+                  }
+total_evaluations 42
+total_failures    18
+
+---------------------- Per Run Pass Rates ----------------------
+{
+  "run_1_pass": 0.5714285714285714
+}
+Mean Pass Rate: 0.5714
+Standard Deviation: 0.0000
