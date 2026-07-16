@@ -77,16 +77,27 @@ async def start_session(
     ).scalar_one_or_none()
     if sop is None:
         raise HTTPException(status_code=404, detail="SOP not found")
-    version = (
-        await db.execute(
-            select(SopVersion)
-            .where(SopVersion.sop_id == sop.id, SopVersion.status == "published")
-            .order_by(SopVersion.version.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    if version is None:
-        raise HTTPException(status_code=409, detail="SOP has no published version")
+    if req.sop_version:
+        version = (
+            await db.execute(
+                select(SopVersion).where(
+                    SopVersion.sop_id == sop.id, SopVersion.version == req.sop_version
+                )
+            )
+        ).scalar_one_or_none()
+        if version is None:
+            raise HTTPException(status_code=404, detail=f"SOP version {req.sop_version} not found")
+    else:
+        version = (
+            await db.execute(
+                select(SopVersion)
+                .where(SopVersion.sop_id == sop.id, SopVersion.status == "published")
+                .order_by(SopVersion.version.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if version is None:
+            raise HTTPException(status_code=409, detail="SOP has no published version")
     # D-7: pin prompt-block bindings now — a block published mid-conversation
     # never lands mid-call.
     from ..runtime import collect_prompt_block_names

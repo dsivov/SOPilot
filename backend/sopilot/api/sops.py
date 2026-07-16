@@ -194,27 +194,47 @@ async def delete_sop(
     return {"deleted": sop_id}
 
 
+@router.get("/{sop_id}/versions")
+async def list_sop_versions(
+    sop_id: str, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
+) -> list[dict]:
+    sop = await _get_sop(db, scope, sop_id)
+    rows = (
+        (
+            await db.execute(
+                select(SopVersion).where(SopVersion.sop_id == sop.id).order_by(SopVersion.version.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {"version": v.version, "status": v.status, "created_at": v.created_at.isoformat()} for v in rows
+    ]
+
+
 @router.get("/{sop_id}")
 async def get_sop(
-    sop_id: str, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
+    sop_id: str,
+    scope: Scope = Depends(resolve_scope),
+    db: AsyncSession = Depends(get_db),
+    version: int = 0,
 ) -> dict:
+    """Latest version by default; ?version=N pins one (A/B arms use this)."""
     sop = await _get_sop(db, scope, sop_id)
-    version = (
-        await db.execute(
-            select(SopVersion)
-            .where(SopVersion.sop_id == sop.id)
-            .order_by(SopVersion.version.desc())
-            .limit(1)
-        )
-    ).scalar_one()
+    q = select(SopVersion).where(SopVersion.sop_id == sop.id)
+    q = q.where(SopVersion.version == version) if version else q.order_by(SopVersion.version.desc()).limit(1)
+    row = (await db.execute(q)).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"SOP version {version} not found")
     return {
         "id": sop.id,
         "name": sop.name,
-        "version": version.version,
-        "status": version.status,
-        "definition": version.definition,
-        "source_document": version.source_document,
-        "source_filename": version.source_filename,
+        "version": row.version,
+        "status": row.status,
+        "definition": row.definition,
+        "source_document": row.source_document,
+        "source_filename": row.source_filename,
     }
 
 

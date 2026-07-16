@@ -74,6 +74,29 @@ class ApiKey(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class ABTest(Base):
+    """One autopilot A/B run: two SOP versions of the same SOP, driven by the
+    customer simulator through the REAL runtime, judged per turn."""
+
+    __tablename__ = "ab_tests"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    project_id: Mapped[str] = mapped_column(String(32), index=True)
+    sop_id: Mapped[str] = mapped_column(String(32), index=True)
+    name: Mapped[str] = mapped_column(String(200), default="")
+    arm_a_version: Mapped[int] = mapped_column(Integer)
+    arm_b_version: Mapped[int] = mapped_column(Integer)
+    n_sessions: Mapped[int] = mapped_column(Integer, default=4)
+    max_turns: Mapped[int] = mapped_column(Integer, default=8)
+    status: Mapped[str] = mapped_column(String(16), default="running")  # running | done | failed
+    progress: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {"completed": n, "total": n}
+    results: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class TenantSecret(Base):
     """Connector credentials, Fernet-encrypted at rest (see secrets.py)."""
 

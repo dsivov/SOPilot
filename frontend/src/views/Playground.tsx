@@ -1,6 +1,7 @@
 import { CircleStop, MessageSquarePlus, Mic, MicOff, Send } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api";
+import AutopilotPanel from "./Autopilot";
 import { VoiceCall } from "./voiceCall";
 
 type SopMeta = { id: string; name: string; latest_version: number };
@@ -31,6 +32,7 @@ export default function PlaygroundView() {
   const [error, setError] = useState("");
   const [voice, setVoice] = useState<VoiceCall | null>(null);
   const [voiceStatus, setVoiceStatus] = useState("");
+  const [panel, setPanel] = useState<"live" | "autopilot">("live");
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -161,10 +163,18 @@ export default function PlaygroundView() {
         <div>
           <div className="eyebrow">Operations</div>
           <h1>Playground</h1>
-          <p>Talk to a published SOP over the text channel — with the supervisor's X-ray per turn.</p>
+          <p>
+            {panel === "live"
+              ? "Talk to a published SOP over the text channel — with the supervisor's X-ray per turn."
+              : "Autopilot A/B: the customer simulator drives two SOP versions through the real runtime and charts them per turn."}
+          </p>
         </div>
         <div className="actions">
-          {sessionId && (
+          <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+            <button className={"btn ghost sm"} style={panel === "live" ? { background: "var(--accent-dim)", color: "var(--accent)", borderRadius: 0 } : { borderRadius: 0 }} onClick={() => setPanel("live")}>Live chat</button>
+            <button className={"btn ghost sm"} style={panel === "autopilot" ? { background: "var(--accent-dim)", color: "var(--accent)", borderRadius: 0 } : { borderRadius: 0 }} onClick={() => setPanel("autopilot")}>Autopilot A/B</button>
+          </div>
+          {panel === "live" && sessionId && (
             <button className="btn" onClick={() => endSession("abandoned")}>
               <CircleStop /> End session
             </button>
@@ -172,7 +182,14 @@ export default function PlaygroundView() {
         </div>
       </div>
 
-      {!sessionId ? (
+      {panel === "autopilot" ? (
+        <div className="card">
+          <div className="chead"><h3>Autopilot A/B</h3></div>
+          <div className="cbody">
+            <AutopilotPanel sops={sops} />
+          </div>
+        </div>
+      ) : !sessionId ? (
         <div className="card" style={{ maxWidth: 560 }}>
           <div className="chead"><h3>Start a conversation</h3></div>
           <div className="cbody" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
