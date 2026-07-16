@@ -164,6 +164,18 @@ class PrefetchManager:
         fetch_id = ""
         try:
             async with self.sessionmaker() as db:
+                # Late-landing fetch on an already-ended session (the background
+                # lane has no deadline): record it as wasted immediately — the
+                # /end finalizer has already swept and won't come back for it.
+                from sqlalchemy import select as _select
+
+                from .models import ConversationSession
+
+                sess_status = (
+                    await db.execute(
+                        _select(ConversationSession.status).where(ConversationSession.id == session_id)
+                    )
+                ).scalar_one_or_none()
                 row = DataFetchAudit(
                     tenant_id=scope.tenant_id,
                     project_id=scope.project_id,
@@ -184,6 +196,7 @@ class PrefetchManager:
                     fetch_duration_ms=duration_ms,
                     payload_summary=(summary or "")[:500],
                     fetch_error=err,
+                    wasted=(sess_status == "ended" and speculative),
                 )
                 db.add(row)
                 await db.commit()
