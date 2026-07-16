@@ -535,6 +535,21 @@ async def converse(
             "respond_ms": respond_ms,
             "reply_source": "pre-draft" if plan["instruction_hit"] else "model",
         }
+    # Complete the precedent trace: the agent's actual reply (what instruction
+    # pre-generation mines) and the situation embedding (already computed for
+    # this turn's rerank — no extra API call).
+    trace_row = (
+        await db.execute(
+            select(PrecedentTrace).where(
+                PrecedentTrace.session_id == session.id,
+                PrecedentTrace.turn_index == plan["turn_index"],
+            )
+        )
+    ).scalar_one_or_none()
+    if trace_row is not None:
+        trace_row.response_text = reply
+        if query_emb is not None:
+            trace_row.situation_embedding = query_emb
     await db.commit()
 
     cp = task_def.conversation_profile
@@ -543,6 +558,19 @@ async def converse(
         else "failure" if proposal["state"] in set(cp.failure_markers)
         else None
     )
+    if terminal and session.terminal_outcome is None:
+        # auto-record the detected terminal + back-propagate onto traces;
+        # an explicit POST /outcome afterwards still overrides.
+        session.terminal_outcome = terminal
+        await db.execute(
+            update(PrecedentTrace)
+            .where(
+                PrecedentTrace.tenant_id == scope.tenant_id,
+                PrecedentTrace.session_id == session.id,
+            )
+            .values(terminal_outcome=terminal, terminal_reward=TERMINAL_REWARDS[terminal])
+        )
+        await db.commit()
     return {
         "reply": reply,
         "terminal": terminal,

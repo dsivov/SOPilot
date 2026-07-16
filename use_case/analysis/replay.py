@@ -86,13 +86,15 @@ async def replay_one(theme: str, dialogue: dict, sem: asyncio.Semaphore) -> dict
         client_turns = [t["t"] for t in dialogue["turns"] if t["s"] == "Client"][:MAX_CLIENT_TURNS]
         sess = (await call("POST", "/sessions", {"sop_id": SOP_IDS[theme], "channel": "bench"}))["session_id"]
         ai_replies = []
+        terminal_seen = None
         for msg in client_turns:
             r = await call("POST", f"/sessions/{sess}/converse", {"user_message": msg})
             ai_replies.append(r["reply"])
             if r.get("terminal"):
+                terminal_seen = r["terminal"]
                 break
             await asyncio.sleep(1.0)
-        await call("POST", f"/sessions/{sess}/outcome", {"outcome": "abandoned"})
+        await call("POST", f"/sessions/{sess}/outcome", {"outcome": terminal_seen or "abandoned"})
         await call("POST", f"/sessions/{sess}/end")
 
         human = "\n".join(f"{t['s']}: {t['t']}" for t in dialogue["turns"])

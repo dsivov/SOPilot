@@ -165,6 +165,7 @@ async def arm_a_reply(history: list[dict], variant: str) -> str:
 
 async def run_conversation(scenario: dict, arm: str) -> dict:
     history: list[dict] = []
+    terminal_seen = None
     sess = None
     if arm == "B":
         sess = (await call("POST", "/sessions", {"channel": "bench"}))["session_id"]  # intake — router decides
@@ -179,12 +180,14 @@ async def run_conversation(scenario: dict, arm: str) -> dict:
             else:
                 r = await call("POST", f"/sessions/{sess}/converse", {"user_message": utt})
                 reply = r["reply"]
+                if r.get("terminal"):
+                    terminal_seen = r["terminal"]
             history.append({"role": "agent", "text": reply})
         if done:
             break
         await asyncio.sleep(0.8)
     if sess:
-        await call("POST", f"/sessions/{sess}/outcome", {"outcome": "abandoned"})
+        await call("POST", f"/sessions/{sess}/outcome", {"outcome": terminal_seen or "abandoned"})
         await call("POST", f"/sessions/{sess}/end")
 
     transcript = "\n".join(f"{h['role']}: {h['text']}" for h in history)
