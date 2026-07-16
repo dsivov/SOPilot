@@ -11,3 +11,13 @@ dist/
 node_modules/
 certs/
 *.local.txt
+
+# Real customer data (AENA) — NEVER commit raw data or any derived artifact
+# that contains conversation content (Dima, explicit). Only scripts + aggregate
+# reports may be committed.
+use_case/aena_dump*
+use_case/**/cleaned*
+use_case/**/*.jsonl
+use_case/**/*.json
+use_case/**/*.zip
+use_case/**/*.txt
