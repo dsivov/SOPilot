@@ -34,6 +34,22 @@ def fetch_key(dep_name: str, action_name: str, query_hash: str = "") -> str:
     return hashlib.sha1(f"{dep_name}|{action_name}|{query_hash}".encode()).hexdigest()[:24]
 
 
+def payload_prompt_text(payload: object, summary: str) -> str:
+    """What the AGENT should see for a consumed dependency. Rich fetchers (RAG,
+    MCP, HTTP) carry their content in the payload; the summary is a ≤200-char
+    meta-line meant for rerank/audit, not for answering. Prefer content."""
+    if isinstance(payload, dict):
+        for key in ("joined_text", "text", "content", "result"):
+            v = payload.get(key)
+            if isinstance(v, str) and v.strip():
+                return v[:1500]
+    if isinstance(payload, str) and payload.strip():
+        return payload[:1500]
+    if payload is not None and not isinstance(payload, (dict, list)):
+        return str(payload)[:400]
+    return summary or (str(payload)[:400] if payload is not None else "")
+
+
 def query_hash(query: str | None) -> str:
     if not query:
         return ""
@@ -214,6 +230,10 @@ class PrefetchManager:
         current_turn_index: int,
         await_inflight_ms: int = 2000,
         live_fallback: bool = True,
+        user_text: str = "",
+        cohort: str = "",
+        mood: str = "",
+        state: str = "",
     ) -> tuple[dict[str, str], dict[str, int]]:
         """Resolve the chosen action's declared deps from the pool; poll briefly for
         in-flight fetches; optionally live-fetch misses (audited as such)."""
@@ -241,10 +261,22 @@ class PrefetchManager:
                     item = await self._pool_lookup(scope, session_id, dep_name)
             if item is not None:
                 stats["consumed"] += 1
-                payloads[dep_name] = item.payload_summary or str(item.payload)[:200]
+                payloads[dep_name] = payload_prompt_text(item.payload, item.payload_summary)
                 await self._mark_consumed(scope, item.fetch_id, current_turn_index)
                 continue
             if live_fallback:
+                # live fallback renders the SAME query template the speculative
+                # path would — with the actual user text, which is strictly
+                # better context than a prediction-time synthesis.
+                rendered_query = None
+                if dep.query_template:
+                    try:
+                        rendered_query = dep.query_template.format(
+                            user_text=user_text, cohort=cohort, mood=mood,
+                            state=state, action=action_name,
+                        )
+                    except (KeyError, IndexError):
+                        rendered_query = None
                 t0 = time.perf_counter()
                 live_item = await self._run_fetch(
                     scope=scope,
@@ -257,11 +289,13 @@ class PrefetchManager:
                     predicted_turn=current_turn_index,
                     speculative=False,
                     predictor_source="live",
+                    rendered_query=rendered_query,
+                    qh=query_hash(rendered_query) if rendered_query else "",
                 )
                 stats["live"] += 1
                 stats["live_latency_ms"] += int((time.perf_counter() - t0) * 1000)
                 if live_item is not None:
-                    payloads[dep_name] = live_item.payload_summary or str(live_item.payload)[:200]
+                    payloads[dep_name] = payload_prompt_text(live_item.payload, live_item.payload_summary)
 
         # latency_hidden = what the consumed fetches originally cost off-path
         if stats["consumed"]:

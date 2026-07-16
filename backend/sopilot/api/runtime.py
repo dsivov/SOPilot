@@ -146,6 +146,10 @@ async def plan_turn(
             task_def=task_def,
             action_name=chosen,
             current_turn_index=turn_index,
+            user_text=body.user_message,
+            cohort=body.cohort,
+            mood=body.mood,
+            state=body.state,
         )
         db.add(
             PoolPickAudit(
@@ -168,6 +172,10 @@ async def plan_turn(
             action_name=chosen,
             current_turn_index=turn_index,
             await_inflight_ms=0,
+            user_text=body.user_message,
+            cohort=body.cohort,
+            mood=body.mood,
+            state=body.state,
         )
 
     # D-7: stage blocks come from the bindings pinned at session start.
