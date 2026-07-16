@@ -150,6 +150,7 @@ async def plan_turn(
             cohort=body.cohort,
             mood=body.mood,
             state=body.state,
+            query_emb=getattr(request.state, "query_emb", None),
         )
         db.add(
             PoolPickAudit(
@@ -176,6 +177,7 @@ async def plan_turn(
             cohort=body.cohort,
             mood=body.mood,
             state=body.state,
+            query_emb=getattr(request.state, "query_emb", None),
         )
 
     # D-7: stage blocks come from the bindings pinned at session start.

@@ -75,6 +75,10 @@ def assemble_stage_prompt(
     for content in stage_blocks or []:  # D-7: authored, versioned language — pinned at session start
         lines.append(content)
     lines.append(f"CURRENT STAGE: {action_name}")
+    if dep_payloads:
+        lines.append("DATA FOR THIS STAGE (answer from this first when it fits the caller's question):")
+        for dep_name, payload in dep_payloads.items():
+            lines.append(f"- {dep_name}: {payload}")
     if action is not None:
         if action.description:
             lines.append(f"STAGE INSTRUCTIONS: {action.description}")
@@ -82,10 +86,6 @@ def assemble_stage_prompt(
             lines.append("MUST INCLUDE: " + " | ".join(action.must_say))
         if action.must_not_say:
             lines.append("DO NOT SAY: " + " | ".join(action.must_not_say))
-    if dep_payloads:
-        lines.append("DATA FOR THIS STAGE:")
-        for dep_name, payload in dep_payloads.items():
-            lines.append(f"- {dep_name}: {payload}")
     if context_block:
         lines.append("")
         lines.append(context_block)

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from .embeddings import EmbeddingProvider
 from .fetchers.base import get_fetcher
+from .config import get_settings
 from .models import DataFetchAudit
 from .pool import PoolItem, SessionPool, utcnow
 from .predictor import PrefetchPlanItem
@@ -247,6 +248,7 @@ class PrefetchManager:
         cohort: str = "",
         mood: str = "",
         state: str = "",
+        query_emb=None,
     ) -> tuple[dict[str, str], dict[str, int]]:
         """Resolve the chosen action's declared deps from the pool; poll briefly for
         in-flight fetches; optionally live-fetch misses (audited as such)."""
@@ -273,10 +275,37 @@ class PrefetchManager:
                 else:
                     item = await self._pool_lookup(scope, session_id, dep_name)
             if item is not None:
-                stats["consumed"] += 1
-                payloads[dep_name] = payload_prompt_text(item.payload, item.payload_summary)
-                await self._mark_consumed(scope, item.fetch_id, current_turn_index)
-                continue
+                # D-12: staleness gate for user-text-driven deps — a speculatively
+                # fetched item answers the PREDICTED utterance; if its content is
+                # semantically far from what the caller ACTUALLY just said, re-fetch
+                # live with the real query instead of serving stale context.
+                stale = False
+                min_cos = get_settings().consume_stale_min_cos
+                if (
+                    min_cos > 0
+                    and live_fallback
+                    and query_emb is not None
+                    and item.summary_embedding is not None
+                    and dep.query_template
+                    and "{user_text}" in dep.query_template
+                ):
+                    import numpy as _np
+
+                    a = _np.asarray(query_emb, dtype=float)
+                    b = _np.asarray(item.summary_embedding, dtype=float)
+                    denom = float(_np.linalg.norm(a) * _np.linalg.norm(b)) or 1.0
+                    cos = float(a.dot(b)) / denom
+                    if cos < min_cos:
+                        stale = True
+                        log.info(
+                            "stale speculation dep=%s cos=%.3f < %.2f — live re-fetch with real query",
+                            dep_name, cos, min_cos,
+                        )
+                if not stale:
+                    stats["consumed"] += 1
+                    payloads[dep_name] = payload_prompt_text(item.payload, item.payload_summary)
+                    await self._mark_consumed(scope, item.fetch_id, current_turn_index)
+                    continue
             if live_fallback:
                 # live fallback renders the SAME query template the speculative
                 # path would — with the actual user text, which is strictly

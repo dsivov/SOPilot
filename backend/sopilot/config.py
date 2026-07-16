@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     # 0 disables. One tenant's burst must not starve another's supervisor lane.
     quota_turns_per_min: int = 120
 
+    # D-12 staleness gate: a pooled data item is served only if its content
+    # embedding is close enough to the CURRENT utterance (cosine); below the
+    # floor the runtime re-fetches live with the real query instead. 0 disables.
+    consume_stale_min_cos: float = 0.30
+
     # Milestone B: instruction pre-generation (the pre-committed-criteria bet:
     # ship-claim requires hit>=70% + no success regression; audit rows measure it).
     instruction_prefetch: bool = True

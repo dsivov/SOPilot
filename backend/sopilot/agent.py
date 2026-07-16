@@ -136,9 +136,15 @@ async def pre_generate_reply(
 async def respond(prompt_text: str, history: list[dict], user_message: str) -> str:
     """The live agent's reply from the plan-turn instruction payload (text channel)."""
     settings = get_settings()
+    in_progress = bool(history)
     system = (
         "You are the live conversational agent on this channel. Follow the instructions below exactly — "
-        "including any MUST INCLUDE wording — and keep replies natural and short (1-3 sentences).\n\n"
+        "including any MUST INCLUDE wording — and keep replies natural and short (1-3 sentences).\n"
+        "CONVERSATION RULES:\n"
+        "- If DATA below answers the caller's current question, lead with that answer, concretely — "
+        "never replace an available answer with a clarifying question or a referral to screens/staff.\n"
+        + ("- The conversation is already in progress: do NOT greet again.\n" if in_progress else "")
+        + "- Reply in the language the caller is using; never ask which language they prefer.\n\n"
         + (prompt_text or "Respond helpfully and professionally.")
     )
     msgs: list[dict] = [{"role": "system", "content": system}]
