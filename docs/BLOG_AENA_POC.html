@@ -328,6 +328,26 @@ b.hl{color:#8fd9c9}
       SOPBench work.</li>
     <li><b>Voice demo for AENA</b>: live call in the Playground against SOP 1 (lost luggage) — the emotional one.</li>
   </ol>
+  <h3>First replay scorecard (v1 — honest baseline)</h3>
+  <p>36 held-out real conversations (never seen by mining) replayed through the live POC; a judge compared the
+  AI's answers with what the human agent actually provided:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Theme</th><th>Covered</th><th>Partial</th><th>Missed</th></tr></thead>
+    <tbody>
+      <tr><td>transport &amp; wayfinding</td><td>3/12</td><td>7</td><td>2</td></tr>
+      <tr><td>flight &amp; boarding info</td><td>2/12</td><td>4</td><td>6</td></tr>
+      <tr><td>lost luggage</td><td>2/12</td><td>1</td><td>9</td></tr>
+      <tr><td><b>total</b></td><td><b>7/36 (19%)</b></td><td><b>12 (33%)</b></td><td><b>17 (47%)</b></td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Why v1 scores low — three specific, fixable causes: (1) the fact base has 25 facts while the
+  human agents demonstrate a long tail of desk knowledge (per-airline handler desks, per-flight belts) — the miss
+  notes are dominated by "AI missed the desk location"; (2) the mined SOPs verify before answering, while real desk
+  agents answer first and verify only when routing requires it; (3) replay desynchronization — when the AI asks a
+  clarifying question, the recorded traveller's next line answers the <i>human</i> agent's different flow, which the
+  judge scores as a miss. Iteration one: mine facts from ALL agent answers (not just the SOP-mining sample), make
+  the SOPs answer-first, neutral retrieval queries. The harness re-runs in minutes, so this number is a baseline to
+  climb, not a verdict.</p>
   <div class="callout ok"><div class="clabel">◆ Where we are</div>
     Steps 0 of this list — corpus survey, garbage taxonomy, cleaning pipeline, intent mining — are <b>done</b>
     (this document is their report). Everything above runs from <code>use_case/analysis/</code> and re-runs in
