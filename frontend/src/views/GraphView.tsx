@@ -26,7 +26,7 @@ function storageKey(sopId: string): string {
   return `sopilot-graph-layout-${sopId}`;
 }
 
-export default function GraphView({ def, sopId, onSelect }: { def: Def; sopId: string; onSelect?: (name: string, kind: "action" | "state") => void }) {
+export default function GraphView({ def, sopId, onSelect, visits }: { def: Def; sopId: string; onSelect?: (name: string, kind: "action" | "state") => void; visits?: Record<string, number> }) {
   const [overrides, setOverrides] = useState<Record<string, XY>>({});
   const drag = useRef<{ name: string; dx: number; dy: number; moved: boolean; kind: string } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -227,14 +227,24 @@ export default function GraphView({ def, sopId, onSelect }: { def: Def; sopId: s
             const isBad = layout.failure.has(name);
             const stroke = isAction ? "var(--comm)" : isGood ? "var(--good)" : isBad ? "var(--crit)" : "var(--accent)";
             const fill = isAction ? "var(--comm-dim)" : isGood ? "var(--good-dim)" : isBad ? "var(--crit-dim)" : "var(--accent-dim)";
+            const visitCount = visits?.[name] ?? 0;
+            const dimmed = visits !== undefined && visitCount === 0;
             return (
-              <g key={name} onPointerDown={onPointerDown(name, p.kind)} style={{ cursor: "grab" }}>
-                <title>{name}{isAction && layout.hasData.get(name) ? " — needs external data" : isGood ? " — ends: success" : isBad ? " — ends: failure" : ""}</title>
-                <rect x={p.x} y={p.y} width={p.w} height={NODE_H} rx={9} fill={fill} stroke={stroke} strokeWidth={1.2} />
+              <g key={name} onPointerDown={onPointerDown(name, p.kind)} style={{ cursor: "grab" }} opacity={dimmed ? 0.38 : 1}>
+                <title>{name}{isAction && layout.hasData.get(name) ? " — needs external data" : isGood ? " — ends: success" : isBad ? " — ends: failure" : ""}{visits !== undefined ? (visitCount ? ` — visited on ${visitCount} turn${visitCount === 1 ? "" : "s"}` : " — not visited") : ""}</title>
+                <rect x={p.x} y={p.y} width={p.w} height={NODE_H} rx={9} fill={fill} stroke={stroke} strokeWidth={visitCount ? 2.4 : 1.2} />
                 <text x={p.x + p.w / 2} y={p.y + 21} textAnchor="middle" style={{ fill: "var(--text)", fontSize: 12, fontWeight: 600, pointerEvents: "none", userSelect: "none" }}>
                   {name}{isGood ? " ✓" : isBad ? " ✕" : ""}
                 </text>
                 {isAction && layout.hasData.get(name) && <circle cx={p.x + p.w - 8} cy={p.y + 8} r={3.5} fill="var(--warn)" />}
+                {visitCount > 0 && (
+                  <g pointerEvents="none">
+                    <circle cx={p.x + p.w - 2} cy={p.y - 2} r={9} fill="var(--accent)" />
+                    <text x={p.x + p.w - 2} y={p.y + 1.5} textAnchor="middle" style={{ fill: "#fff", fontSize: 10, fontWeight: 700 }}>
+                      {visitCount}
+                    </text>
+                  </g>
+                )}
               </g>
             );
           })}

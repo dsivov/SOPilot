@@ -72,6 +72,47 @@ async def save_block(
     return {"name": block.name, "version": block.latest_version, "status": "draft"}
 
 
+class BlockRewriteRequest(BaseModel):
+    content: str
+    instruction: str = ""
+    kind: str = "stage"
+
+
+@router.post("/rewrite")
+async def rewrite_block(
+    req: BlockRewriteRequest,
+    scope: Scope = Depends(resolve_scope),  # noqa: ARG001 — auth gate; rewrite is stateless
+) -> dict:
+    """LLM-assisted rewrite (builder model). Stateless preview — nothing is
+    saved; the client saves the result as a new draft version explicitly."""
+    if not req.content.strip():
+        raise HTTPException(status_code=422, detail="content must not be empty")
+    from ..config import get_settings
+    from ..llm import chat_json
+
+    system = (
+        "You rewrite prompt blocks for a voice/chat agent platform. A prompt block is a short, "
+        "reusable instruction fragment injected into an agent's system prompt at specific "
+        "conversation stages. Kinds: stage (stage guidance), compliance (legally mandated wording — "
+        "preserve mandated phrases verbatim unless the instruction explicitly asks to change them), "
+        "role (persona), escalation (handoff rules).\n"
+        "Rewrite the given block per the user's instruction. Keep it concise and imperative; "
+        "spoken-friendly (it may be read aloud); no markdown headings or bullets unless the "
+        "original had them. Return JSON: {\"content\": \"<rewritten block>\", "
+        "\"notes\": \"<one sentence on what you changed and why>\"}."
+    )
+    user = (
+        f"KIND: {req.kind}\n"
+        f"INSTRUCTION: {req.instruction.strip() or 'Improve clarity and effectiveness; keep the meaning.'}\n"
+        f"CURRENT CONTENT:\n{req.content}"
+    )
+    out = await chat_json(system, user, model=get_settings().builder_model, max_tokens=1200)
+    content = str(out.get("content", "")).strip()
+    if not content:
+        raise HTTPException(status_code=502, detail="model returned an empty rewrite")
+    return {"content": content, "notes": str(out.get("notes", "")).strip()}
+
+
 @router.get("")
 async def list_blocks(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)) -> list[dict]:
     rows = (

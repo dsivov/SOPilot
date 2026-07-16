@@ -1,15 +1,11 @@
 import { CircleStop, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
+import GraphView from "./GraphView";
 
 type Session = {
   session_id: string; sop_id: string; sop_version: number; channel: string;
   status: string; terminal_outcome: string | null; started_at: string;
-};
-type PoolItem = {
-  item_id: string; kind: string; dependency_name: string; source_action: string;
-  payload_summary: string; confidence: number; predictor_source: string;
-  predicted_user_state: string | null; fetched_at: string; expires_at: string;
 };
 type FetchRow = {
   kind: string; dependency_name: string; action_name: string; predictor_source: string;
@@ -17,13 +13,26 @@ type FetchRow = {
   fetch_duration_ms: number; issued_at_turn: number; consumed_at_turn: number | null;
   payload_summary: string; error: boolean;
 };
+type JourneyTurn = {
+  turn_index: number; user_message: string; assistant_message: string; state: string; action: string;
+  cohort: string; mood: string; instruction_hit: boolean; duration_ms: number; created_at: string;
+};
+type Journey = {
+  session_id: string; sop_id: string; sop_version: number; status: string;
+  terminal_outcome: string | null;
+  definition: Record<string, unknown> | null;
+  prompt_bindings: Record<string, { version: number; content: string }>;
+  turns: JourneyTurn[];
+};
 
 const OUTCOME_TONE: Record<string, string> = { success: "good", failure: "crit", abandoned: "warn" };
 
 export default function SessionsView() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selected, setSelected] = useState<string>("");
-  const [pool, setPool] = useState<PoolItem[] | null>(null);
+  const [journey, setJourney] = useState<Journey | null>(null);
+  const [journeyNote, setJourneyNote] = useState("");
+  const [node, setNode] = useState<{ name: string; kind: "action" | "state" } | null>(null);
   const [audit, setAudit] = useState<FetchRow[] | null>(null);
   const [auditNote, setAuditNote] = useState("");
 
@@ -32,19 +41,41 @@ export default function SessionsView() {
     refresh().catch(() => undefined);
   }, [refresh]);
 
-  const openPool = async (id: string) => {
+  const open = async (id: string) => {
     setSelected(id);
-    const snap = await api("GET", `/sessions/${id}/pool`);
-    setPool(snap.items);
+    setNode(null);
+    setJourney(null);
+    setJourneyNote("");
     setAudit(null);
     setAuditNote("");
     try {
-      const a = await api("GET", `/sessions/${id}/fetches`);
+      setJourney(await api<Journey>("GET", `/sessions/${id}/journey`));
+    } catch {
+      setJourneyNote("journey endpoint activates on the next backend restart");
+    }
+    try {
+      const a = await api<{ fetches: FetchRow[] }>("GET", `/sessions/${id}/fetches`);
       setAudit(a.fetches);
     } catch {
       setAuditNote("audit endpoint activates on the next backend restart");
     }
   };
+
+  // visit counts per node name (actions AND states) for graph highlighting
+  const visits: Record<string, number> = {};
+  for (const t of journey?.turns ?? []) {
+    if (t.action) visits[t.action] = (visits[t.action] ?? 0) + 1;
+    if (t.state) visits[t.state] = (visits[t.state] ?? 0) + 1;
+  }
+
+  const def = journey?.definition as
+    | { agent_actions?: Array<{ name: string; must_say?: string[]; prompt_blocks?: string[] }> }
+    | null
+    | undefined;
+  const nodeTurns = node
+    ? (journey?.turns ?? []).filter((t) => (node.kind === "action" ? t.action === node.name : t.state === node.name))
+    : [];
+  const nodeAction = node?.kind === "action" ? def?.agent_actions?.find((a) => a.name === node.name) : undefined;
 
   return (
     <div className="view">
@@ -52,7 +83,7 @@ export default function SessionsView() {
         <div>
           <div className="eyebrow">Operations</div>
           <h1>Sessions</h1>
-          <p>Recent conversations and the live pool X-ray (what the supervisor pre-staged).</p>
+          <p>Recent conversations mapped onto their SOP graph — click a node to see the turns and the prompt that ran there.</p>
         </div>
         <div className="actions">
           <button className="btn" onClick={() => refresh()}>
@@ -77,7 +108,7 @@ export default function SessionsView() {
                   </thead>
                   <tbody>
                     {sessions.map((s) => (
-                      <tr key={s.session_id} className={selected === s.session_id ? "sel" : ""} onClick={() => openPool(s.session_id)} style={{ cursor: "pointer" }}>
+                      <tr key={s.session_id} className={selected === s.session_id ? "sel" : ""} onClick={() => open(s.session_id)} style={{ cursor: "pointer" }}>
                         <td className="mono" style={{ fontSize: 12 }}>{s.session_id.slice(0, 12)}…</td>
                         <td>{s.channel}</td>
                         <td><span className={"st " + (s.status === "active" ? "accent" : "")}>{s.status}</span></td>
@@ -115,39 +146,81 @@ export default function SessionsView() {
         </div>
         <div className="card">
           <div className="chead">
-            <h3>Pool X-ray</h3>
-            {pool && <span className="sub num">{pool.length} live · {audit ? `${audit.length} audited` : ""}</span>}
+            <h3>Turn inspector</h3>
+            {node && <span className="sub">{node.kind}: {node.name} · {nodeTurns.length} turn{nodeTurns.length === 1 ? "" : "s"}</span>}
           </div>
-          <div className="cbody" style={{ padding: pool && pool.length ? 0 : undefined }}>
-            {!pool ? (
-              <div className="empty">Select a session to inspect its pool.</div>
-            ) : pool.length === 0 ? (
-              <div className="empty">
-                No LIVE pool items — the pool is cleared when a session ends and items expire by TTL.
-                The permanent prefetch record is below.
-              </div>
+          <div className="cbody">
+            {!selected ? (
+              <div className="empty">Select a session, then click a node on its journey graph below.</div>
+            ) : !node ? (
+              <div className="empty">Click a highlighted node on the journey graph to inspect what happened there.</div>
             ) : (
-              <div className="tablewrap" style={{ border: 0, borderRadius: 0, maxHeight: 420 }}>
-                <table className="table">
-                  <thead>
-                    <tr><th>Kind</th><th>Dependency</th><th>Summary</th><th>Source</th></tr>
-                  </thead>
-                  <tbody>
-                    {pool.map((p) => (
-                      <tr key={p.item_id}>
-                        <td><span className={"chip " + (p.kind === "instruction" ? "comm" : "accent")}>{p.kind}</span></td>
-                        <td className="mono" style={{ fontSize: 12 }}>{p.dependency_name}</td>
-                        <td style={{ fontSize: 12.5, color: "var(--text2)" }}>{p.payload_summary.slice(0, 90)}</td>
-                        <td><span className="chip">{p.predictor_source}</span></td>
-                      </tr>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 400, overflow: "auto" }}>
+                {nodeAction && (nodeAction.must_say?.length || nodeAction.prompt_blocks?.length) ? (
+                  <div style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 6 }}>PROMPT AT THIS STAGE</div>
+                    {(nodeAction.prompt_blocks ?? []).map((b) => (
+                      <div key={b} style={{ marginBottom: 8 }}>
+                        <span className="chip warn"><span className="cd" />{b} v{journey?.prompt_bindings[b]?.version ?? "?"}</span>
+                        <div style={{ fontSize: 12.5, marginTop: 4, whiteSpace: "pre-wrap" }}>
+                          {journey?.prompt_bindings[b]?.content ?? <i style={{ color: "var(--muted)" }}>(not pinned in this session)</i>}
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                    {(nodeAction.must_say ?? []).map((m, i) => (
+                      <div key={i} style={{ fontSize: 12.5, color: "var(--text2)" }}>must say: “{m}”</div>
+                    ))}
+                  </div>
+                ) : null}
+                {nodeTurns.length === 0 && <div className="empty">The conversation never visited this node.</div>}
+                {nodeTurns.map((t) => (
+                  <div key={t.turn_index} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                      <span className="chip"><span className="cd" />turn {t.turn_index}</span>
+                      {t.state && <span className="chip accent"><span className="cd" />{t.state}</span>}
+                      {t.mood && <span className="chip"><span className="cd" />{t.mood}</span>}
+                      {t.instruction_hit && <span className="chip good"><span className="cd" />pre-drafted reply served</span>}
+                      <span className="chip"><span className="cd" />{t.duration_ms} ms</span>
+                    </div>
+                    <div style={{ fontSize: 13, marginBottom: 4 }}><b>User:</b> {t.user_message || <i style={{ color: "var(--muted)" }}>(none)</i>}</div>
+                    <div style={{ fontSize: 13 }}><b>Agent:</b> {t.assistant_message || <i style={{ color: "var(--muted)" }}>(none)</i>}</div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {selected && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="chead">
+            <h3>Conversation journey</h3>
+            {journey && (
+              <span className="sub num">
+                {journey.turns.length} turns · SOP v{journey.sop_version}
+                {journey.terminal_outcome ? ` · ${journey.terminal_outcome}` : ""}
+              </span>
+            )}
+          </div>
+          <div className="cbody">
+            {journeyNote ? (
+              <div className="empty">{journeyNote}</div>
+            ) : !journey ? (
+              <div className="spin" />
+            ) : !journey.definition ? (
+              <div className="empty">The SOP version this session ran is no longer available.</div>
+            ) : (
+              <GraphView
+                def={journey.definition}
+                sopId={`journey-${journey.sop_id}`}
+                visits={visits}
+                onSelect={(name, kind) => setNode({ name, kind })}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {selected && (
         <div className="card" style={{ marginTop: 14 }}>

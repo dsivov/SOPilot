@@ -1,0 +1,7 @@
+# New Features
+* This document outlines the new features introduced in the latest version of our software. Each feature is described in detail, along with its benefits and usage instructions.
+1. **Feature A**: UI improvements: Browser for already ingested data from real conversations, which we will use as precedent traces.
+2. **Feature B**: Option to generate A/B test for new SOP and prompts (re-use customer simulator) - autopilot mode in Playground. I also would like to see chart (in style of line chart) of the performance of the new prompt vs old prompt, with metrics like accuracy, response time, and user satisfaction on each turn.
+3. **Feature C**: UI improvements: Enhanced interface for prompts, with option to re-write prompts with LLM.
+4. **Feature D**: Pool X-ray - it is always empty - let's reuse this panel to show SOP graph of conversations, with option to click on each node to see the conversation and the prompt used. This will help us understand how the SOP is performing and where we can improve it.
+5. **Do not forget**: Then back to Next in the queue when you want it: the full 7-domain SOPBench run (the writeup case is now strong), stronger-model arms, and the remaining voice-latency work.

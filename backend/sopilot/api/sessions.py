@@ -195,6 +195,58 @@ async def get_fetch_audit(
     }
 
 
+@router.get("/{session_id}/journey")
+async def session_journey(
+    session_id: str, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """The conversation mapped onto its SOP graph: the pinned definition, every
+    turn (with the state/action the tracker assigned), and the prompt-block
+    wording that was pinned for this session. Powers the Sessions journey panel."""
+    from ..models import Turn
+
+    session = await _get_session(db, scope, session_id)
+    version = (
+        await db.execute(
+            select(SopVersion).where(
+                SopVersion.sop_id == session.sop_id, SopVersion.version == session.sop_version
+            )
+        )
+    ).scalar_one_or_none()
+    turns = (
+        (
+            await db.execute(
+                select(Turn).where(Turn.session_id == session.id).order_by(Turn.turn_index.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "session_id": session.id,
+        "sop_id": session.sop_id,
+        "sop_version": session.sop_version,
+        "status": session.status,
+        "terminal_outcome": session.terminal_outcome,
+        "definition": version.definition if version else None,
+        "prompt_bindings": session.prompt_bindings or {},
+        "turns": [
+            {
+                "turn_index": t.turn_index,
+                "user_message": t.user_message,
+                "assistant_message": t.assistant_message,
+                "state": t.state,
+                "action": t.action,
+                "cohort": t.cohort,
+                "mood": t.mood,
+                "instruction_hit": t.instruction_hit,
+                "duration_ms": t.duration_ms,
+                "created_at": t.created_at.isoformat(),
+            }
+            for t in turns
+        ],
+    }
+
+
 @router.post("/{session_id}/end")
 async def end_session(
     session_id: str,
