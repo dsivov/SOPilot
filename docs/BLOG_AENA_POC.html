@@ -291,11 +291,11 @@ b.hl{color:#8fd9c9}
   <div class="tablewrap"><table>
     <thead><tr><th>Risk</th><th>Reality</th><th>Mitigation</th></tr></thead>
     <tbody>
-      <tr><td><b>PII &amp; consent</b> <span class="pill danger">blocking</span></td>
-        <td>transcripts contain names, flight numbers, personal situations. Local analysis is fine; sending content
-        to an external LLM for SOP mining is a data-processing decision that isn't ours to make</td>
-        <td>PII-masking pass first; explicit AENA sign-off on the mining step; keep raw data machine-local forever
-        (already enforced at the git-ignore level)</td></tr>
+      <tr><td><b>PII &amp; consent</b> <span class="pill win">resolved</span></td>
+        <td>customer decision (2026-07-16): the corpus contains no critical data — the information is publicly
+        available on the AENA website; no real names or payment data</td>
+        <td>cleared to use as-is for LLM-assisted mining; raw data still stays machine-local and out of version
+        control (enforced at the git-ignore level)</td></tr>
       <tr><td><b>No outcome labels</b></td>
         <td>we don't know which conversations the traveller considered resolved</td>
         <td>heuristic labels (thanked-and-left vs escalated vs abandoned) + spot-check; POC metric is answer
@@ -318,9 +318,8 @@ b.hl{color:#8fd9c9}
   <div class="kicker">The ask</div>
   <h2>Next steps</h2>
   <ol>
-    <li><b>Decide the PII path</b> (blocking): masking approach + AENA sign-off for LLM-assisted mining.</li>
-    <li><b>PII-masking pass</b> over the cleaned corpus (names, phone numbers, booking references, flight numbers →
-      placeholders), local, re-runnable.</li>
+    <li><b>Decide the PII path</b> — <b>done</b>: customer confirmed no critical data (publicly available
+      information, no names/payment data); mining may use the corpus as-is.</li>
     <li><b>SOP mining</b> on the top themes: cluster agent behavior per theme, draft the three SOPs in Studio,
       review with someone who knows the desk.</li>
     <li><b>Build the <code>aena</code> tenant</b>: three SOPs, airport-facts RAG corpus, flight-status connector
