@@ -74,6 +74,28 @@ class ApiKey(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class Connector(Base):
+    """A named retrieval system at project level (D-10): MCP server, RAG
+    endpoint, HTTP tool, or the managed pgvector corpus. SOP stages bind to it
+    by name (`data_dependencies[].config.connector`); connection details live
+    HERE, swappable without republishing any SOP. Credentials stay in
+    TenantSecret — config carries only the secret NAME."""
+
+    __tablename__ = "connectors"
+    __table_args__ = (UniqueConstraint("tenant_id", "project_id", "name"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    project_id: Mapped[str] = mapped_column(String(32), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    kind: Mapped[str] = mapped_column(String(16))  # mcp | rag | http | mock
+    description: Mapped[str] = mapped_column(String(500), default="")
+    config: Mapped[dict] = mapped_column(JSON, default=dict)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ABTest(Base):
     """One autopilot A/B run: two SOP versions of the same SOP, driven by the
     customer simulator through the REAL runtime, judged per turn."""
@@ -290,6 +312,8 @@ class DataFetchAudit(Base):
     dependency_name: Mapped[str] = mapped_column(String(200))
     action_name: Mapped[str] = mapped_column(String(100), default="")
     kind: Mapped[str] = mapped_column(String(16), default="mock")
+    # named connector the dependency resolved through, "" for inline config (D-10)
+    connector: Mapped[str] = mapped_column(String(100), default="")
     speculative: Mapped[bool] = mapped_column(Boolean, default=True)
     predictor_source: Mapped[str] = mapped_column(String(16), default="empirical")
     confidence: Mapped[float] = mapped_column(Float, default=0.0)

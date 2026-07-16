@@ -216,16 +216,30 @@ curl -X POST $BASE/prompt-blocks/compliance.recording/publish
     Mark every mutating data dependency <code>"idempotent": false</code> — the prefetcher trusts the flag and will
     never speculate on it. And keep at least one non-terminal <code>user_state</code>: an all-terminal vocabulary is
     a lint error because per-turn tracking degenerates (learned in live testing, now enforced).</div>
-  <h3>External data over MCP</h3>
+  <h3>External data: connectors (MCP · RAG · HTTP)</h3>
   <pre><code># store the credential once per tenant (encrypted at rest; reads return names only)
 curl -X PUT $BASE/secrets -H "Authorization: Bearer $KEY" \
   -d '{"name":"kr_api_key","value":"&lt;credential&gt;"}'
 
-# then in the SOP's data_dependencies:
-{"name":"kb","kind":"mcp","idempotent":true,
+# register the retrieval system as a NAMED CONNECTOR (kinds: mcp | rag | http | mock)
+curl -X PUT $BASE/connectors/kb -H "$AUTH" -H "$PROJ" -d '{"kind":"mcp",
  "config":{"server":"https://kg.example.com/mcp","tool":"query_knowledge_graph",
-            "query_arg":"query","auth_secret":"kr_api_key","auth_header":"X-API-Key"},
+            "query_arg":"query","auth_secret":"kr_api_key","auth_header":"X-API-Key"}}'
+
+# probe it live, then monitor health (error rate, p50/p95, which SOPs bind it)
+curl -X POST $BASE/connectors/kb/test -d '{"query":"test"}'    # one real fetch
+curl "$BASE/connectors?days=7"                                  # registry + stats
+
+# SOP stages bind by NAME only — swap/re-credential the system without republishing:
+{"name":"kb_lookup","kind":"mock","idempotent":true,
+ "config":{"connector":"kb","top_k":2},
  "query_template":"customer asks: {user_text}"}</code></pre>
+  <div class="callout key"><div class="clabel">◆ Systems vs bindings (D-10)</div>
+    Connection details live in the project's connector registry (Studio → Connectors: health stats + a live
+    test button). The SOP carries only <b>what</b> a stage needs and <b>which</b> named system serves it — so
+    different stages can use different RAG/tool backends, and an unreachable or disabled connector degrades
+    that one fetch gracefully (audited, visible) instead of crashing the conversation. The same connector serves
+    both the background prefetch <i>and</i> the live fallback — one config, both paths.</div>
 </section>
 
 <section id="text">

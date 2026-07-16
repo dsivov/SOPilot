@@ -188,6 +188,7 @@ async def get_fetch_audit(
         "fetches": [
             {
                 "kind": r.kind,
+                "connector": r.connector,
                 "dependency_name": r.dependency_name,
                 "action_name": r.action_name,
                 "predictor_source": r.predictor_source,

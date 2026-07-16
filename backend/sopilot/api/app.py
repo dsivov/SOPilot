@@ -8,12 +8,11 @@ from fastapi import FastAPI
 from ..config import get_settings
 from ..db import get_sessionmaker
 from ..embeddings import OpenAIEmbeddings
-from ..fetchers import MockFetcher, PgVectorRagFetcher, register_fetcher
-from ..fetchers.mcp import McpFetcher
+from ..fetchers import register_default_fetchers
 from ..pool import SessionPool
 from ..prefetch import PrefetchManager
 from ..supervisor import SupervisorWorker
-from . import abtests, admin, metrics, prompt_blocks, runtime, secrets, sessions, sops, traces, voice
+from . import abtests, admin, connectors, metrics, prompt_blocks, runtime, secrets, sessions, sops, traces, voice
 
 
 def create_app() -> FastAPI:
@@ -29,11 +28,7 @@ def create_app() -> FastAPI:
         app.state.embedder = embedder
         app.state.pool = pool
         app.state.prefetch = PrefetchManager(pool, get_sessionmaker(), embedder)
-        register_fetcher("mock", MockFetcher())
-        register_fetcher("rag", PgVectorRagFetcher(get_sessionmaker(), embedder))
-        register_fetcher("mcp", McpFetcher(get_sessionmaker()))
-        for kind in ("kg", "db", "api"):
-            register_fetcher(kind, MockFetcher())  # real connectors land with the fetcher SDK P2 work
+        register_default_fetchers(get_sessionmaker(), embedder)
         # D-1 dev mode: run a supervisor consumer in-process (production runs
         # `sopilot-supervisor` as its own deployment — same code path).
         worker = None
@@ -59,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(secrets.router)
     app.include_router(traces.router)
     app.include_router(abtests.router)
+    app.include_router(connectors.router)
 
     @app.get("/health")
     async def health() -> dict:

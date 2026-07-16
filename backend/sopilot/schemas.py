@@ -53,7 +53,7 @@ class DataDependency(BaseModel):
 
     name: str
     description: str = ""
-    kind: Literal["mock", "rag", "kg", "db", "api", "mcp"] = "mock"
+    kind: Literal["mock", "rag", "kg", "db", "api", "mcp", "http"] = "mock"
     config: dict = Field(default_factory=dict)
     expected_latency_ms: int = 1000
     cache_ttl_s: int = 300

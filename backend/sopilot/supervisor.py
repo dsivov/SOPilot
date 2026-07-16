@@ -48,6 +48,9 @@ class SupervisorWorker:
         self.autoclaim_idle_ms = settings.supervisor_autoclaim_idle_ms
         self.embedder = embedder or OpenAIEmbeddings()
         self.pool = SessionPool(redis)
+        from .fetchers import register_default_fetchers
+
+        register_default_fetchers(get_sessionmaker(), self.embedder)
         self.prefetch = PrefetchManager(self.pool, get_sessionmaker(), self.embedder)
         self._stop = asyncio.Event()
         self._sop_cache: dict[tuple[str, int], TaskDefinition] = {}

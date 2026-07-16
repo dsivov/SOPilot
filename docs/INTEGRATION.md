@@ -127,6 +127,46 @@ published mid-conversation never changes a running call).
 Store the credential once per tenant: `PUT /secrets {"name":"kr_api_key",
 "value":"..."}` (reads return names only; Fernet-encrypted at rest).
 
+### Connectors — the production shape (D-10)
+
+Inline config works, but production deployments should register retrieval
+systems as **named connectors** and have SOP stages bind by name — then a
+system can be swapped, re-credentialed, or disabled without republishing any
+SOP:
+
+```bash
+# register once per project (kinds: mcp | rag | http | mock)
+curl -X PUT $BASE/connectors/kb -H "$AUTH" -H "$PROJ" -d '{
+  "kind": "mcp", "description": "knowledge graph",
+  "config": {"server":"https://kg.example.com/mcp","tool":"query_knowledge_graph",
+             "query_arg":"query","auth_secret":"kr_api_key","auth_header":"X-API-Key"}}'
+
+# probe it live (one real fetch; nothing pools, nothing audits)
+curl -X POST $BASE/connectors/kb/test -H "$AUTH" -H "$PROJ" -d '{"query":"test"}'
+# → {"ok": true, "latency_ms": 240, "summary": "…", "payload_excerpt": "…"}
+
+# monitor: registry + 7-day health (fetch volume, error rate, p50/p95 latency,
+# SOPs binding each connector) — the Studio Connectors view renders this
+curl "$BASE/connectors?days=7" -H "$AUTH" -H "$PROJ"
+```
+
+Bind from an SOP stage by name only; tuning keys may override the connector's
+defaults (the dependency's `kind` is replaced by the connector's at fetch time):
+
+```json
+{"name": "kb_lookup", "kind": "mock", "idempotent": true,
+ "config": {"connector": "kb", "top_k": 2},
+ "query_template": "customer asks: {user_text}"}
+```
+
+The generic `http` kind covers RAG endpoints and internal search/tool APIs —
+config keys: `url`, `method` (GET/POST), `query_field`, `body`, `params`,
+`headers`, `auth_secret`, `auth_header`, `result_path` (dot-path into the
+response JSON), `timeout_s`. An unknown or disabled connector makes that fetch
+fail *visibly* (audited with the reason, shown in the Connectors health view)
+while the turn degrades gracefully — a retrieval outage never crashes a
+conversation.
+
 ## 5. Running conversations
 
 ### Session lifecycle

@@ -122,7 +122,11 @@ class PrefetchManager:
         payload = None
         summary = ""
         err: str | None = None
+        connector_name = ""
         try:
+            from .connectors import resolve_dependency
+
+            dep, connector_name = await resolve_dependency(self.sessionmaker, scope, dep)
             fetcher = get_fetcher(dep.kind)
             outcome = await fetcher.fetch(
                 dep, scope=scope, session_id=session_id, action_name=action_name, query=rendered_query
@@ -146,6 +150,7 @@ class PrefetchManager:
                     dependency_name=dep.name,
                     action_name=action_name,
                     kind=dep.kind,
+                    connector=connector_name,
                     speculative=speculative,
                     predictor_source=predictor_source,
                     confidence=confidence,
