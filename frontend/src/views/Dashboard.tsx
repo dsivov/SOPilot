@@ -23,7 +23,7 @@ type Summary = {
 };
 
 const OUTCOME_TONE: Record<string, string> = {
-  success: "good", failure: "crit", abandoned: "warn", in_progress: "accent",
+  success: "good", failure: "crit", abandoned: "warn", in_progress: "accent", no_outcome: "",
 };
 
 function pctOrDash(v: number | null): string {

@@ -4,6 +4,11 @@ SOP-based conversation agent management — productization of the
 [MCPlanner](https://github.com/dsivov/MCPlanner) research. Multi-tenant,
 multi-project, realtime-voice-first.
 
+- **Installation guide**: [`docs/INSTALL.md`](docs/INSTALL.md) — requirements,
+  fresh vs existing Postgres/Redis, full `.env` reference, production topology,
+  upgrades, ops notes
+- Integration manual: [`docs/INTEGRATION.md`](docs/INTEGRATION.md) (agents) /
+  `docs/INTEGRATION.html` (humans, illustrated)
 - Kickoff discussion (I): `docs/BLOG_SOPILOT_KICKOFF.html`
 - Architecture discussion (II): `docs/BLOG_SOPILOT_ARCHITECTURE.html`
 - Engineer reference: [`ARCHITECTURE.md`](ARCHITECTURE.md) — topology, per-turn

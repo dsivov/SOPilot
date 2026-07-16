@@ -75,6 +75,7 @@ figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{c
   <div class="tl-title">In this guide</div>
   <ol>
     <li><a href="#flow">The integration at a glance</a></li>
+    <li><a href="#install">Install &amp; configure</a></li>
     <li><a href="#bootstrap">Bootstrap &amp; auth</a></li>
     <li><a href="#author">Author &amp; publish an SOP</a></li>
     <li><a href="#text">Text channel</a></li>
@@ -124,6 +125,53 @@ figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{c
     <span class="pill b">sop</span> only (procedure tracking + governed prompts, plain live lookups), or
     <span class="pill a">retrieval</span> only (prediction + pre-staged context for <i>your</i> agent). Set it at
     project creation, change it with a PATCH, or override per session at start.</div>
+</section>
+
+<section id="install">
+  <div class="kicker">Step 0</div>
+  <h2>Install &amp; configure</h2>
+  <p class="lead-p">Two stores, two processes, one static UI. Postgres is the only thing you back up.</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 232" role="img" aria-label="Deployment topology: API replicas and supervisor workers over Postgres with pgvector (system of record) and Redis (expendable cache and stream); Studio static files behind the same origin">
+      <defs><marker id="arV" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .vb{rx:10;stroke-width:1.2}.vt{fill:#e7ebf3;font:11.5px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}
+        .vs{fill:#aab3c5;font:9.8px "Segoe UI",sans-serif;text-anchor:middle}
+        .vl{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#arV)}
+        .vd{fill:#7b8499;font:10px "Segoe UI",sans-serif;text-anchor:middle}
+      </style>
+      <rect class="vb" x="16" y="20" width="150" height="56" fill="#231b33" stroke="rgba(169,116,240,.55)"/>
+      <text class="vt" x="91" y="42">Studio UI</text><text class="vs" x="91" y="60">static dist/ · /api → API</text>
+      <rect class="vb" x="226" y="20" width="180" height="56" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="vt" x="316" y="42">sopilot-api · N replicas</text><text class="vs" x="316" y="60">:8100 · stateless · no LLM on turn path</text>
+      <rect class="vb" x="466" y="20" width="200" height="56" fill="#1b2a1f" stroke="rgba(25,184,154,.5)"/>
+      <text class="vt" x="566" y="42">sopilot-supervisor · N workers</text><text class="vs" x="566" y="60">shared consumer group · outbound only</text>
+      <rect class="vb" x="146" y="140" width="220" height="56" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="vt" x="256" y="162">PostgreSQL 16 + pgvector</text><text class="vs" x="256" y="180">system of record — BACK THIS UP</text>
+      <rect class="vb" x="426" y="140" width="200" height="56" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="vt" x="526" y="162">Redis 7</text><text class="vs" x="526" y="180">pool · event stream · quotas — expendable</text>
+      <line class="vl" x1="166" y1="48" x2="224" y2="48"/>
+      <line class="vl" x1="300" y1="76" x2="270" y2="138"/><line class="vl" x1="340" y1="76" x2="480" y2="138"/>
+      <line class="vl" x1="540" y1="76" x2="300" y2="140"/><line class="vl" x1="566" y1="76" x2="540" y2="138"/>
+      <text class="vd" x="360" y="222">losing Redis costs warm-up, never data · supervisor replicas scale by adding processes (XAUTOCLAIM reclaims stalls)</text>
+    </svg>
+    <figcaption><b>The production shape.</b> Dev collapses it to one process with
+      <code>SOPILOT_EMBEDDED_SUPERVISOR=true</code> and the bundled <code>docker compose up -d</code> stores.</figcaption>
+  </div></figure>
+  <pre><code># fresh install (full guide incl. existing-database options: docs/INSTALL.md)
+git clone https://github.com/dsivov/SOPilot &amp;&amp; cd SOPilot
+docker compose up -d                     # pgvector Postgres :5433 + Redis :6380 (skip if using your own)
+cd backend &amp;&amp; python3.12 -m venv .venv &amp;&amp; .venv/bin/pip install -e '.[dev]'
+cp .env.example .env                     # set OPENAI_API_KEY, SOPILOT_ADMIN_TOKEN, SOPILOT_SECRET_KEY
+.venv/bin/alembic upgrade head           # creates the whole schema; same command on every upgrade
+.venv/bin/uvicorn sopilot.api.app:app --host 0.0.0.0 --port 8100   # + sopilot-supervisor in prod
+curl -s localhost:8100/health            # {"status":"ok"} → scripts/smoke_test.sh for the full 14-check pass</code></pre>
+  <div class="callout key"><div class="clabel">◆ Bringing your own databases</div>
+    Any Postgres 16+ works if <code>CREATE EXTENSION vector</code> is available (RDS, Cloud SQL, Azure PG, Neon all
+    ship pgvector); set <code>SOPILOT_DATABASE_URL=postgresql+asyncpg://…</code> — the <b>asyncpg</b> scheme is
+    required. Any Redis 7+ works; give SOPilot its own logical DB on shared instances. Redis persistence is
+    optional by design. Every configuration key, sizing note, and the reverse-proxy recipe for serving the Studio:
+    <code>docs/INSTALL.md</code>.</div>
 </section>
 
 <section id="bootstrap">

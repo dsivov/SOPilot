@@ -129,16 +129,20 @@ async def summary(
     # sessions by outcome
     sess_rows = (
         await db.execute(
-            select(ConversationSession.terminal_outcome, func.count())
+            select(ConversationSession.status, ConversationSession.terminal_outcome, func.count())
             .where(
                 ConversationSession.tenant_id == scope.tenant_id,
                 ConversationSession.project_id == scope.project_id,
                 ConversationSession.started_at >= since,
             )
-            .group_by(ConversationSession.terminal_outcome)
+            .group_by(ConversationSession.status, ConversationSession.terminal_outcome)
         )
     ).all()
-    outcomes = { (r[0] or "in_progress"): int(r[1]) for r in sess_rows }
+    # an ended session with no terminal outcome is "no_outcome", not in-progress
+    outcomes: dict[str, int] = {}
+    for status, outcome, n in sess_rows:
+        label = outcome or ("in_progress" if status == "active" else "no_outcome")
+        outcomes[label] = outcomes.get(label, 0) + int(n)
     n_sessions = sum(outcomes.values())
 
     lag = await stream_lag_ms(request.app.state.redis, get_settings().supervisor_group)

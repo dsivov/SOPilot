@@ -21,6 +21,11 @@ last commit; the illustrated human version is
 
 ## 1. Deployment
 
+> Full installation guide — requirements, existing vs fresh Postgres/Redis
+> (pgvector, DSNs, sizing), complete `.env` reference, Studio production build
+> + reverse proxy, upgrades, backups: **`docs/INSTALL.md`**. Below is the
+> dev-quickstart shape only.
+
 ```bash
 docker compose up -d          # pgvector Postgres :5433, Redis :6380
 cd backend && python3.12 -m venv .venv && .venv/bin/pip install -e '.[dev]'
