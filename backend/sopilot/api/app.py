@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
@@ -16,6 +17,10 @@ from . import abtests, admin, connectors, metrics, prompt_blocks, runtime, secre
 
 
 def create_app() -> FastAPI:
+    # App-logger output (turn planned / fetch ok lines): uvicorn configures only
+    # its own loggers, so give the root logger a handler if nobody has yet.
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         import asyncio

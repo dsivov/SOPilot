@@ -139,6 +139,11 @@ class PrefetchManager:
                 await self.pool.release_fetch(scope, session_id, key)
         duration_ms = int((time.perf_counter() - t0) * 1000)
         completed_at = utcnow()
+        log.info(
+            "fetch %s dep=%s kind=%s connector=%s ms=%d speculative=%s source=%s%s",
+            "FAILED" if err else "ok", dep.name, dep.kind, connector_name or "-",
+            duration_ms, speculative, predictor_source, f" err={err}" if err else "",
+        )
 
         fetch_id = ""
         try:

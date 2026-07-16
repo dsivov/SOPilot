@@ -234,6 +234,10 @@ class Turn(Base):
     action: Mapped[str] = mapped_column(String(100), default="")
     instruction_hit: Mapped[bool] = mapped_column(Boolean, default=False)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    # Feature E: what actually ran this turn — served prompt, stage blocks,
+    # retrieval payload summaries, pool picks, timing breakdown. Nullable JSON;
+    # written at plan time, enriched at respond time.
+    debug: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

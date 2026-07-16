@@ -4,12 +4,15 @@
 import { FlaskConical, Play } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import Transcript from "./Transcript";
 
 type SopMeta = { id: string; name: string; latest_version: number };
 type VersionMeta = { version: number; status: string };
 type PerTurn = { turn_index: number; n: number; accuracy: number | null; response_ms: number | null; satisfaction: number | null };
+type SessionDetail = { session_id: string; persona: string; outcome: string; turns: unknown[] };
 type ArmResult = {
   sop_version: number;
+  session_details?: SessionDetail[];
   per_turn: PerTurn[];
   sessions: number;
   outcomes: Record<string, number>;
@@ -113,6 +116,7 @@ export default function AutopilotPanel({ sops }: { sops: SopMeta[] }) {
   const [history, setHistory] = useState<ABTestRow[]>([]);
   const [err, setErr] = useState("");
   const timer = useRef<number | null>(null);
+  const [openSession, setOpenSession] = useState<string>("");
 
   useEffect(() => {
     if (!sopId) return;
@@ -223,6 +227,43 @@ export default function AutopilotPanel({ sops }: { sops: SopMeta[] }) {
             Adherence and satisfaction are scored per turn by an LLM judge; response time is the server's full turn time.
             Same {test?.n_sessions} personas hit both arms in alternation, so drift affects them equally.
           </p>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 10 }}>
+            {(["arm_a", "arm_b"] as const).map((armKey) => (
+              <div key={armKey} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: armKey === "arm_a" ? ARM_COLORS.a : ARM_COLORS.b }} />
+                  <span style={{ fontWeight: 700, fontSize: 12.5 }}>
+                    {armKey === "arm_a" ? "Arm A" : "Arm B"} sessions — click to open the full transcript
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {(r[armKey].session_details ?? []).map((sd) => (
+                    <button
+                      key={sd.session_id}
+                      className="btn ghost sm"
+                      style={{ justifyContent: "flex-start", textAlign: "left", fontSize: 12, border: openSession === sd.session_id ? "1px solid var(--accent)" : "1px solid var(--line)" }}
+                      onClick={() => setOpenSession(openSession === sd.session_id ? "" : sd.session_id)}
+                    >
+                      <span className={"st " + (sd.outcome === "success" ? "good" : sd.outcome === "failure" ? "crit" : "warn")}>{sd.outcome}</span>
+                      <span style={{ color: "var(--muted)" }}>{sd.turns.length} turns ·</span> {sd.persona}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          {openSession && (
+            <div className="card">
+              <div className="chead">
+                <h3>Transcript — what actually ran</h3>
+                <span className="sub mono">{openSession.slice(0, 12)}…</span>
+              </div>
+              <div className="cbody" style={{ maxHeight: 520, overflow: "auto" }}>
+                <Transcript sessionId={openSession} />
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

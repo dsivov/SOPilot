@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select, update
@@ -16,6 +18,8 @@ from ..runtime import build_plan, choose_action
 from ..schemas import TaskDefinition
 from ..sop_graph import SOPGraph
 from ..tenancy import Scope, resolve_scope
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sessions", tags=["runtime"])
 
@@ -189,6 +193,20 @@ async def plan_turn(
         stage_blocks=stage_blocks,
     )
 
+    # Feature E: persist what actually ran — the debugging/analysis record.
+    debug = {
+        "allowed_actions": allowed,
+        "stage_blocks": stage_blocks,
+        "prompt_text": plan.prompt_text,
+        "context_block": plan.context_block,
+        "instruction_hit": plan.instruction_hit,
+        "retrieval": {
+            name: str(payload)[:400] for name, payload in (dep_payloads or {}).items()
+        },
+        "picks": plan.picks,
+        "consume_stats": plan.consume_stats,
+        "rerank_ms": plan.rerank_ms,
+    }
     db.add(
         Turn(
             session_id=session.id,
@@ -199,6 +217,7 @@ async def plan_turn(
             state=body.state,
             action=chosen,
             instruction_hit=plan.instruction_hit,
+            debug=debug,
         )
     )
     db.add(
@@ -234,6 +253,12 @@ async def plan_turn(
         ),
     )
 
+    log.info(
+        "turn planned session=%s turn=%d action=%s state=%s subsystems=%s rerank_ms=%s picks=%d "
+        "instruction_hit=%s consumed=%s",
+        session.id, turn_index, chosen, body.state or "-", scope.subsystems,
+        plan.rerank_ms, len(plan.picks or []), plan.instruction_hit, plan.consume_stats,
+    )
     return {
         "turn_index": plan.turn_index,
         "chosen_action": plan.chosen_action,
@@ -346,14 +371,24 @@ async def converse(
     )
 
     payload_for_agent = plan["prompt_text"] or plan["context_block"]
+    t_respond = _time.perf_counter()
     reply = plan["prompt_text"] if plan["instruction_hit"] else await respond(
         payload_for_agent, history, body.user_message
     )
-    await db.execute(
-        update(Turn)
-        .where(Turn.session_id == session.id, Turn.turn_index == plan["turn_index"])
-        .values(assistant_message=reply, duration_ms=int((_time.perf_counter() - t0) * 1000))
-    )
+    respond_ms = int((_time.perf_counter() - t_respond) * 1000)
+    turn_row = (
+        await db.execute(
+            select(Turn).where(Turn.session_id == session.id, Turn.turn_index == plan["turn_index"])
+        )
+    ).scalar_one_or_none()
+    if turn_row is not None:
+        turn_row.assistant_message = reply
+        turn_row.duration_ms = int((_time.perf_counter() - t0) * 1000)
+        turn_row.debug = {
+            **(turn_row.debug or {}),
+            "respond_ms": respond_ms,
+            "reply_source": "pre-draft" if plan["instruction_hit"] else "model",
+        }
     await db.commit()
 
     cp = task_def.conversation_profile

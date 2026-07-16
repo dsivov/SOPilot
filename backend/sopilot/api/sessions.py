@@ -252,6 +252,7 @@ async def session_journey(
                 "mood": t.mood,
                 "instruction_hit": t.instruction_hit,
                 "duration_ms": t.duration_ms,
+                "debug": t.debug,
                 "created_at": t.created_at.isoformat(),
             }
             for t in turns

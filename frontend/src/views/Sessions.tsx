@@ -16,6 +16,10 @@ type FetchRow = {
 type JourneyTurn = {
   turn_index: number; user_message: string; assistant_message: string; state: string; action: string;
   cohort: string; mood: string; instruction_hit: boolean; duration_ms: number; created_at: string;
+  debug: {
+    prompt_text?: string; context_block?: string; reply_source?: string; respond_ms?: number;
+    retrieval?: Record<string, string>;
+  } | null;
 };
 type Journey = {
   session_id: string; sop_id: string; sop_version: number; status: string;
@@ -184,6 +188,16 @@ export default function SessionsView() {
                     </div>
                     <div style={{ fontSize: 13, marginBottom: 4 }}><b>User:</b> {t.user_message || <i style={{ color: "var(--muted)" }}>(none)</i>}</div>
                     <div style={{ fontSize: 13 }}><b>Agent:</b> {t.assistant_message || <i style={{ color: "var(--muted)" }}>(none)</i>}</div>
+                    {t.debug?.prompt_text && (
+                      <details style={{ marginTop: 6 }}>
+                        <summary style={{ fontSize: 11.5, color: "var(--muted)", cursor: "pointer" }}>
+                          what actually ran — prompt{t.debug.reply_source ? ` · reply: ${t.debug.reply_source}` : ""}
+                          {t.debug.respond_ms !== undefined ? ` · respond ${t.debug.respond_ms} ms` : ""}
+                          {t.debug.retrieval && Object.keys(t.debug.retrieval).length ? ` · ${Object.keys(t.debug.retrieval).length} retrievals` : ""}
+                        </summary>
+                        <pre style={{ whiteSpace: "pre-wrap", fontSize: 11.5, lineHeight: 1.5, maxHeight: 180, overflow: "auto", background: "var(--surface2)", borderRadius: 8, padding: "8px 10px", margin: "6px 0 0", color: "var(--text2)" }}>{t.debug.prompt_text}</pre>
+                      </details>
+                    )}
                   </div>
                 ))}
               </div>
