@@ -143,6 +143,38 @@ modified):
 | University, adversarial (36) | 38.9% | 50.0% | +11.1 pp |
 | Bank, standard (134) | 36.6% | 68.7% | **+32.1 pp** |
 
-Next: (1) full 7-domain run + writeup; (2) stronger-model arms (does
-supervision still add on top of GPT-4.1-class baselines?); (3) human A/B
-harness.
+## Full 7-domain sweep — the complete benchmark (2026-07-16)
+
+All 830 released test cases, both arms, identical flags (gpt-4o-mini, fc,
+full tool list), their unmodified evaluator:
+
+| Domain | N | Arm A | Arm B | Δ | dirgraph A→B | failures A→B |
+|---|---|---|---|---|---|---|
+| healthcare | 124 | 17.7% | **58.1%** | **+40.3 pp** | 95→23 | 102→52 |
+| bank | 134 | 36.6% | **68.7%** | **+32.1 pp** | 71→24 | 85→42 |
+| university | 42 | 40.5% | **57.1%** | **+16.7 pp** | 13→4 | 25→18 |
+| library | 66 | 51.5% | 57.6% | +6.1 pp | 16→10 | 32→28 |
+| online_market | 172 | 45.4% | 48.3% | +2.9 pp | 78→70 | 94→89 |
+| dmv | 97 | 65.0% | 66.0% | +1.0 pp | 14→13 | 34→33 |
+| hotel | 195 | 41.0% | 40.5% | −0.5 pp | 72→10 | 115→116 |
+| **OVERALL** | **830** | **41.3%** | **54.5%** | **+13.1 pp (+32% rel)** | **359→154 (−57%)** | **487→378 (−22%)** |
+
+Reading the spread honestly:
+
+- **The mechanism is uniform; the payoff isn't.** Supervision cuts
+  procedure-order violations in every domain (−57% overall; hotel −86%). It
+  converts to pass-rate gains exactly where those violations were the binding
+  failure class: healthcare (95 of 102 baseline failures were dirgraph) gains
+  +40 pp; bank (71/85) gains +32 pp.
+- **Where order wasn't the bottleneck, order fixes don't move pass rate.**
+  Hotel: dirgraph 72→10, yet pass flat — its failures are dominated by
+  constraint/database booleans (wrong permissibility decisions), which
+  supervision doesn't claim to fix. Dmv's baseline was already 65% (easy
+  procedures) — little headroom.
+- **Deployment implication**: score a domain's failure mix first; supervision
+  is the right lever when procedure-skipping dominates — which is exactly the
+  failure class the SOPBench paper identifies as the field-wide problem.
+
+Next: (1) stronger-model arms (does supervision still add on top of
+GPT-4.1-class baselines?); (2) human A/B harness (the in-product Autopilot
+A/B now exists for exactly this); (3) writeup.

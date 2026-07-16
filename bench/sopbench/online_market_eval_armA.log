@@ -1,0 +1,309 @@
+Loaded 172 results from ./output/armA/online_market/ast_gpt-4o-mini-mode_fc-dep_full-fmt_structured-tool_full-shuffle_False.json
+Evaluating task simulations: 0it [00:00, ?it/s]Evaluating task simulations: 12it [00:00, 115.28it/s]Evaluating task simulations: 24it [00:00, 112.73it/s]Evaluating task simulations: 36it [00:00, 111.33it/s]Evaluating task simulations: 48it [00:00, 112.89it/s]Evaluating task simulations: 60it [00:00, 114.91it/s]Evaluating task simulations: 72it [00:00, 106.16it/s]Evaluating task simulations: 83it [00:00, 99.84it/s] Evaluating task simulations: 94it [00:00, 96.55it/s]Evaluating task simulations: 104it [00:01, 94.35it/s]Evaluating task simulations: 115it [00:01, 98.64it/s]Evaluating task simulations: 127it [00:01, 102.70it/s]Evaluating task simulations: 138it [00:01, 103.69it/s]Evaluating task simulations: 149it [00:01, 103.37it/s]Evaluating task simulations: 160it [00:01, 104.45it/s]Evaluating task simulations: 171it [00:01, 103.98it/s]Evaluating task simulations: 172it [00:01, 104.03it/s]
+Saving 172 results. First result has evaluations: True
+Results saved successfully to ./output/armA/online_market/ast_gpt-4o-mini-mode_fc-dep_full-fmt_structured-tool_full-shuffle_False.json
+--------- Overall domain statistics for online_market ----------
+assistant_model                       ('gpt-4o-mini',)
+avg_num_constraints                   4.28488
+avg_num_constraints_expanded          7.09884
+avg_num_function_calls                4.68605
+avg_num_messages                      7.51744
+domain                                online_market
+mean_pass_rate                        0.45348837209302323
+percentage_action_called_correctly    0.68023
+percentage_action_should_succeed      0.34884
+percentage_action_successfully_called 0.52907
+percentage_constraint_not_violated    0.73837
+percentage_database_match             0.75
+percentage_dirgraph_satisfied         0.54651
+percentage_no_tool_call_error         0.9593
+percentage_success                    0.45349
+std_pass_rate                         0.0
+total_action_called_correctly         117
+total_action_should_succeed           60
+total_action_successfully_called      91
+total_constraint_not_violated         127
+total_database_match                  129
+total_dirgraph_satisfied              94
+total_interactions                    172
+total_no_tool_call_error              165
+total_num_constraints                 737
+total_num_constraints_expanded        1221
+total_num_function_calls              806
+total_num_messages                    1293
+total_pass@1                          78
+total_success                         78
+total_tasks                           172
+user_model                            (None,)
+
+----------------------- Distr User Goal ------------------------
+add_review           51
+add_shipping_address 2
+add_to_cart          2
+cancel_order         5
+exchange_product     45
+get_order_details    3
+get_product_details  1
+place_order          6
+return_order         10
+use_coupon           47
+
+----------------------- Group Statistics -----------------------
+1  {
+     "total_tasks": 5,
+     "total_interactions": 5,
+     "distr_user_goal": {
+       "add_review": 4,
+       "get_product_details": 1
+     },
+     "total_action_should_succeed": 2,
+     "total_num_messages": 24,
+     "total_num_function_calls": 9,
+     "total_num_constraints": 4,
+     "total_num_constraints_expanded": 4,
+     "total_no_tool_call_error": 5,
+     "total_constraint_not_violated": 4,
+     "total_database_match": 4,
+     "total_action_successfully_called": 2,
+     "total_dirgraph_satisfied": 4,
+     "total_action_called_correctly": 3,
+     "total_success": 3,
+     "total_pass@1": 3,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.6
+     },
+     "mean_pass_rate": 0.6,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.4,
+     "avg_num_messages": 4.8,
+     "avg_num_function_calls": 1.8,
+     "avg_num_constraints": 0.8,
+     "avg_num_constraints_expanded": 0.8,
+     "percentage_no_tool_call_error": 1.0,
+     "percentage_constraint_not_violated": 0.8,
+     "percentage_database_match": 0.8,
+     "percentage_action_successfully_called": 0.4,
+     "percentage_dirgraph_satisfied": 0.8,
+     "percentage_action_called_correctly": 0.6,
+     "percentage_success": 0.6
+   }
+2  {
+     "total_tasks": 18,
+     "total_interactions": 18,
+     "distr_user_goal": {
+       "add_review": 8,
+       "add_shipping_address": 2,
+       "add_to_cart": 2,
+       "cancel_order": 3,
+       "get_order_details": 3
+     },
+     "total_action_should_succeed": 8,
+     "total_num_messages": 85,
+     "total_num_function_calls": 35,
+     "total_num_constraints": 36,
+     "total_num_constraints_expanded": 48,
+     "total_no_tool_call_error": 18,
+     "total_constraint_not_violated": 15,
+     "total_database_match": 16,
+     "total_action_successfully_called": 8,
+     "total_dirgraph_satisfied": 10,
+     "total_action_called_correctly": 14,
+     "total_success": 9,
+     "total_pass@1": 9,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.5
+     },
+     "mean_pass_rate": 0.5,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.44444,
+     "avg_num_messages": 4.72222,
+     "avg_num_function_calls": 1.94444,
+     "avg_num_constraints": 2.0,
+     "avg_num_constraints_expanded": 2.66667,
+     "percentage_no_tool_call_error": 1.0,
+     "percentage_constraint_not_violated": 0.83333,
+     "percentage_database_match": 0.88889,
+     "percentage_action_successfully_called": 0.44444,
+     "percentage_dirgraph_satisfied": 0.55556,
+     "percentage_action_called_correctly": 0.77778,
+     "percentage_success": 0.5
+   }
+3  {
+     "total_tasks": 40,
+     "total_interactions": 40,
+     "distr_user_goal": {
+       "add_review": 18,
+       "cancel_order": 2,
+       "exchange_product": 6,
+       "place_order": 4,
+       "return_order": 2,
+       "use_coupon": 8
+     },
+     "total_action_should_succeed": 14,
+     "total_num_messages": 264,
+     "total_num_function_calls": 136,
+     "total_num_constraints": 120,
+     "total_num_constraints_expanded": 184,
+     "total_no_tool_call_error": 37,
+     "total_constraint_not_violated": 33,
+     "total_database_match": 33,
+     "total_action_successfully_called": 18,
+     "total_dirgraph_satisfied": 25,
+     "total_action_called_correctly": 32,
+     "total_success": 23,
+     "total_pass@1": 23,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.575
+     },
+     "mean_pass_rate": 0.575,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.35,
+     "avg_num_messages": 6.6,
+     "avg_num_function_calls": 3.4,
+     "avg_num_constraints": 3.0,
+     "avg_num_constraints_expanded": 4.6,
+     "percentage_no_tool_call_error": 0.925,
+     "percentage_constraint_not_violated": 0.825,
+     "percentage_database_match": 0.825,
+     "percentage_action_successfully_called": 0.45,
+     "percentage_dirgraph_satisfied": 0.625,
+     "percentage_action_called_correctly": 0.8,
+     "percentage_success": 0.575
+   }
+4  {
+     "total_tasks": 43,
+     "total_interactions": 43,
+     "distr_user_goal": {
+       "add_review": 16,
+       "exchange_product": 4,
+       "place_order": 2,
+       "return_order": 3,
+       "use_coupon": 18
+     },
+     "total_action_should_succeed": 15,
+     "total_num_messages": 312,
+     "total_num_function_calls": 195,
+     "total_num_constraints": 172,
+     "total_num_constraints_expanded": 285,
+     "total_no_tool_call_error": 39,
+     "total_constraint_not_violated": 31,
+     "total_database_match": 31,
+     "total_action_successfully_called": 24,
+     "total_dirgraph_satisfied": 23,
+     "total_action_called_correctly": 28,
+     "total_success": 17,
+     "total_pass@1": 17,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.3953488372093023
+     },
+     "mean_pass_rate": 0.3953488372093023,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.34884,
+     "avg_num_messages": 7.25581,
+     "avg_num_function_calls": 4.53488,
+     "avg_num_constraints": 4.0,
+     "avg_num_constraints_expanded": 6.62791,
+     "percentage_no_tool_call_error": 0.90698,
+     "percentage_constraint_not_violated": 0.72093,
+     "percentage_database_match": 0.72093,
+     "percentage_action_successfully_called": 0.55814,
+     "percentage_dirgraph_satisfied": 0.53488,
+     "percentage_action_called_correctly": 0.65116,
+     "percentage_success": 0.39535
+   }
+5  {
+     "total_tasks": 29,
+     "total_interactions": 29,
+     "distr_user_goal": {
+       "add_review": 5,
+       "exchange_product": 3,
+       "return_order": 5,
+       "use_coupon": 16
+     },
+     "total_action_should_succeed": 8,
+     "total_num_messages": 235,
+     "total_num_function_calls": 154,
+     "total_num_constraints": 145,
+     "total_num_constraints_expanded": 249,
+     "total_no_tool_call_error": 29,
+     "total_constraint_not_violated": 18,
+     "total_database_match": 19,
+     "total_action_successfully_called": 18,
+     "total_dirgraph_satisfied": 14,
+     "total_action_called_correctly": 17,
+     "total_success": 12,
+     "total_pass@1": 12,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.41379310344827586
+     },
+     "mean_pass_rate": 0.41379310344827586,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.27586,
+     "avg_num_messages": 8.10345,
+     "avg_num_function_calls": 5.31034,
+     "avg_num_constraints": 5.0,
+     "avg_num_constraints_expanded": 8.58621,
+     "percentage_no_tool_call_error": 1.0,
+     "percentage_constraint_not_violated": 0.62069,
+     "percentage_database_match": 0.65517,
+     "percentage_action_successfully_called": 0.62069,
+     "percentage_dirgraph_satisfied": 0.48276,
+     "percentage_action_called_correctly": 0.58621,
+     "percentage_success": 0.41379
+   }
+6+ {
+     "total_tasks": 37,
+     "total_interactions": 37,
+     "distr_user_goal": {
+       "exchange_product": 32,
+       "use_coupon": 5
+     },
+     "total_action_should_succeed": 13,
+     "total_num_messages": 373,
+     "total_num_function_calls": 277,
+     "total_num_constraints": 260,
+     "total_num_constraints_expanded": 451,
+     "total_no_tool_call_error": 37,
+     "total_constraint_not_violated": 26,
+     "total_database_match": 26,
+     "total_action_successfully_called": 21,
+     "total_dirgraph_satisfied": 18,
+     "total_action_called_correctly": 23,
+     "total_success": 14,
+     "total_pass@1": 14,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.3783783783783784
+     },
+     "mean_pass_rate": 0.3783783783783784,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.35135,
+     "avg_num_messages": 10.08108,
+     "avg_num_function_calls": 7.48649,
+     "avg_num_constraints": 7.02703,
+     "avg_num_constraints_expanded": 12.18919,
+     "percentage_no_tool_call_error": 1.0,
+     "percentage_constraint_not_violated": 0.7027,
+     "percentage_database_match": 0.7027,
+     "percentage_action_successfully_called": 0.56757,
+     "percentage_dirgraph_satisfied": 0.48649,
+     "percentage_action_called_correctly": 0.62162,
+     "percentage_success": 0.37838
+   }
+
+----------------------- Error Statistics -----------------------
+error_causes      {
+                    "tool_call_errors": 7,
+                    "constraint_violations": 45,
+                    "database_mismatches": 43,
+                    "dirgraph_violations": 78,
+                    "incorrect_action_calls": 55
+                  }
+total_evaluations 172
+total_failures    94
+
+---------------------- Per Run Pass Rates ----------------------
+{
+  "run_1_pass": 0.45348837209302323
+}
+Mean Pass Rate: 0.4535
+Standard Deviation: 0.0000

@@ -1,0 +1,311 @@
+Loaded 195 results from ./output/armB/hotel/ast_gpt-4o-mini-mode_fc-dep_full-fmt_structured-tool_full-shuffle_False.json
+Evaluating task simulations: 0it [00:00, ?it/s]Evaluating task simulations: 10it [00:00, 91.69it/s]Evaluating task simulations: 20it [00:00, 93.00it/s]Evaluating task simulations: 30it [00:00, 93.83it/s]Evaluating task simulations: 40it [00:00, 93.49it/s]Evaluating task simulations: 50it [00:00, 94.15it/s]Evaluating task simulations: 60it [00:00, 93.07it/s]Evaluating task simulations: 70it [00:00, 90.06it/s]Evaluating task simulations: 80it [00:00, 87.88it/s]Evaluating task simulations: 90it [00:00, 88.68it/s]Evaluating task simulations: 99it [00:01, 88.93it/s]Evaluating task simulations: 108it [00:01, 87.23it/s]Evaluating task simulations: 117it [00:01, 86.68it/s]Evaluating task simulations: 126it [00:01, 87.12it/s]Evaluating task simulations: 135it [00:01, 87.02it/s]Evaluating task simulations: 144it [00:01, 85.36it/s]Evaluating task simulations: 153it [00:01, 82.10it/s]Evaluating task simulations: 162it [00:01, 81.82it/s]Evaluating task simulations: 172it [00:01, 84.51it/s]Evaluating task simulations: 182it [00:02, 88.30it/s]Evaluating task simulations: 191it [00:02, 87.85it/s]Evaluating task simulations: 195it [00:02, 88.07it/s]
+Saving 195 results. First result has evaluations: True
+Results saved successfully to ./output/armB/hotel/ast_gpt-4o-mini-mode_fc-dep_full-fmt_structured-tool_full-shuffle_False.json
+------------- Overall domain statistics for hotel --------------
+assistant_model                       ('gpt-4o-mini',)
+avg_num_constraints                   4.24615
+avg_num_constraints_expanded          10.41026
+avg_num_function_calls                4.63077
+avg_num_messages                      7.62564
+domain                                hotel
+mean_pass_rate                        0.40512820512820513
+percentage_action_called_correctly    0.49744
+percentage_action_should_succeed      0.35385
+percentage_action_successfully_called 0.70256
+percentage_constraint_not_violated    0.50769
+percentage_database_match             0.49231
+percentage_dirgraph_satisfied         0.94872
+percentage_no_tool_call_error         0.94872
+percentage_success                    0.40513
+std_pass_rate                         0.0
+total_action_called_correctly         97
+total_action_should_succeed           69
+total_action_successfully_called      137
+total_constraint_not_violated         99
+total_database_match                  96
+total_dirgraph_satisfied              185
+total_interactions                    195
+total_no_tool_call_error              185
+total_num_constraints                 828
+total_num_constraints_expanded        2030
+total_num_function_calls              903
+total_num_messages                    1487
+total_pass@1                          79
+total_success                         79
+total_tasks                           195
+user_model                            (None,)
+
+----------------------- Distr User Goal ------------------------
+book_room                42
+cancel_reservation       4
+find_booking_info        1
+modify_reservation       99
+place_room_service_order 17
+process_guest_checkin    7
+process_guest_checkout   9
+register_loyalty_member  2
+request_room_change      13
+show_available_rooms     1
+
+----------------------- Group Statistics -----------------------
+1  {
+     "total_tasks": 14,
+     "total_interactions": 14,
+     "distr_user_goal": {
+       "cancel_reservation": 2,
+       "find_booking_info": 1,
+       "process_guest_checkout": 2,
+       "register_loyalty_member": 2,
+       "request_room_change": 6,
+       "show_available_rooms": 1
+     },
+     "total_action_should_succeed": 6,
+     "total_num_messages": 83,
+     "total_num_function_calls": 41,
+     "total_num_constraints": 12,
+     "total_num_constraints_expanded": 44,
+     "total_no_tool_call_error": 12,
+     "total_constraint_not_violated": 8,
+     "total_database_match": 8,
+     "total_action_successfully_called": 6,
+     "total_dirgraph_satisfied": 14,
+     "total_action_called_correctly": 8,
+     "total_success": 5,
+     "total_pass@1": 5,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.35714285714285715
+     },
+     "mean_pass_rate": 0.35714285714285715,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.42857,
+     "avg_num_messages": 5.92857,
+     "avg_num_function_calls": 2.92857,
+     "avg_num_constraints": 0.85714,
+     "avg_num_constraints_expanded": 3.14286,
+     "percentage_no_tool_call_error": 0.85714,
+     "percentage_constraint_not_violated": 0.57143,
+     "percentage_database_match": 0.57143,
+     "percentage_action_successfully_called": 0.42857,
+     "percentage_dirgraph_satisfied": 1.0,
+     "percentage_action_called_correctly": 0.57143,
+     "percentage_success": 0.35714
+   }
+2  {
+     "total_tasks": 29,
+     "total_interactions": 29,
+     "distr_user_goal": {
+       "book_room": 3,
+       "cancel_reservation": 2,
+       "modify_reservation": 4,
+       "place_room_service_order": 8,
+       "process_guest_checkin": 4,
+       "process_guest_checkout": 4,
+       "request_room_change": 4
+     },
+     "total_action_should_succeed": 11,
+     "total_num_messages": 199,
+     "total_num_function_calls": 107,
+     "total_num_constraints": 58,
+     "total_num_constraints_expanded": 155,
+     "total_no_tool_call_error": 24,
+     "total_constraint_not_violated": 18,
+     "total_database_match": 15,
+     "total_action_successfully_called": 14,
+     "total_dirgraph_satisfied": 26,
+     "total_action_called_correctly": 16,
+     "total_success": 11,
+     "total_pass@1": 11,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.3793103448275862
+     },
+     "mean_pass_rate": 0.3793103448275862,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.37931,
+     "avg_num_messages": 6.86207,
+     "avg_num_function_calls": 3.68966,
+     "avg_num_constraints": 2.0,
+     "avg_num_constraints_expanded": 5.34483,
+     "percentage_no_tool_call_error": 0.82759,
+     "percentage_constraint_not_violated": 0.62069,
+     "percentage_database_match": 0.51724,
+     "percentage_action_successfully_called": 0.48276,
+     "percentage_dirgraph_satisfied": 0.89655,
+     "percentage_action_called_correctly": 0.55172,
+     "percentage_success": 0.37931
+   }
+3  {
+     "total_tasks": 24,
+     "total_interactions": 24,
+     "distr_user_goal": {
+       "book_room": 4,
+       "modify_reservation": 6,
+       "place_room_service_order": 5,
+       "process_guest_checkin": 3,
+       "process_guest_checkout": 3,
+       "request_room_change": 3
+     },
+     "total_action_should_succeed": 10,
+     "total_num_messages": 175,
+     "total_num_function_calls": 101,
+     "total_num_constraints": 72,
+     "total_num_constraints_expanded": 171,
+     "total_no_tool_call_error": 21,
+     "total_constraint_not_violated": 13,
+     "total_database_match": 12,
+     "total_action_successfully_called": 15,
+     "total_dirgraph_satisfied": 24,
+     "total_action_called_correctly": 15,
+     "total_success": 10,
+     "total_pass@1": 10,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.4166666666666667
+     },
+     "mean_pass_rate": 0.4166666666666667,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.41667,
+     "avg_num_messages": 7.29167,
+     "avg_num_function_calls": 4.20833,
+     "avg_num_constraints": 3.0,
+     "avg_num_constraints_expanded": 7.125,
+     "percentage_no_tool_call_error": 0.875,
+     "percentage_constraint_not_violated": 0.54167,
+     "percentage_database_match": 0.5,
+     "percentage_action_successfully_called": 0.625,
+     "percentage_dirgraph_satisfied": 1.0,
+     "percentage_action_called_correctly": 0.625,
+     "percentage_success": 0.41667
+   }
+4  {
+     "total_tasks": 26,
+     "total_interactions": 26,
+     "distr_user_goal": {
+       "book_room": 8,
+       "modify_reservation": 14,
+       "place_room_service_order": 4
+     },
+     "total_action_should_succeed": 11,
+     "total_num_messages": 203,
+     "total_num_function_calls": 128,
+     "total_num_constraints": 104,
+     "total_num_constraints_expanded": 263,
+     "total_no_tool_call_error": 26,
+     "total_constraint_not_violated": 14,
+     "total_database_match": 14,
+     "total_action_successfully_called": 23,
+     "total_dirgraph_satisfied": 26,
+     "total_action_called_correctly": 14,
+     "total_success": 14,
+     "total_pass@1": 14,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.5384615384615384
+     },
+     "mean_pass_rate": 0.5384615384615384,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.42308,
+     "avg_num_messages": 7.80769,
+     "avg_num_function_calls": 4.92308,
+     "avg_num_constraints": 4.0,
+     "avg_num_constraints_expanded": 10.11538,
+     "percentage_no_tool_call_error": 1.0,
+     "percentage_constraint_not_violated": 0.53846,
+     "percentage_database_match": 0.53846,
+     "percentage_action_successfully_called": 0.88462,
+     "percentage_dirgraph_satisfied": 1.0,
+     "percentage_action_called_correctly": 0.53846,
+     "percentage_success": 0.53846
+   }
+5  {
+     "total_tasks": 44,
+     "total_interactions": 44,
+     "distr_user_goal": {
+       "book_room": 16,
+       "modify_reservation": 28
+     },
+     "total_action_should_succeed": 16,
+     "total_num_messages": 337,
+     "total_num_function_calls": 200,
+     "total_num_constraints": 220,
+     "total_num_constraints_expanded": 532,
+     "total_no_tool_call_error": 44,
+     "total_constraint_not_violated": 20,
+     "total_database_match": 21,
+     "total_action_successfully_called": 35,
+     "total_dirgraph_satisfied": 44,
+     "total_action_called_correctly": 19,
+     "total_success": 17,
+     "total_pass@1": 17,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.38636363636363635
+     },
+     "mean_pass_rate": 0.38636363636363635,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.36364,
+     "avg_num_messages": 7.65909,
+     "avg_num_function_calls": 4.54545,
+     "avg_num_constraints": 5.0,
+     "avg_num_constraints_expanded": 12.09091,
+     "percentage_no_tool_call_error": 1.0,
+     "percentage_constraint_not_violated": 0.45455,
+     "percentage_database_match": 0.47727,
+     "percentage_action_successfully_called": 0.79545,
+     "percentage_dirgraph_satisfied": 1.0,
+     "percentage_action_called_correctly": 0.43182,
+     "percentage_success": 0.38636
+   }
+6+ {
+     "total_tasks": 58,
+     "total_interactions": 58,
+     "distr_user_goal": {
+       "book_room": 11,
+       "modify_reservation": 47
+     },
+     "total_action_should_succeed": 15,
+     "total_num_messages": 490,
+     "total_num_function_calls": 326,
+     "total_num_constraints": 362,
+     "total_num_constraints_expanded": 865,
+     "total_no_tool_call_error": 58,
+     "total_constraint_not_violated": 26,
+     "total_database_match": 26,
+     "total_action_successfully_called": 44,
+     "total_dirgraph_satisfied": 51,
+     "total_action_called_correctly": 25,
+     "total_success": 22,
+     "total_pass@1": 22,
+     "per_run_pass_rates": {
+       "run_1_pass": 0.3793103448275862
+     },
+     "mean_pass_rate": 0.3793103448275862,
+     "std_pass_rate": 0.0,
+     "percentage_action_should_succeed": 0.25862,
+     "avg_num_messages": 8.44828,
+     "avg_num_function_calls": 5.62069,
+     "avg_num_constraints": 6.24138,
+     "avg_num_constraints_expanded": 14.91379,
+     "percentage_no_tool_call_error": 1.0,
+     "percentage_constraint_not_violated": 0.44828,
+     "percentage_database_match": 0.44828,
+     "percentage_action_successfully_called": 0.75862,
+     "percentage_dirgraph_satisfied": 0.87931,
+     "percentage_action_called_correctly": 0.43103,
+     "percentage_success": 0.37931
+   }
+
+----------------------- Error Statistics -----------------------
+error_causes      {
+                    "tool_call_errors": 10,
+                    "constraint_violations": 96,
+                    "database_mismatches": 99,
+                    "dirgraph_violations": 10,
+                    "incorrect_action_calls": 98
+                  }
+total_evaluations 195
+total_failures    116
+
+---------------------- Per Run Pass Rates ----------------------
+{
+  "run_1_pass": 0.40512820512820513
+}
+Mean Pass Rate: 0.4051
+Standard Deviation: 0.0000
