@@ -489,7 +489,31 @@ b.hl{color:#8fd9c9}
       SOPBench work.</li>
     <li><b>Voice demo for AENA</b>: live call in the Playground against SOP 1 (lost luggage) — the emotional one.</li>
   </ol>
-  <h3>First replay scorecard (v1 — honest baseline)</h3>
+  <h3>Replay scorecard — v1 baseline → v2 after iteration one</h3>
+  <p>Iteration one (same 36 held-out conversations, minutes to re-run): fact base grown from 25 to <b>111 facts</b>
+  mined from all 3,872 informative agent answers in the corpus; SOP stages rewritten <b>answer-first</b> (real desk
+  agents answer immediately and verify only what routing needs); neutral retrieval queries.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Verdict</th><th>v1</th><th>v2</th><th>movement</th></tr></thead>
+    <tbody>
+      <tr><td><b>missed</b> (no useful info)</td><td>17 (47%)</td><td><b>11 (31%)</b></td><td><span class="pill win">−35%</span></td></tr>
+      <tr><td>covered or partial (useful info given)</td><td>19 (53%)</td><td><b>25 (69%)</b></td><td><span class="pill win">+16 pp</span></td></tr>
+      <tr><td>fully covered</td><td>7 (19%)</td><td>5 (14%)</td><td>flat — see below</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout key"><div class="clabel">◆ What the remaining gap actually is — the finding that matters</div>
+    Reading every "partial" verdict, one pattern dominates: the human agent's answer was <b>operationally dynamic</b> —
+    "check-in at counter 343", "counter 355, two hours before" — <i>that flight's counter, that day</i>, read off the
+    airport's live screens. A static fact base can never hold these; the same airline is at a different counter
+    tomorrow. This is precisely the <b>flight-status / counter-assignment connector</b> the architecture reserved a
+    slot for (mock today). The concrete ask to AENA: access to the live counter-assignment and flight-status feed —
+    with it, the dominant class of "partial" becomes "covered" mechanically, because the pipeline that serves facts
+    into answers is already proven live.</div>
+  <p class="small">Remaining static-knowledge issues are smaller: a few desk locations are reported variably across
+  the corpus (Ground Force appears at belt 36, 38, and behind La Manon in different months — likely all true at
+  different times), which only AENA's canonical floor data resolves; and the replay method still under-scores
+  clarifying-question flows (the recorded traveller answers the <i>human</i> agent's flow, not the AI's).</p>
+  <h3>Method notes (v1 detail)</h3>
   <p>36 held-out real conversations (never seen by mining) replayed through the live POC; a judge compared the
   AI's answers with what the human agent actually provided:</p>
   <div class="tablewrap"><table>
@@ -501,7 +525,7 @@ b.hl{color:#8fd9c9}
       <tr><td><b>total</b></td><td><b>7/36 (19%)</b></td><td><b>12 (33%)</b></td><td><b>17 (47%)</b></td></tr>
     </tbody>
   </table></div>
-  <p class="small">Why v1 scores low — three specific, fixable causes: (1) the fact base has 25 facts while the
+  <p class="small">Why v1 scored low — the three causes iteration one addressed: (1) the fact base has 25 facts while the
   human agents demonstrate a long tail of desk knowledge (per-airline handler desks, per-flight belts) — the miss
   notes are dominated by "AI missed the desk location"; (2) the mined SOPs verify before answering, while real desk
   agents answer first and verify only when routing requires it; (3) replay desynchronization — when the AI asks a
