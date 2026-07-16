@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Real Airport on the Line — the AENA Málaga help-desk corpus, cleaned, measured, and mapped to a POC</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.11), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.07), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(91,141,239,.08),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.05;margin:.3em 0 .25em;background:linear-gradient(92deg,#cfe0ff,#8fd9c9 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}.tag b{color:var(--ink)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(91,141,239,.2),transparent);color:#fff;border-left:2px solid var(--a)}
+main{min-width:0;max-width:772px}article section{margin:0 0 54px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}p{margin:.7em 0}.lead-p{font-size:19px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--a);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.1)}.callout.key .clabel{color:#9cc0ff}
+.callout.danger{border-color:rgba(239,91,110,.5);background:rgba(239,91,110,.08)}.callout.danger .clabel{color:#f6a2ad}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Customer POC · AENA Málaga · discussion I</div>
+    <h1>A Real Airport on the Line</h1>
+    <p class="lede">AENA — the operator of Málaga airport and our first real customer — gave us something research
+      never does: <b>three months of real help-desk conversations</b>, human agent to human traveller, as raw
+      speech-to-text transcripts. This is the discussion doc for what's in that data, what we had to clean out of it,
+      what travellers actually ask, and the POC it supports.</p>
+    <div class="byline">Sub-project of <b>SOPilot</b> · corpus of 2026-04-17 → 2026-07-15 · all analysis local — the
+      data itself never leaves our machines and never enters git</div>
+    <div class="hero-tags">
+      <span class="tag"><b>6,262</b> raw transcripts</span>
+      <span class="tag"><b>4,227</b> clean dialogues</span>
+      <span class="tag">median call <b>37 s</b></span>
+      <span class="tag">Spanish + English (+ some French)</span>
+      <span class="tag">top ask: <b>flight info</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this discussion</div>
+  <ol>
+    <li><a href="#got">The data we received</a></li>
+    <li><a href="#quality">What's wrong with it</a></li>
+    <li><a href="#cleaning">Cleaning: 6,262 → 4,227</a></li>
+    <li><a href="#asks">What travellers ask</a></li>
+    <li><a href="#fit">Five ways this feeds SOPilot</a></li>
+    <li><a href="#poc">The POC we propose</a></li>
+    <li><a href="#risks">Risks &amp; open questions</a></li>
+    <li><a href="#next">Next steps</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<section id="got">
+  <div class="kicker">The raw material</div>
+  <h2>The data we received</h2>
+  <p class="lead-p">6,262 transcript files covering <b>90 days</b> of the Málaga airport information desk
+  (17&nbsp;April – 15&nbsp;July 2026). Each file is one conversation, already diarized into
+  <span class="pill a">Client</span> and <span class="pill b">Agent</span> lines by the recording system, with
+  start/end timestamps in the filename.</p>
+  <div class="grid g3" style="margin:18px 0">
+    <div class="card"><div style="font-size:30px;font-weight:800;color:#9cc0ff">37 s</div>
+      <p class="small" style="margin-top:4px"><b>median conversation</b> (p95: 2½ minutes). These are short,
+      transactional exchanges — one question, one answer, goodbye. Exactly the shape a voice agent must serve
+      <i>fast</i>.</p></div>
+    <div class="card"><div style="font-size:30px;font-weight:800;color:#9cc0ff">10 turns</div>
+      <p class="small" style="margin-top:4px"><b>median dialogue length</b> before cleaning (mean 12). After echo
+      removal and merging, real exchanges are typically 4–8 genuine turns.</p></div>
+    <div class="card"><div style="font-size:30px;font-weight:800;color:#9cc0ff">3 languages</div>
+      <p class="small" style="margin-top:4px"><b>Spanish ~44%, English ~35%</b>, the rest too short to classify —
+      with a visible French minority inside it. The POC must be multilingual from day one.</p></div>
+  </div>
+  <div class="callout danger"><div class="clabel">◆ Data handling rule — absolute</div>
+    These are real conversations with real travellers. The corpus lives only on our analysis machine, is excluded
+    from version control at the ignore level (scripts and aggregate numbers are the only things committed), and this
+    document quotes <b>no conversation verbatim</b>. Before any external LLM touches the content (SOP mining), we
+    need a PII-masking pass and the customer's explicit sign-off — see <a href="#risks">§7</a>.</div>
+</section>
+
+<section id="quality">
+  <div class="kicker">Garbage taxonomy</div>
+  <h2>What's wrong with it — the four defects</h2>
+  <p>This is machine-transcribed speech from a noisy terminal hall. Four defect classes, in order of impact:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Defect</th><th>What it looks like</th><th>How common</th><th>Our handling</th></tr></thead>
+    <tbody>
+      <tr><td><b>Empty / trivial files</b></td>
+        <td>recorder triggered, nobody really spoke — zero to two lines of greeting noise</td>
+        <td>2,035 files (32%)</td><td><span class="pill danger">drop</span></td></tr>
+      <tr><td><b>Diarization echo</b></td>
+        <td>the same utterance captured twice within seconds — once under each speaker label (two microphones hearing
+        one voice). Illustrative shape: <i>Agent: "you need to ask the airline" → Client: "you need to ask the
+        airline"</i></td>
+        <td>5,197 turns; up to 75% of turns in the worst files</td><td><span class="pill c">repair</span> — keep first
+        occurrence, drop near-duplicates (containment counts for long lines)</td></tr>
+      <tr><td><b>Speaker mislabeling</b></td>
+        <td>runs of agent speech filed under Client (and vice versa) — the answer text sits on the asker's label</td>
+        <td>frequent in long files</td><td><span class="pill c">mitigate</span> — echo removal fixes the doubled
+        cases; analysis weights content, not labels; full re-diarization is out of scope</td></tr>
+      <tr><td><b>ASR mangling</b></td>
+        <td>proper nouns and desk names garbled (a baggage-handler brand rendered as a made-up word, place names
+        drifting between repetitions)</td>
+        <td>pervasive but tolerable</td><td><span class="pill b">keep</span> — meaning usually survives; matters
+        only for verbatim prompt mining, where we'll use the cleanest examples</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="cleaning">
+  <div class="kicker">The pipeline</div>
+  <h2>Cleaning: 6,262 files → 4,227 dialogues</h2>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 216" role="img" aria-label="Cleaning funnel: 6262 raw files; 618 empty dropped; 1417 too short dropped; 4227 clean dialogues kept. 76377 raw lines become 35883 real turns.">
+      <style>
+        .ft{fill:#e7ebf3;font:12.5px "Segoe UI",sans-serif;font-weight:700}
+        .fs{fill:#aab3c5;font:11px "Segoe UI",sans-serif}
+        .fv{fill:#e7ebf3;font:13px "Segoe UI",sans-serif;font-weight:700;font-variant-numeric:tabular-nums}
+      </style>
+      <rect x="16" y="30" width="640" height="26" rx="6" fill="rgba(91,141,239,.25)" stroke="#5b8def"/>
+      <text class="ft" x="24" y="48">6,262 raw transcript files</text>
+      <rect x="16" y="76" width="63" height="26" rx="6" fill="rgba(239,91,110,.2)" stroke="rgba(239,91,110,.6)"/>
+      <text class="fs" x="88" y="93">− 618 empty (recorder noise, nobody spoke)</text>
+      <rect x="16" y="112" width="145" height="26" rx="6" fill="rgba(239,91,110,.2)" stroke="rgba(239,91,110,.6)"/>
+      <text class="fs" x="170" y="129">− 1,417 too short after echo removal (&lt; 3 real turns, or one-sided)</text>
+      <rect x="16" y="158" width="432" height="26" rx="6" fill="rgba(25,184,154,.25)" stroke="#19b89a"/>
+      <text class="ft" x="24" y="176">4,227 clean dialogues (67.5%)</text>
+      <text class="fs" x="16" y="206">inside the kept dialogues: 5,197 echo turns deleted · consecutive same-speaker lines merged · 76,377 raw lines → 35,883 real turns</text>
+    </svg>
+    <figcaption><b>Two-thirds of the corpus is real signal.</b> The drop rate is normal for always-on desk
+      recording: a third of triggers catch passers-by, not conversations. Everything kept has both speakers and at
+      least three genuine turns.</figcaption>
+  </div></figure>
+  <p>The pipeline (<code>use_case/analysis/clean.py</code>) emits one JSON record per dialogue — speaker-tagged
+  turns, language, duration, echo statistics — which every later step consumes. Nothing irreversible happens to the
+  raw files; the pipeline is re-runnable as we tighten heuristics.</p>
+</section>
+
+<section id="asks">
+  <div class="kicker">Demand analysis</div>
+  <h2>What travellers actually ask</h2>
+  <p class="lead-p">A bilingual keyword lexicon over the cleaned dialogues labels <b>82%</b> of them with at least
+  one theme. The distribution is the product decision in one picture:</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 330" role="img" aria-label="Primary intent distribution over 4227 dialogues: flight info 1222, transport and parking 711, wayfinding 585, lost luggage 461, security and documents 160, lost and found items 147, airport services 119, shopping tax-free 45, unmatched 777.">
+      <style>
+        .it{fill:#aab3c5;font:12px "Segoe UI",sans-serif}
+        .iv{fill:#e7ebf3;font:12.5px "Segoe UI",sans-serif;font-weight:700;font-variant-numeric:tabular-nums}
+        .ittl{fill:#e7ebf3;font:13px "Segoe UI",sans-serif;font-weight:700}
+      </style>
+      <text class="ittl" x="16" y="22">Primary theme per dialogue — 4,227 clean conversations</text>
+      <g><text class="it" x="16" y="58">flight &amp; boarding info</text>
+        <path d="M200,46 h437 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-437 z" fill="#5b8def"/><text class="iv" x="649" y="60">1,222 · 29%</text></g>
+      <g><text class="it" x="16" y="88">transport &amp; parking</text>
+        <path d="M200,76 h252 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-252 z" fill="#5b8def"/><text class="iv" x="464" y="90">711 · 17%</text></g>
+      <g><text class="it" x="16" y="118">wayfinding (where is…)</text>
+        <path d="M200,106 h207 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-207 z" fill="#5b8def"/><text class="iv" x="419" y="120">585 · 14%</text></g>
+      <g><text class="it" x="16" y="148">lost luggage</text>
+        <path d="M200,136 h162 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-162 z" fill="#5b8def"/><text class="iv" x="374" y="150">461 · 11%</text></g>
+      <g><text class="it" x="16" y="178">security &amp; documents</text>
+        <path d="M200,166 h54 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-54 z" fill="#5b8def"/><text class="iv" x="266" y="180">160 · 4%</text></g>
+      <g><text class="it" x="16" y="208">lost &amp; found items</text>
+        <path d="M200,196 h49 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-49 z" fill="#5b8def"/><text class="iv" x="261" y="210">147 · 3%</text></g>
+      <g><text class="it" x="16" y="238">airport services (wifi, PMR…)</text>
+        <path d="M200,226 h39 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-39 z" fill="#5b8def"/><text class="iv" x="251" y="240">119 · 3%</text></g>
+      <g><text class="it" x="16" y="268">shopping / tax-free</text>
+        <path d="M200,256 h12 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-12 z" fill="#5b8def"/><text class="iv" x="224" y="270">45 · 1%</text></g>
+      <g><text class="it" x="16" y="298">no theme matched</text>
+        <path d="M200,286 h278 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-278 z" fill="#39425a"/><text class="iv" x="490" y="300">777 · 18%</text></g>
+      <text class="it" x="16" y="324" style="font-size:10.5px;fill:#7b8499">unmatched = mostly greeting-only/noise calls (top leftover words are fillers and goodbyes) plus a French-language minority the es/en lexicon can't see</text>
+    </svg>
+    <figcaption><b>Four themes cover 71% of everything.</b> Flight info, transport, wayfinding and lost luggage are
+      the airport's conversational workload. Note the co-occurrence pattern: every theme pairs most often with
+      wayfinding — whatever travellers ask about, the answer usually ends with <i>where to go</i>.</figcaption>
+  </div></figure>
+  <div class="callout info"><div class="clabel">◆ The lost-luggage insight</div>
+    Lost-luggage calls are the clearest <b>procedure</b> in the corpus: agents consistently walk the same decision
+    tree (which airline → is it airline-handled or ground-handler → send to the right desk with directions → mention
+    the reference code they'll need). That's an SOP already being executed by humans, hundreds of times — we just
+    have to write down what they demonstrably do.</div>
+</section>
+
+<section id="fit">
+  <div class="kicker">Why this data matters to us</div>
+  <h2>Five ways the corpus feeds SOPilot</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Use</th><th>What the corpus provides</th><th>SOPilot feature it lands in</th></tr></thead>
+    <tbody>
+      <tr><td><b>1 · SOP mining</b></td><td>hundreds of repetitions of the same agent procedure per theme — the
+        raw material to draft the real SOPs, not invented ones</td><td>Studio ingestion + builder</td></tr>
+      <tr><td><b>2 · Approved wording</b></td><td>how experienced agents actually phrase directions and hand-offs
+        (post-cleaning, best examples)</td><td>prompt-block library</td></tr>
+      <tr><td><b>3 · Caller personas</b></td><td>real cohort/mood distribution: hurried, confused, elderly,
+        non-native speakers, repeat askers</td><td>Autopilot A/B simulator personas</td></tr>
+      <tr><td><b>4 · Predictor warm-start</b></td><td>real (situation → action) sequences to seed precedent traces so
+        prediction and pre-drafted replies work from day one</td><td>empirical predictor / pool</td></tr>
+      <tr><td><b>5 · Replay evaluation</b></td><td>held-out real client questions as the test set: does the agent
+        answer what Málaga actually gets asked?</td><td>bench harness (replay mode)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="pull">The corpus turns the POC from "a demo with invented procedures" into "an agent trained on and
+  evaluated against ninety days of the real desk."</p>
+</section>
+
+<section id="poc">
+  <div class="kicker">The proposal</div>
+  <h2>The POC we propose: Málaga Airport Information Agent</h2>
+  <p class="lead-p">A voice-first agent covering the <b>top four themes = 71% of real traffic</b>, built as one
+  SOPilot tenant (<code>aena</code>) with three mined SOPs:</p>
+  <div class="grid g3" style="margin:18px 0">
+    <div class="card"><span class="pill a">SOP 1</span>
+      <h3 style="margin:8px 0 6px">Lost-luggage triage</h3>
+      <p class="small">The clearest procedure in the data: airline → handler desk routing, directions, reference-code
+      guidance. High emotion, high value — the case where following the procedure calms the caller.</p></div>
+    <div class="card"><span class="pill a">SOP 2</span>
+      <h3 style="margin:8px 0 6px">Flight &amp; boarding info</h3>
+      <p class="small">29% of traffic. Needs one real data connector (flight-status lookup) — a perfect showcase for
+      background retrieval: the answer is pre-fetched while the caller finishes saying the flight number.</p></div>
+    <div class="card"><span class="pill a">SOP 3</span>
+      <h3 style="margin:8px 0 6px">Transport, parking &amp; wayfinding</h3>
+      <p class="small">31% combined. Mostly static knowledge (stops, desks, floors) — a RAG corpus of airport
+      facts serves it; every answer ends in directions, matching the co-occurrence pattern.</p></div>
+  </div>
+  <p>Why this is a strong POC for AENA specifically: the calls are <b>short and repetitive</b> (median 37 s — ideal
+  for latency-hidden retrieval and pre-drafted replies), <b>trilingual</b> (the realtime voice channel handles
+  language switching), and the evaluation writes itself — <b>replay the held-out real questions</b> at the agent and
+  measure answer coverage against what human agents did, using the Autopilot harness we already built.</p>
+</section>
+
+<section id="risks">
+  <div class="kicker">Said plainly</div>
+  <h2>Risks &amp; open questions</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Risk</th><th>Reality</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td><b>PII &amp; consent</b> <span class="pill danger">blocking</span></td>
+        <td>transcripts contain names, flight numbers, personal situations. Local analysis is fine; sending content
+        to an external LLM for SOP mining is a data-processing decision that isn't ours to make</td>
+        <td>PII-masking pass first; explicit AENA sign-off on the mining step; keep raw data machine-local forever
+        (already enforced at the git-ignore level)</td></tr>
+      <tr><td><b>No outcome labels</b></td>
+        <td>we don't know which conversations the traveller considered resolved</td>
+        <td>heuristic labels (thanked-and-left vs escalated vs abandoned) + spot-check; POC metric is answer
+        coverage, not "success rate" we can't ground</td></tr>
+      <tr><td><b>ASR ceiling</b></td>
+        <td>proper nouns are mangled; wording mined verbatim can embed transcription errors</td>
+        <td>mine structure from many repetitions, wording only from the cleanest examples; canonical names come from
+        AENA, not from ASR</td></tr>
+      <tr><td><b>18% unmatched</b></td>
+        <td>lexicon misses some themes and all French</td>
+        <td>second pass with embedding clustering on the unmatched bucket once the PII decision is made</td></tr>
+      <tr><td><b>Speaker labels unreliable</b></td>
+        <td>mislabeled runs survive cleaning</td>
+        <td>fine for theme mining; for SOP mining, treat turn ORDER as reliable and labels as advisory</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="next">
+  <div class="kicker">The ask</div>
+  <h2>Next steps</h2>
+  <ol>
+    <li><b>Decide the PII path</b> (blocking): masking approach + AENA sign-off for LLM-assisted mining.</li>
+    <li><b>PII-masking pass</b> over the cleaned corpus (names, phone numbers, booking references, flight numbers →
+      placeholders), local, re-runnable.</li>
+    <li><b>SOP mining</b> on the top themes: cluster agent behavior per theme, draft the three SOPs in Studio,
+      review with someone who knows the desk.</li>
+    <li><b>Build the <code>aena</code> tenant</b>: three SOPs, airport-facts RAG corpus, flight-status connector
+      (mock first, AENA API when available), Spanish/English prompt blocks.</li>
+    <li><b>Replay evaluation</b>: held-out real questions through the runtime; coverage report in the style of our
+      SOPBench work.</li>
+    <li><b>Voice demo for AENA</b>: live call in the Playground against SOP 1 (lost luggage) — the emotional one.</li>
+  </ol>
+  <div class="callout ok"><div class="clabel">◆ Where we are</div>
+    Steps 0 of this list — corpus survey, garbage taxonomy, cleaning pipeline, intent mining — are <b>done</b>
+    (this document is their report). Everything above runs from <code>use_case/analysis/</code> and re-runs in
+    under a minute as heuristics improve.</div>
+</section>
+
+</article>
+</main>
+</div>
+
+<div class="footer">SOPilot · AENA Málaga POC — discussion I · data analysis edition · the corpus itself never
+leaves the analysis machine and is never committed to version control.</div>
+
+</body>
+</html>
