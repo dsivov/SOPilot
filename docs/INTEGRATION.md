@@ -171,6 +171,20 @@ conversation.
 
 ### Session lifecycle
 
+**Intake mode (D-11):** start a session with NO `sop_id` and SOPilot's router
+assigns the procedure from the conversation itself — deferring politely on
+greetings, auditing every decision:
+
+```bash
+curl -X POST $BASE/sessions -H "$AUTH" -H "$PROJ" -d '{}'   # → {"routed": false, ...}
+# converse as normal; the response carries "routing" when a decision lands:
+#   {"routing": {"kind": "initial", "sop_id": "...", "reason": "lost luggage inquiry"}}
+# journey exposes the full routing_events audit trail per session.
+```
+
+Pass an explicit `sop_id` when the upstream system already knows the intent
+(IVR menu choice, app deep link) — explicit selection always wins.
+
 ```
 POST /sessions {"sop_id": ..., "channel": "text"|"realtime_voice",
                 "subsystems": ""|"sop"|"retrieval"|"both"}   # per-session D-9 override

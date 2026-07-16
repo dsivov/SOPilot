@@ -204,7 +204,9 @@ class ConversationSession(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(32), index=True)
     project_id: Mapped[str] = mapped_column(String(32), index=True)
-    sop_id: Mapped[str] = mapped_column(String(32), index=True)
+    # D-11: nullable — an INTAKE session starts without an SOP; the router
+    # assigns one on the first routable utterance (and may switch later).
+    sop_id: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)
     sop_version: Mapped[int] = mapped_column(Integer, default=0)
     channel: Mapped[str] = mapped_column(String(32), default="text")  # text | realtime_voice | bench
     status: Mapped[str] = mapped_column(String(16), default="active")  # active | ended
@@ -239,6 +241,25 @@ class Turn(Base):
     # written at plan time, enriched at respond time.
     debug: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RoutingEvent(Base):
+    """D-11 audit: every router decision — initial routing, deferral (stayed in
+    intake), or mid-conversation switch — with the candidate scores/reason."""
+
+    __tablename__ = "routing_events"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    project_id: Mapped[str] = mapped_column(String(32), index=True)
+    session_id: Mapped[str] = mapped_column(String(32), index=True)
+    turn_index: Mapped[int] = mapped_column(Integer, default=0)
+    kind: Mapped[str] = mapped_column(String(16))  # initial | defer | switch | oos
+    chosen_sop_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    previous_sop_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reason: Mapped[str] = mapped_column(String(300), default="")
+    router_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
 class PrecedentTrace(Base):

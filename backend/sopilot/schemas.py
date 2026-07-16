@@ -125,7 +125,9 @@ class SopMeta(BaseModel):
 
 
 class SessionStartRequest(BaseModel):
-    sop_id: str
+    # Empty = INTAKE session (D-11): the router assigns an SOP on the first
+    # routable utterance. Explicit sop_id always wins (IVR menu, deep link).
+    sop_id: str = ""
     channel: Literal["text", "realtime_voice", "bench"] = "text"
     # D-9 override for THIS session only; empty = project default.
     subsystems: Literal["", "sop", "retrieval", "both"] = ""
@@ -136,5 +138,6 @@ class SessionStartRequest(BaseModel):
 
 class SessionStartResponse(BaseModel):
     session_id: str
-    sop_version: int
-    definition: TaskDefinition
+    routed: bool = True  # False = intake, awaiting the router
+    sop_version: int = 0
+    definition: Optional[TaskDefinition] = None

@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     runtime_model: str = "gpt-4o"
     # Voice channel: OpenAI Realtime speech model + voice. The supervisor steers it
     # per turn via session.update; it never sees the SOP whole.
+    # D-11 router: routes intake sessions to an SOP and checks mid-call
+    # switches. Measured on the AENA corpus: cheap model ≈ strong oracle (88%).
+    router_model: str = "gpt-4o-mini"
     realtime_model: str = "gpt-realtime"
     realtime_voice: str = "marin"
 

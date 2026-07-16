@@ -285,6 +285,48 @@ class ConverseRequest(BaseModel):
     user_message: str
 
 
+async def _routing_candidates(db: AsyncSession, scope: Scope) -> list[dict]:
+    """Published SOPs of the project as router candidates (id, name, description)."""
+    from ..models import Sop
+
+    rows = (
+        await db.execute(
+            select(Sop, SopVersion)
+            .join(SopVersion, SopVersion.sop_id == Sop.id)
+            .where(
+                Sop.tenant_id == scope.tenant_id,
+                Sop.project_id == scope.project_id,
+                SopVersion.status == "published",
+            )
+            .order_by(SopVersion.version.asc())
+        )
+    ).all()
+    latest: dict[str, tuple] = {}
+    for sop, ver in rows:  # ascending — last write wins = newest published
+        latest[sop.id] = (sop, ver)
+    return [
+        {"id": sop.id, "name": sop.name, "description": (ver.definition or {}).get("description", ""), "version": ver.version}
+        for sop, ver in latest.values()
+    ]
+
+
+async def _assign_sop(db: AsyncSession, scope: Scope, session, sop_id: str, version: int) -> None:
+    """Route/switch a session onto an SOP: pin version + prompt bindings."""
+    from ..runtime import collect_prompt_block_names
+    from .prompt_blocks import resolve_published_blocks
+
+    ver = (
+        await db.execute(
+            select(SopVersion).where(SopVersion.sop_id == sop_id, SopVersion.version == version)
+        )
+    ).scalar_one()
+    task_def = TaskDefinition.model_validate(ver.definition)
+    bindings, _missing = await resolve_published_blocks(db, scope, collect_prompt_block_names(task_def))
+    session.sop_id = sop_id
+    session.sop_version = version
+    session.prompt_bindings = bindings or None
+
+
 @router.post("/{session_id}/converse")
 async def converse(
     session_id: str,
@@ -320,6 +362,58 @@ async def converse(
                 status_code=429,
                 detail=f"tenant turn quota exceeded ({limit}/min) — retry shortly",
             )
+    routing_info: dict | None = None
+    if session.sop_id is None:
+        # D-11 intake: route on the client utterances gathered so far.
+        from ..models import RoutingEvent
+        from ..router import INTAKE_REPLY, route_initial
+
+        prior = (
+            (await db.execute(select(Turn).where(Turn.session_id == session.id).order_by(Turn.turn_index)))
+            .scalars()
+            .all()
+        )
+        utterances = [t.user_message for t in prior if t.user_message] + [body.user_message]
+        candidates = await _routing_candidates(db, scope)
+        decision = await route_initial(candidates, utterances) if candidates else None
+        kind = decision.kind if decision else "oos"
+        chosen = decision.sop_id if decision else None
+        db.add(
+            RoutingEvent(
+                tenant_id=scope.tenant_id, project_id=scope.project_id, session_id=session.id,
+                turn_index=len(prior), kind=kind, chosen_sop_id=chosen,
+                reason=(decision.reason if decision else "no published SOPs"),
+                router_ms=(decision.router_ms if decision else 0),
+            )
+        )
+        if chosen:
+            ver = next(c["version"] for c in candidates if c["id"] == chosen)
+            await _assign_sop(db, scope, session, chosen, ver)
+            await db.commit()
+            routing_info = {"kind": "initial", "sop_id": chosen, "reason": decision.reason}
+            log.info("routed session=%s -> sop=%s (%s)", session.id, chosen, decision.reason)
+            # fall through to the normal flow: this same turn runs on the routed SOP
+        else:
+            reply = INTAKE_REPLY
+            db.add(
+                Turn(
+                    session_id=session.id, turn_index=len(prior), user_message=body.user_message,
+                    assistant_message=reply,
+                    debug={"routing": {"kind": kind, "reason": decision.reason if decision else ""}},
+                )
+            )
+            await db.commit()
+            log.info("intake defer session=%s kind=%s", session.id, kind)
+            return {
+                "reply": reply, "terminal": None,
+                "classification": {"state": "", "action": "", "cohort": "", "mood": ""},
+                "turn": {"turn_index": len(prior), "chosen_action": "", "instruction_hit": False,
+                          "picks": [], "consume_stats": {}, "rerank_ms": 0, "prompt_text": "", "context_block": ""},
+                "routing": {"kind": kind, "sop_id": None,
+                             "reason": decision.reason if decision else "no published SOPs"},
+                "total_ms": int((_time.perf_counter() - t0) * 1000),
+            }
+
     version = (
         await db.execute(
             select(SopVersion).where(
@@ -363,6 +457,47 @@ async def converse(
         _embed_query(),
     )
     request.state.query_emb = query_emb
+
+    # D-11 switch check: only when the tracker lost the thread — the classified
+    # state is outside (or absent from) the current SOP's vocabulary.
+    state_vocab = {u.name for u in task_def.user_states}
+    if not proposal["state"] or proposal["state"] not in state_vocab:
+        from ..models import RoutingEvent
+        from ..router import route_switch
+
+        candidates = await _routing_candidates(db, scope)
+        current_name = next((c["name"] for c in candidates if c["id"] == session.sop_id), "current")
+        recent = [t.user_message for t in prior_turns[-1:] if t.user_message] + [body.user_message]
+        decision = await route_switch(candidates, session.sop_id, current_name, recent)
+        if decision.sop_id:
+            db.add(
+                RoutingEvent(
+                    tenant_id=scope.tenant_id, project_id=scope.project_id, session_id=session.id,
+                    turn_index=len(prior_turns), kind="switch", chosen_sop_id=decision.sop_id,
+                    previous_sop_id=session.sop_id, reason=decision.reason, router_ms=decision.router_ms,
+                )
+            )
+            ver = next(c["version"] for c in candidates if c["id"] == decision.sop_id)
+            await _assign_sop(db, scope, session, decision.sop_id, ver)
+            await db.commit()
+            log.info("switched session=%s -> sop=%s (%s)", session.id, decision.sop_id, decision.reason)
+            routing_info = {"kind": "switch", "sop_id": decision.sop_id, "reason": decision.reason}
+            # re-plan this turn against the NEW SOP (fresh graph; prior actions
+            # belong to the old procedure and don't constrain the new one)
+            version = (
+                await db.execute(
+                    select(SopVersion).where(
+                        SopVersion.sop_id == session.sop_id, SopVersion.version == session.sop_version
+                    )
+                )
+            ).scalar_one()
+            task_def = TaskDefinition.model_validate(version.definition)
+            graph = SOPGraph(task_def)
+            allowed = graph.allowed_actions(set())
+            proposal = await classify_and_propose(
+                task_def, history, body.user_message, allowed,
+                prior_cohort=prior_turns[-1].cohort if prior_turns else "",
+            )
 
     plan = await plan_turn(
         session_id,
@@ -410,6 +545,7 @@ async def converse(
         "terminal": terminal,
         "classification": proposal,
         "turn": plan,
+        "routing": routing_info,
         "total_ms": int((_time.perf_counter() - t0) * 1000),
     }
 

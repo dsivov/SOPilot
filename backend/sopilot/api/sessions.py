@@ -68,6 +68,21 @@ async def start_session(
     scope: Scope = Depends(resolve_scope),
     db: AsyncSession = Depends(get_db),
 ) -> SessionStartResponse:
+    if not req.sop_id:
+        # D-11 intake session: no SOP yet — the router assigns one in /converse
+        # on the first routable utterance.
+        session = ConversationSession(
+            tenant_id=scope.tenant_id,
+            project_id=scope.project_id,
+            sop_id=None,
+            sop_version=0,
+            channel=req.channel,
+            subsystems_override=req.subsystems,
+        )
+        db.add(session)
+        await db.commit()
+        return SessionStartResponse(session_id=session.id, routed=False)
+
     sop = (
         await db.execute(
             select(Sop).where(
@@ -233,12 +248,30 @@ async def session_journey(
         .scalars()
         .all()
     )
+    from ..models import RoutingEvent
+
+    routing = (
+        (
+            await db.execute(
+                select(RoutingEvent)
+                .where(RoutingEvent.session_id == session.id)
+                .order_by(RoutingEvent.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return {
         "session_id": session.id,
         "sop_id": session.sop_id,
         "sop_version": session.sop_version,
         "status": session.status,
         "terminal_outcome": session.terminal_outcome,
+        "routing_events": [
+            {"turn_index": e.turn_index, "kind": e.kind, "chosen_sop_id": e.chosen_sop_id,
+             "previous_sop_id": e.previous_sop_id, "reason": e.reason, "router_ms": e.router_ms}
+            for e in routing
+        ],
         "definition": version.definition if version else None,
         "prompt_bindings": session.prompt_bindings or {},
         "turns": [

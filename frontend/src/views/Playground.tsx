@@ -45,7 +45,7 @@ export default function PlaygroundView() {
   const start = useCallback(async () => {
     setError("");
     try {
-      const r = await api("POST", "/sessions", { sop_id: sopId, subsystems: mode });
+      const r = await api("POST", "/sessions", { sop_id: sopId === "__auto__" ? "" : sopId, subsystems: mode });
       setSessionId(r.session_id);
       setSessionMode(mode);
       setMsgs([]);
@@ -195,6 +195,7 @@ export default function PlaygroundView() {
           <div className="cbody" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <select className="qinput" value={sopId} onChange={(e) => setSopId(e.target.value)} style={{ flex: "none" }}>
               <option value="">Choose an SOP…</option>
+              <option value="__auto__">✨ Auto — let the router pick from the conversation (D-11)</option>
               {sops.map((s) => (
                 <option key={s.id} value={s.id}>{s.name} (v{s.latest_version})</option>
               ))}
