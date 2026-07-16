@@ -43,10 +43,19 @@ def _catalog(candidates: list[dict]) -> str:
 
 ROUTE_SYS = (
     "You route the opening of a service conversation to ONE standard operating procedure, or defer.\n"
+    "The text is noisy speech-to-text: expect garbled words, mixed languages, fragments — route on the best "
+    "plausible reading, not on perfect clarity.\n"
     "Return JSON {\"route\": \"<procedure id>\" | \"defer\" | \"oos\", \"reason\": \"<max 10 words>\"}.\n"
-    "defer = the customer has not yet revealed what they need (greeting only, unintelligible) — wait a turn.\n"
-    "oos = the need is clear but none of the procedures covers it.\n"
-    "Route as soon as the need is recognizable; do not defer on a clear question."
+    "defer = ONLY a pure greeting or truly empty utterance — nothing about the need yet.\n"
+    "oos = clearly unrelated to ALL procedures (e.g. medical emergency, job application).\n"
+    "When torn between defer/oos and a procedure, PREFER the procedure — a wrong-but-close procedure still helps; "
+    "a greeting loop never does."
+)
+
+FORCE_SYS = (
+    "You MUST route this conversation to exactly ONE of the procedures — defer and oos are not available. "
+    "The text is noisy speech-to-text. Pick the closest plausible procedure.\n"
+    "Return JSON {\"route\": \"<procedure id>\", \"reason\": \"<max 10 words>\"}."
 )
 
 SWITCH_SYS = (
@@ -57,10 +66,15 @@ SWITCH_SYS = (
 )
 
 
-async def route_initial(candidates: list[dict], client_utterances: list[str]) -> RouteDecision:
+async def route_initial(
+    candidates: list[dict], client_utterances: list[str], *, force: bool = False
+) -> RouteDecision:
+    """force=True (second non-routed turn): intake never loops — pick the
+    closest procedure. A wrong-but-close SOP can still answer or hand off;
+    a repeated greeting cannot."""
     t0 = time.perf_counter()
     out = await chat_json(
-        ROUTE_SYS + "\nPROCEDURES:\n" + _catalog(candidates),
+        (FORCE_SYS if force else ROUTE_SYS) + "\nPROCEDURES:\n" + _catalog(candidates),
         [{"role": "user", "content": "Customer so far:\n" + "\n".join(client_utterances[-3:])}],
         model=get_settings().router_model,
     )
@@ -70,6 +84,8 @@ async def route_initial(candidates: list[dict], client_utterances: list[str]) ->
     known = {c["id"] for c in candidates}
     if route in known:
         return RouteDecision(route, "initial", reason, ms)
+    if force:  # model dodged — take the first candidate rather than loop
+        return RouteDecision(candidates[0]["id"], "initial", f"forced fallback: {reason}", ms)
     if route == "oos":
         return RouteDecision(None, "oos", reason, ms)
     return RouteDecision(None, "defer", reason, ms)

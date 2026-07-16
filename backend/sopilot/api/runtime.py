@@ -375,7 +375,10 @@ async def converse(
         )
         utterances = [t.user_message for t in prior if t.user_message] + [body.user_message]
         candidates = await _routing_candidates(db, scope)
-        decision = await route_initial(candidates, utterances) if candidates else None
+        # never loop in intake: from the second non-routed turn on, force a choice
+        decision = (
+            await route_initial(candidates, utterances, force=len(prior) >= 1) if candidates else None
+        )
         kind = decision.kind if decision else "oos"
         chosen = decision.sop_id if decision else None
         db.add(
