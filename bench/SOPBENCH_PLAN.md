@@ -175,6 +175,41 @@ Reading the spread honestly:
   is the right lever when procedure-skipping dominates — which is exactly the
   failure class the SOPBench paper identifies as the field-wide problem.
 
-Next: (1) stronger-model arms (does supervision still add on top of
-GPT-4.1-class baselines?); (2) human A/B harness (the in-product Autopilot
-A/B now exists for exactly this); (3) writeup.
+## Stronger-model arms — gpt-4o, University + Healthcare (2026-07-16)
+
+Same harness, same flags, assistant model upgraded to gpt-4o in BOTH arms:
+
+| Domain | N | Arm A (gpt-4o alone) | Arm B (+SOPilot) | Δ pass | dirgraph A→B |
+|---|---|---|---|---|---|
+| university | 42 | 59.5% | 59.5% | 0.0 pp | 6→**0** |
+| healthcare | 124 | 74.2% | 77.4% | +3.2 pp | 9→**1** |
+
+Three findings, in order of importance:
+
+1. **Supervision recovers 71–88% of the model-upgrade gap at ~1/17 the model
+   cost.** The commercially decisive comparison is supervised-mini vs bare-4o:
+   university 57.1% vs 59.5% (supervision closed 16.7 of the 19.0 pp gap —
+   88%); healthcare 58.1% vs 74.2% (closed 40.3 of 56.5 pp — 71%). A cheap
+   supervised model is most of a frontier upgrade, at a fraction of the
+   per-turn price and latency.
+2. **The mechanism is model-independent.** Procedure-order violations at
+   gpt-4o: 15 → 1 across both domains (−93%). Even frontier-class models
+   still skip verification steps under long dialogues; per-step supervision
+   removes the failure class essentially entirely (university: literally 0).
+   For compliance-gated deployments this matters independently of pass rate —
+   "never skipped a mandated check" is a property regulators ask about.
+3. **The pass-rate delta shrinks as baselines strengthen** (0 to +3.2 pp),
+   because gpt-4o's residual failures are permissibility-reasoning classes
+   (constraint decisions, wrong target action) that supervision doesn't claim
+   to fix — the same boundary the 4o-mini sweep showed at hotel/dmv. No
+   regression in any metric: at worst, supervision is free procedural
+   insurance on a strong model.
+
+Not run: Bank/others at gpt-4o (the question is answered; the remaining
+domains would refine point 3 at real cost), GPT-4.1-class arms (same design
+applies if wanted).
+
+Next: (1) human A/B harness (the in-product Autopilot A/B is the tool);
+(2) writeup — the claim set is now complete: full-benchmark +13.1 pp,
+adversarial +11.1 pp, supervised-mini ≈ 71–88% of a frontier upgrade,
+procedure violations −57% (mini) / −93% (4o).

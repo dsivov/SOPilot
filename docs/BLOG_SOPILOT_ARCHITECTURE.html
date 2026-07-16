@@ -947,6 +947,20 @@ b.hl{color:#8fd9c9}
       <p class="small" style="margin:4px 0 0">Procedure-order violations under attack (−80%). Compliance held
       near-perfectly even while the user pushed to skip verification.</p></div></div>
   </div>
+  <h3>Does it still help a stronger model?</h3>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="stripe good"></span><div class="cbody" style="padding:14px 16px">
+      <div style="font-size:26px;font-weight:800;color:#8fd9c9">71–88% of a frontier upgrade</div>
+      <p class="small" style="margin:4px 0 0">Supervised gpt-4o-mini vs bare gpt-4o on the same tasks: university
+      57.1% vs 59.5%, healthcare 58.1% vs 74.2%. Supervision recovers most of the gap a model upgrade buys —
+      at roughly <b>1/17th the per-token cost</b> and lower latency.</p></div></div>
+    <div class="card"><span class="stripe good"></span><div class="cbody" style="padding:14px 16px">
+      <div style="font-size:26px;font-weight:800;color:#8fd9c9">15 → 1 at gpt-4o</div>
+      <p class="small" style="margin:4px 0 0">Procedure-order violations with BOTH arms on gpt-4o (university +
+      healthcare, −93%; university reached literally zero). Frontier models still skip verification steps in long
+      dialogues — the failure mode is model-independent, and so is the fix. Pass-rate delta shrinks (0 to +3.2 pp)
+      as reasoning errors dominate the residue; supervision never regressed a metric.</p></div></div>
+  </div>
   <p class="small">Also strategically satisfying: the SOPBench paper argues external SOP-tracking systems are "not
   always feasible or efficient to implement" — SOPilot is exactly such a system, outscoring internalized compliance
   on their own verifiers.</p>
