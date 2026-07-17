@@ -1,0 +1,27 @@
+{
+  "customer": "aena",
+  "tenant_slug": "aena",
+  "tenant_name": "AENA — Malaga Airport",
+  "project_slug": "malaga",
+  "subsystems": "advisory",
+  "base_url": "http://127.0.0.1:8100",
+  "admin_token_env": "SOPILOT_ADMIN_TOKEN",
+  "sops_dir": "use_case/analysis/mined",
+  "facts_file": "use_case/analysis/facts_full.jsonl",
+  "domain": {
+    "descriptor": "Malaga Airport information desk knowledge",
+    "topics": [
+      {"key": "lost_luggage", "sop_title": "Lost or Delayed Luggage", "lexicon": ["maleta", "equipaje", "luggage"]},
+      {"key": "flight_info", "sop_title": "Flight & Boarding Information", "lexicon": ["vuelo", "flight", "gate"]},
+      {"key": "transport_wayfinding", "sop_title": "Transport, Parking & Wayfinding", "lexicon": ["taxi", "bus", "donde"]}
+    ]
+  },
+  "knowledge": {"mode": "corpus", "corpus_name": "airport_facts"},
+  "connectors": [
+    {"name": "airport-facts", "kind": "http", "description": "Context Graph aena workspace",
+     "config": {"url": "http://10.0.0.80:9621/query", "method": "POST", "query_field": "query",
+                "body": {"mode": "mix", "only_need_context": true, "chunk_top_k": 5, "max_total_tokens": 3000},
+                "headers": {"LIGHTRAG-WORKSPACE": "aena"}, "result_path": "response", "timeout_s": 45}},
+    {"name": "flight-status", "kind": "mock", "description": "flight status — mock until AENA feed"}
+  ]
+}

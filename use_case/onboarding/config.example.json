@@ -1,0 +1,37 @@
+{
+  "_comment": "Per-customer onboarding config. Copy to <customer>.json and fill in. Files with a real api key are gitignored. See docs/ONBOARDING.md for the full recipe.",
+
+  "customer": "acme",
+  "tenant_slug": "acme",
+  "tenant_name": "Acme Corp",
+  "project_slug": "main",
+  "subsystems": "advisory",
+
+  "base_url": "http://127.0.0.1:8100",
+  "admin_token_env": "SOPILOT_ADMIN_TOKEN",
+  "api_key_env": "SOPILOT_ACME_KEY",
+
+  "sops_dir": "use_case/analysis/mined",
+  "facts_file": "use_case/analysis/facts_full.jsonl",
+
+  "domain": {
+    "descriptor": "One-line description of the service desk this agent serves.",
+    "topics": [
+      {"key": "topic_a", "sop_title": "Human-readable procedure name", "lexicon": ["keyword", "palabra"]}
+    ]
+  },
+
+  "knowledge": {
+    "mode": "corpus",
+    "corpus_name": "facts",
+    "cg_url": "http://10.0.0.80:9621/query",
+    "cg_workspace": "acme"
+  },
+
+  "connectors": [
+    {"name": "facts", "kind": "rag", "description": "Managed knowledge corpus", "config": {"corpus": "facts", "top_k": 3}}
+  ],
+
+  "bind_connector_to_answering_stages": "facts",
+  "answering_stage_keywords": ["greet", "identify", "verify", "provide", "resolve", "route", "inform"]
+}

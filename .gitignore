@@ -24,3 +24,7 @@ use_case/**/*.txt
 
 # onboarding configs may reference keys — commit only the example + reviewed instances
 use_case/onboarding/*.local.json
+
+# onboarding configs are code, not data — no secrets (keys resolved from env/TENANT_KEYS)
+!use_case/onboarding/config.example.json
+!use_case/onboarding/aena.json
