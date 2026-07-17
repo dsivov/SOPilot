@@ -539,6 +539,57 @@ b.hl{color:#8fd9c9}
     (+13 to +32 points on SOPBench, −93% skipped verifications) — is not what a short info-desk Q&A measures;
     here its job was to stop costing anything, and after three iterations it essentially does, while adding
     routing, audit trails, per-turn analytics and the compliance guarantees the plain arms cannot offer.</div>
+  <h3>The production-grade round: Context Graph + realtime-class model + latency</h3>
+  <p>The final configuration mirrors production on three axes the earlier rounds idealized: the knowledge lives in
+  the <b>real Context Graph server</b> the team runs in production (not a local vector table), the answering model is
+  a <b>realtime-class small model</b> (gpt-4o-mini — production voice models are weaker than gpt-4o), and every arm's
+  <b>per-turn reply latency</b> is measured. Results land here when the run completes.</p>
+
+  <h4>Test setup — full detail for review</h4>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>Arm A_prompt</th><th>Arm A_rag</th><th>Arm B — SOPilot</th></tr></thead>
+    <tbody>
+      <tr><td><b>Answering model</b></td>
+        <td colspan="3">identical in all arms: gpt-4o-mini, temperature 0.3, max 200 tokens, "answer concretely and
+        briefly (spoken, 1-3 sentences), in the traveller's language"</td></tr>
+      <tr><td><b>Knowledge access</b></td>
+        <td>all three SOP documents + all 111 facts pasted into the system prompt, every turn (no retrieval)</td>
+        <td>one Context Graph query per turn with the traveller's last utterance, verbatim; the retrieved context
+        (≤3,000 chars) is injected into the system prompt for that turn</td>
+        <td>the same Context Graph server behind a SOPilot <b>connector</b>; the supervisor pre-fetches in the
+        background (predicted queries after each turn + the current utterance fetched in parallel with
+        classification); the agent receives pooled context via the per-turn stage prompt</td></tr>
+      <tr><td><b>Retrieval call</b></td>
+        <td>—</td>
+        <td colspan="2">identical for both: <code>POST /query</code> on the production CG server, workspace
+        <code>aena</code>, <code>mode=mix</code>, <code>only_need_context=true</code>, <code>chunk_top_k=5</code>,
+        <code>max_total_tokens=3000</code> — retrieval context only, no CG-side answer generation. Measured raw
+        latency: 2.3–3.6&nbsp;s per uncached query</td></tr>
+      <tr><td><b>SOP layer</b></td>
+        <td>as prose in the prompt</td><td>none</td>
+        <td>full runtime: intake router (gpt-4o-mini) assigns the SOP from the conversation; graph tracking;
+        stage prompts + mined must-say wording; strong classifier (gpt-4o) for state/action; pre-drafted replies
+        served verbatim on exact match; staleness gate re-fetches live when pooled context doesn't match the
+        current utterance</td></tr>
+      <tr><td><b>Latency measurement</b></td>
+        <td colspan="3">wall-clock per reply, measured identically in the harness: from the moment the traveller's
+        utterance is sent to the moment the reply text is received (includes every model/retrieval call the arm
+        makes); reported p50/p95 over ~100 turns per arm</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small"><b>How the knowledge is organized in Context Graph:</b> the 111 mined facts are grouped into six
+  topic documents (flights, baggage, transport, parking, wayfinding, services) and ingested into a dedicated
+  <code>aena</code> workspace on the production CG server, which runs its own entity/relation extraction over them
+  (LightRAG-style graph + vector index; embedding model text-embedding-3-large, extraction model gpt-4o, server-side
+  LLM cache on). Every arm therefore queries <i>the same knowledge through the same server</i> — the arms differ
+  only in WHO pays the retrieval latency and WHETHER a procedure layer governs the conversation.
+  <b>Scenario &amp; judging:</b> 36 scenarios (12 per theme), each seeded from a held-out real conversation — the
+  simulated traveller (gpt-4o-mini, identical for all arms) opens with the real first utterance and pursues the
+  real need; ground truth is what the human desk agent actually provided in that recorded conversation. A gpt-4o
+  judge scores every conversation: coverage (covered/partial/missed vs ground truth), specifics (a concrete
+  location/number when the truth contains one), traveller satisfaction 1–5. Up to 4 traveller turns; the traveller
+  ends early when satisfied. Harness: <code>use_case/analysis/aena_ab.py</code>.</p>
+
   <h3>Method notes (v1 replay detail — superseded as headline by the A/B above)</h3>
   <p>36 held-out real conversations (never seen by mining) replayed through the live POC; a judge compared the
   AI's answers with what the human agent actually provided:</p>
