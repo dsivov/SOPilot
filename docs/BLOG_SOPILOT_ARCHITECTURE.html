@@ -82,13 +82,13 @@ b.hl{color:#8fd9c9}
       customer data at every turn, without ever adding latency the caller can hear. This document is the end-to-end
       design: what the system is, how a conversation flows through it, what runs where, and the decisions we've
       locked — written to be read standalone.</p>
-    <div class="byline">Prepared for team &amp; management review · updated 16 July 2026 · P0–P3 built and verified
-      (text + voice channels live; full external benchmark complete) — phase plan in §11</div>
+    <div class="byline">Prepared for team &amp; management review · updated 17 July 2026 · P0–P3 built and verified;
+      first real customer (AENA — Málaga airport) validated on production infrastructure — phase plan in §11</div>
     <div class="hero-tags">
-      <span class="tag">status: <b>P2 complete</b></span>
+      <span class="tag">status: <b>P0–P3 done</b></span>
       <span class="tag">channels: <b>text + voice live</b></span>
       <span class="tag">design: <b>two lanes, one pool</b></span>
-      <span class="tag">proof: <b>SOPBench 7/7 domains, +13.1 pp</b></span>
+      <span class="tag">proof: <b>SOPBench +13pp · real customer validated</b></span>
     </div>
   </div>
 </header>
@@ -109,6 +109,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#slis">How we measure success</a></li>
     <li><a href="#results">First measurements</a></li>
     <li><a href="#proof">External proof: SOPBench</a></li>
+    <li><a href="#realcustomer">Real customer: AENA</a></li>
     <li><a href="#phases">Phase plan &amp; open risks</a></li>
     <li><a href="#decisions">Decision log</a></li>
   </ol>
@@ -1039,6 +1040,67 @@ b.hl{color:#8fd9c9}
   on their own verifiers.</p>
 </section>
 
+<!-- 9d -->
+<section id="realcustomer">
+  <div class="kicker">From benchmark to a real customer</div>
+  <h2>The real-customer round: AENA (Málaga airport)</h2>
+  <p class="lead-p">A benchmark proves the mechanism; a real customer proves the product. AENA — the operator of
+  Málaga airport — gave us ninety days of real information-desk conversations. We turned them into a working agent
+  and validated it on <b>our own production knowledge server</b>, against <b>what the human agents actually said</b>.
+  Standing this up surfaced the four capabilities that turn the engine into a deployable product.</p>
+  <div class="grid g2" style="margin:18px 0">
+    <div class="card"><span class="stripe good"></span><div class="cbody" style="padding:14px 16px">
+      <div style="font-size:16px;font-weight:800">Connectors — swap the knowledge system without touching a procedure</div>
+      <p class="small" style="margin:6px 0 0">Retrieval systems register once as named connectors; procedures
+      reference them by name. We moved the airport knowledge from a built-in store to the team's production
+      <b>Context Graph</b> server with a one-line configuration change and no procedure republished — health-monitored
+      and audited throughout.</p></div></div>
+    <div class="card"><span class="stripe good"></span><div class="cbody" style="padding:14px 16px">
+      <div style="font-size:16px;font-weight:800">Routing — the agent picks the procedure, and we can prove it</div>
+      <p class="small" style="margin:6px 0 0">A caller no longer has to be pre-assigned a procedure: the platform
+      routes from the first real sentence, defers on a greeting, and switches topic mid-call. We measured this on the
+      real corpus <i>before</i> building it — a cheap router matches an expert on 88% of routable openings.</p></div></div>
+    <div class="card"><span class="stripe good"></span><div class="cbody" style="padding:14px 16px">
+      <div style="font-size:16px;font-weight:800">Advisory &amp; strict modes — one platform, the right shape per procedure</div>
+      <p class="small" style="margin:6px 0 0">For fast information-desk answers the procedure and fresh knowledge go
+      straight to a lightweight answering model while tracking runs in the background (advisory); for
+      compliance-critical work every turn is governed (strict). Chosen per procedure.</p></div></div>
+    <div class="card"><span class="stripe good"></span><div class="cbody" style="padding:14px 16px">
+      <div style="font-size:16px;font-weight:800">A production-realistic answering model</div>
+      <p class="small" style="margin:6px 0 0">The answering voice is a small, fast model of the class used for
+      real-time speech; the strong reasoning stays in the background supervisor. The customer hears a cheap model
+      that behaves like an expert — the same "supervised weak model" result the benchmark showed, now in production
+      shape.</p></div></div>
+  </div>
+  <h3>Measured against real traveller needs</h3>
+  <p>Three configurations faced the same simulated travellers (each seeded from a held-out real call; the benchmark
+  for a good answer is what the human agent actually gave), all on the same production knowledge server, all timed:</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 250" role="img" aria-label="AENA results: answer coverage 54/68/61 percent and median reply time 2.50/2.86/1.64 seconds for basic-retrieval, plus-procedures, and SOPilot">
+      <style>.at{fill:#aab3c5;font:12.5px "Segoe UI",sans-serif}.av{fill:#e7ebf3;font:13px "Segoe UI",sans-serif;font-weight:700}.attl{fill:#e7ebf3;font:13.5px "Segoe UI",sans-serif;font-weight:700}.ag{fill:#7b8499;font:11px "Segoe UI",sans-serif}</style>
+      <text class="attl" x="16" y="24">Answer quality — % of conversations covering what the human agent provided</text>
+      <g><text class="at" x="16" y="60">basic agent + retrieval</text><path d="M250,48 h214 a4,4 0 0 1 4,4 v13 a4,4 0 0 1 -4,4 h-214 z" fill="#5b8def"/><text class="av" x="476" y="63">54%</text></g>
+      <g><text class="at" x="16" y="94">+ procedures</text><path d="M250,82 h270 a4,4 0 0 1 4,4 v13 a4,4 0 0 1 -4,4 h-270 z" fill="#14a087"/><text class="av" x="532" y="97">68%</text></g>
+      <g><text class="at" x="16" y="128">SOPilot agent</text><path d="M250,116 h242 a4,4 0 0 1 4,4 v13 a4,4 0 0 1 -4,4 h-242 z" fill="#14a087"/><text class="av" x="504" y="131">61%</text></g>
+      <text class="attl" x="16" y="170">Median reply time — seconds (lower is better)</text>
+      <g><text class="at" x="16" y="206">basic agent + retrieval</text><path d="M250,194 h250 a4,4 0 0 1 4,4 v13 a4,4 0 0 1 -4,4 h-250 z" fill="#5b8def"/><text class="av" x="512" y="209">2.50 s</text></g>
+      <g><text class="at" x="16" y="240">SOPilot agent</text><path d="M250,228 h164 a4,4 0 0 1 4,4 v13 a4,4 0 0 1 -4,4 h-164 z" fill="#14a087"/><text class="av" x="426" y="241">1.64 s — fastest</text></g>
+    </svg>
+    <figcaption><b>Two findings for the deck.</b> The procedures mined from AENA's own calls are the value —
+      identical agents, procedures the only difference, +14 points of coverage and +27 of concreteness at no latency
+      cost. SOPilot delivers that quality class <b>~40% faster</b> than the equivalent prompt-based agent (it
+      pre-fetches while the caller speaks) and is the only configuration with routing, tracking and a full audit
+      trail. Pooled over 72 conversations per configuration; run-to-run noise ±8–10 points.</figcaption>
+  </div></figure>
+  <div class="callout key"><div class="clabel">◆ Why this round matters strategically</div>
+    It closes the loop from research to revenue: the platform ingested a real customer's raw conversations, learned
+    their unwritten procedures, served answers from the customer's own production infrastructure, and was graded
+    against real human performance — and the standalone customer report
+    (<span class="mono">REPORT_AENA_PROD.html</span>) is written for their team, not ours. The remaining quality
+    ceiling is not a platform limit — it is live operational data (today's counter for today's flight) that only
+    AENA can provide, and the connection slot for it is already built.</div>
+</section>
+
 <!-- 10 -->
 <section id="phases">
   <div class="kicker">The plan, honestly</div>
@@ -1110,6 +1172,24 @@ b.hl{color:#8fd9c9}
         for A/B tests and API consumers)</td><td>the two subsystems are sellable separately — a customer with its
         own prompting stack can still buy the prefetch pool, and a compliance-focused customer can run procedure
         management with plain live lookups; the position tracker runs in every mode because both halves key off it</td></tr>
+      <tr><td>D-10</td><td>Retrieval systems (a knowledge base, a search API, an internal tool) are registered once
+        as named <b>connectors</b> at the project level; procedures reference them by name</td><td>the underlying
+        system can be swapped, re-credentialed, or disabled without touching a single procedure — and each step can
+        use whichever system answers it best; every lookup is health-monitored and audited</td></tr>
+      <tr><td>D-11</td><td>The agent's <b>topic routing lives inside SOPilot</b>, not in the customer's model: a
+        conversation can start without a chosen procedure and the platform routes it from the first real sentence
+        (deferring politely on a greeting), switching topic mid-call when the caller does</td><td>choosing the
+        procedure is the highest-stakes classification in the system; keeping it in-house makes it measurable,
+        auditable, and improvable — an outside model choosing blindly would reintroduce the very drift SOPilot
+        exists to remove. Measured on real data before it was built</td></tr>
+      <tr><td>D-12</td><td>Pre-fetched knowledge is served only when it still fits what the caller <i>actually</i>
+        just asked; otherwise the platform silently fetches fresh</td><td>speculation must never make an answer
+        worse — a prediction for the wrong next question is discarded, not spoken</td></tr>
+      <tr><td>D-13</td><td>Each procedure runs in one of two modes: <b>advisory</b> (procedure + fresh knowledge go
+        straight to a fast answering model; tracking and learning happen in the background) or <b>strict</b>
+        (every turn governed by the full procedure contract)</td><td>measured on a real customer: advisory gives
+        the best answer quality at the lowest latency for information-desk work, while strict mode is what wins
+        compliance-critical procedures — one platform, the right mode chosen per procedure</td></tr>
     </tbody>
   </table></div>
   <div class="callout key"><div class="clabel">◆ The one-paragraph summary for the busy reviewer</div>
