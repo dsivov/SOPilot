@@ -318,6 +318,40 @@ b.hl{color:#8fd9c9}
   conversation against the procedure, pre-fetches knowledge it predicts will be needed next, and records a complete
   audit trail of every answer, every retrieval, and every routing decision — the operational visibility a
   production service needs.</p>
+
+  <h3>4 · The agent learns from every conversation</h3>
+  <p>Each finished turn is stored as a compact experience record: the situation (what the traveller expressed, in
+  which mood), what the agent did, and how the conversation ended. From these records the platform learns, per
+  topic, <b>what typically comes next</b> — and uses it to fetch knowledge from Context Graph <i>before</i> the
+  traveller asks. That anticipation is why the recommended configuration answers ~40% faster than an agent that must
+  look everything up on demand: by the time the caller finishes their sentence, the answer material is usually
+  already staged.</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 150" role="img" aria-label="Learning loop: conversations produce experience records, records train prediction, prediction pre-fetches knowledge, which speeds up the next conversation">
+      <defs><marker id="arL" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.lb{rx:10;stroke-width:1.2}.lt{fill:#e7ebf3;font:12px "Segoe UI",sans-serif;font-weight:700;text-anchor:middle}.ls{fill:#aab3c5;font:9.8px "Segoe UI",sans-serif;text-anchor:middle}.ll{stroke:#8a93a8;stroke-width:1.6;fill:none;marker-end:url(#arL)}.ld{fill:#7b8499;font:10px "Segoe UI",sans-serif;text-anchor:middle}</style>
+      <rect class="lb" x="16" y="30" width="150" height="54" fill="#161d33" stroke="rgba(91,141,239,.5)"/>
+      <text class="lt" x="91" y="52">Conversations</text><text class="ls" x="91" y="68">every answered turn</text>
+      <rect class="lb" x="200" y="30" width="150" height="54" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="lt" x="275" y="52">Experience records</text><text class="ls" x="275" y="68">situation → action → outcome</text>
+      <rect class="lb" x="384" y="30" width="150" height="54" fill="#231b33" stroke="rgba(169,116,240,.55)"/>
+      <text class="lt" x="459" y="52">Prediction</text><text class="ls" x="459" y="68">what comes next, per topic</text>
+      <rect class="lb" x="568" y="30" width="136" height="54" fill="#132a24" stroke="rgba(25,184,154,.5)"/>
+      <text class="lt" x="636" y="52">Pre-fetched</text><text class="ls" x="636" y="66">knowledge staged</text>
+      <line class="ll" x1="166" y1="57" x2="198" y2="57"/><line class="ll" x1="350" y1="57" x2="382" y2="57"/><line class="ll" x1="534" y1="57" x2="566" y2="57"/>
+      <path class="ll" d="M636,84 C636,132 200,138 95,88" stroke-dasharray="5 4"/>
+      <text class="ld" x="380" y="126">…which makes the next conversation faster — the loop runs per airport, on AENA's own traffic, automatically</text>
+    </svg>
+    <figcaption><b>The learning loop.</b> No retraining projects, no manual tuning: the agent's speed and answer
+    choices improve continuously from the airport's own conversations, and every learned record is inspectable in
+    the operations console — you can always see exactly what the system learned from.</figcaption>
+  </div></figure>
+  <p class="small">During this POC the loop was live: the test rounds themselves trained the prediction, which is
+  measurable in the response times above. Operationally this means two things for production: the agent will keep
+  improving on real Málaga traffic without intervention, and tests should run in a separate workspace so simulated
+  conversations never mix into production learning (the platform isolates workspaces natively — this costs
+  nothing).</p>
+
 </section>
 
 <section id="test">
@@ -421,6 +455,9 @@ b.hl{color:#8fd9c9}
     <li><b>Keep strict procedure mode for compliance-critical flows.</b> The same platform runs each procedure in
       the mode that fits it: conversational mode for information delivery (measured here), strict step-enforced
       mode where regulation demands it (proven on the public SOPBench benchmark).</li>
+    <li><b>Let the learning loop run — and keep tests out of it.</b> The agent improves automatically on real
+      traffic (the loop above); run future tests and experiments in a separate workspace so simulated conversations
+      never train the production agent. The platform isolates workspaces natively.</li>
     <li><b>Scale by recipe, not by rewrite.</b> New topics follow the same validated pipeline: recordings → mined
       procedure → facts into Context Graph → measured against real conversations before going live.</li>
   </ol>
