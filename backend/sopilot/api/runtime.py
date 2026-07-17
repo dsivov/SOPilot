@@ -446,6 +446,14 @@ async def converse(
     )
     allowed = graph.allowed_actions(visited)
 
+    # D-12b: same-turn parallel prefetch — the fetch runs while we classify,
+    # so even turn 0 pays max(classify, fetch), not the sum.
+    if scope.retrieval_enabled or scope.sop_enabled:
+        request.app.state.prefetch.prefetch_current_turn(
+            scope=scope, session_id=session.id, task_def=task_def,
+            user_text=body.user_message,
+        )
+
     async def _embed_query():
         try:
             return await request.app.state.embedder.embed(body.user_message)

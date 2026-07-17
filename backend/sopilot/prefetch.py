@@ -43,9 +43,9 @@ def payload_prompt_text(payload: object, summary: str) -> str:
         for key in ("joined_text", "text", "content", "result"):
             v = payload.get(key)
             if isinstance(v, str) and v.strip():
-                return v[:1500]
+                return v[:3000]
     if isinstance(payload, str) and payload.strip():
-        return payload[:1500]
+        return payload[:3000]
     if payload is not None and not isinstance(payload, (dict, list)):
         return str(payload)[:400]
     return summary or (str(payload)[:400] if payload is not None else "")
@@ -151,9 +151,9 @@ class PrefetchManager:
             payload, summary = outcome.payload, outcome.summary
         except Exception as e:  # noqa: BLE001 — a failed fetch must not kill the lane
             err = f"{type(e).__name__}: {e}"
-        finally:
-            if speculative:
-                await self.pool.release_fetch(scope, session_id, key)
+        # NOTE: the in-flight claim is released AFTER the pool insert (see the
+        # tail of this function) — releasing here made consume() wake up,
+        # find the pool still empty, and fire a redundant live fetch.
         duration_ms = int((time.perf_counter() - t0) * 1000)
         completed_at = utcnow()
         log.info(
@@ -206,13 +206,20 @@ class PrefetchManager:
             log.exception("data_fetches audit write failed (fetch continues)")
 
         if err is not None or payload is None:
+            if speculative:
+                await self.pool.release_fetch(scope, session_id, key)
             return None
 
         summary_emb = None
+        # For query-driven fetches embed the RENDERED QUERY, not the payload
+        # header: rich fetchers (CG/RAG) prefix every response with identical
+        # boilerplate, which made content embeddings useless for both rerank
+        # and the D-12 staleness gate (query-vs-query is the right comparison).
         short_summary = (summary or "")[:200]
-        if short_summary:
+        emb_text = (rendered_query or "").strip() or short_summary
+        if emb_text:
             try:
-                summary_emb = await self.embedder.embed(short_summary)
+                summary_emb = await self.embedder.embed(emb_text[:300])
             except Exception:
                 summary_emb = None
         item = PoolItem(
@@ -230,9 +237,43 @@ class PrefetchManager:
             summary_embedding=summary_emb,
         )
         await self.pool.insert(scope, session_id, item)
+        if speculative:
+            await self.pool.release_fetch(scope, session_id, key)
         return item
 
     # ----- consumption -----
+
+    def prefetch_current_turn(
+        self, *, scope: Scope, session_id: str, task_def: TaskDefinition,
+        user_text: str, cohort: str = "", mood: str = "", state: str = "",
+    ) -> None:
+        """Fire-and-forget: fetch every {user_text}-templated idempotent dep
+        with the CURRENT utterance, in parallel with classification. Turn 0
+        (nothing prefetched yet) goes from serial classify→fetch to
+        max(classify, fetch); consume() awaits these via the turnfetch key."""
+        for dep in task_def.data_dependencies:
+            if not dep.idempotent or not dep.query_template or "{user_text}" not in dep.query_template:
+                continue
+            try:
+                rendered = dep.query_template.format(
+                    user_text=user_text, cohort=cohort, mood=mood, state=state, action=""
+                )
+            except (KeyError, IndexError):
+                continue
+            key = f"turnfetch:{dep.name}"
+
+            async def _go(dep=dep, key=key, rendered=rendered) -> None:
+                if not await self.pool.try_claim_fetch(scope, session_id, key, ttl_s=60):
+                    return  # already in flight for this turn
+                await self._run_fetch(
+                    scope=scope, session_id=session_id, dep=dep, key=key,
+                    action_name="__current_turn", confidence=1.0,
+                    issued_at_turn=0, predicted_turn=0, speculative=True,
+                    predictor_source="turn", rendered_query=rendered,
+                    qh=query_hash(rendered),
+                )
+
+            asyncio.ensure_future(_go())
 
     async def consume(
         self,
@@ -242,7 +283,7 @@ class PrefetchManager:
         task_def: TaskDefinition,
         action_name: str,
         current_turn_index: int,
-        await_inflight_ms: int = 2000,
+        await_inflight_ms: int = 6000,
         live_fallback: bool = True,
         user_text: str = "",
         cohort: str = "",
@@ -265,10 +306,15 @@ class PrefetchManager:
                 continue
             item = await self._pool_lookup(scope, session_id, dep_name)
             if item is None and await_inflight_ms > 0:
-                key = fetch_key(dep_name, action_name)
+                keys = (fetch_key(dep_name, action_name), f"turnfetch:{dep_name}")
                 deadline = time.perf_counter() + await_inflight_ms / 1000.0
                 while time.perf_counter() < deadline:
-                    if not await self.pool.is_inflight(scope, session_id, key):
+                    inflight = False
+                    for k in keys:
+                        if await self.pool.is_inflight(scope, session_id, k):
+                            inflight = True
+                            break
+                    if not inflight:
                         item = await self._pool_lookup(scope, session_id, dep_name)
                         break
                     await asyncio.sleep(0.1)
