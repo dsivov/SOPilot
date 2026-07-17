@@ -25,6 +25,7 @@ import asyncio
 import json
 import os
 import sys
+import time as _time
 import urllib.request
 from pathlib import Path
 
@@ -45,7 +46,7 @@ BASE = "http://127.0.0.1:8100"
 KEY = "sop_19b6179b1c913671df2251e9ac2eb70d9b817c91"
 N_PER_THEME = int(sys.argv[1]) if len(sys.argv) > 1 else 12
 MAX_TURNS = 4
-AGENT_MODEL = "gpt-4o"  # arm A agent — same class as SOPilot's respond model
+AGENT_MODEL = "gpt-4o-mini"  # prod-realistic responder class (matches SOPILOT_RESPOND_MODEL)
 SIM_MODEL = "gpt-4o-mini"  # traveller simulator — identical for both arms
 
 
@@ -123,26 +124,23 @@ async def sim_turn(scenario: dict, history: list[dict]) -> str:
     return (res.choices[0].message.content or "").strip()
 
 
-FACTS = [json.loads(ln)["text"] for ln in (HERE / "facts_full.jsonl").open()]
-_fact_embs: list[list[float]] | None = None
+CG_URL = "http://10.0.0.80:9621/query"
+CG_BODY = {"mode": "mix", "only_need_context": True, "chunk_top_k": 5, "max_total_tokens": 3000}
 
 
-async def _facts_top3(query: str) -> str:
-    global _fact_embs
-    if _fact_embs is None:
-        embs = []
-        for i in range(0, len(FACTS), 512):
-            res = await client.embeddings.create(model="text-embedding-3-small", input=FACTS[i:i+512])
-            embs.extend(d.embedding for d in res.data)
-        _fact_embs = embs
-    q = (await client.embeddings.create(model="text-embedding-3-small", input=[query])).data[0].embedding
+def _cg_query_sync(query: str) -> str:
+    req = urllib.request.Request(
+        CG_URL, data=json.dumps({**CG_BODY, "query": query}).encode(), method="POST",
+        headers={"Content-Type": "application/json", "LIGHTRAG-WORKSPACE": "aena"},
+    )
+    return json.loads(urllib.request.urlopen(req, timeout=60).read()).get("response", "")[:3000]
 
-    def cos(a, b):
-        num = sum(x * y for x, y in zip(a, b))
-        return num / ((sum(x * x for x in a) ** 0.5) * (sum(y * y for y in b) ** 0.5) or 1)
 
-    ranked = sorted(range(len(FACTS)), key=lambda i: -cos(q, _fact_embs[i]))[:3]
-    return "\n".join("- " + FACTS[i] for i in ranked)
+async def _cg_retrieve(query: str) -> str:
+    """Per-turn retrieval from the PRODUCTION Context Graph server — the same
+    system and parameters the SOPilot connector uses; A_rag pays its latency
+    on-path every turn, SOPilot prefetches it in the background."""
+    return await asyncio.to_thread(_cg_query_sync, query)
 
 
 BASE_SYS = ("You are the Málaga Airport information desk agent. Answer concretely and briefly "
@@ -155,7 +153,7 @@ async def arm_a_reply(history: list[dict], variant: str) -> str:
         system = BASE_SYS + " Follow the procedures and use the fact base.\n\n" + PACK
     else:  # A_rag — same retrieval access as SOPilot, no SOP layer
         last = next(h["text"] for h in reversed(history) if h["role"] == "traveller")
-        system = BASE_SYS + "\n\nRELEVANT AIRPORT FACTS (retrieved for this turn):\n" + await _facts_top3(last)
+        system = BASE_SYS + "\n\nRETRIEVED CONTEXT (production knowledge server, this turn):\n" + await _cg_retrieve(last)
     res = await client.chat.completions.create(
         model=AGENT_MODEL, temperature=0.3, max_tokens=200,
         messages=[{"role": "system", "content": system}, *msgs],
@@ -165,6 +163,7 @@ async def arm_a_reply(history: list[dict], variant: str) -> str:
 
 async def run_conversation(scenario: dict, arm: str) -> dict:
     history: list[dict] = []
+    latencies: list[int] = []
     terminal_seen = None
     sess = None
     if arm == "B":
@@ -175,6 +174,7 @@ async def run_conversation(scenario: dict, arm: str) -> dict:
         utt = utt.rstrip().removesuffix("DONE").strip()
         if utt:
             history.append({"role": "traveller", "text": utt})
+            t0 = _time.perf_counter()
             if arm.startswith("A"):
                 reply = await arm_a_reply(history, arm)
             else:
@@ -182,6 +182,7 @@ async def run_conversation(scenario: dict, arm: str) -> dict:
                 reply = r["reply"]
                 if r.get("terminal"):
                     terminal_seen = r["terminal"]
+            latencies.append(int((_time.perf_counter() - t0) * 1000))
             history.append({"role": "agent", "text": reply})
         if done:
             break
@@ -201,7 +202,8 @@ async def run_conversation(scenario: dict, arm: str) -> dict:
     except json.JSONDecodeError:
         verdict = {"coverage": "missed", "specifics": False, "satisfaction": 1, "note": "judge parse error"}
     return {"id": scenario["id"], "theme": scenario["theme"], "arm": arm,
-            "turns": sum(1 for h in history if h["role"] == "traveller"), **verdict}
+            "turns": sum(1 for h in history if h["role"] == "traveller"),
+            "latencies_ms": latencies, **verdict}
 
 
 async def main() -> None:
@@ -227,15 +229,22 @@ async def main() -> None:
         if r.get("satisfaction"):
             a["sat"].append(r["satisfaction"])
         a["turns"].append(r.get("turns", 0))
+    lat: dict[str, list[int]] = {}
+    for r in results:
+        lat.setdefault(r["arm"], []).extend(r.get("latencies_ms") or [])
     for arm in ("A_prompt", "A_rag", "B"):
         a = agg[arm]
         n = a["covered"] + a["partial"] + a["missed"]
+        xs = sorted(lat.get(arm) or [0])
+        q = lambda f: xs[min(len(xs) - 1, int(f * len(xs)))]
         print(f"ARM {arm}: covered {a['covered']}/{n} ({100*a['covered']/n:.0f}%)  partial {a['partial']}  "
               f"missed {a['missed']}  specifics {a['specifics']}/{n}  "
-              f"satisfaction {sum(a['sat'])/len(a['sat']):.2f}  errors {a['error']}")
+              f"satisfaction {sum(a['sat'])/len(a['sat']):.2f}  errors {a['error']}  "
+              f"| reply-latency p50 {q(0.5)}ms p95 {q(0.95)}ms (n={len(xs)})")
     (HERE / "aena_ab_results.json").write_text(json.dumps(
         {"aggregate": {k: {kk: vv for kk, vv in v.items() if kk not in ("sat", "turns")} for k, v in agg.items()},
          "satisfaction": {k: round(sum(v["sat"]) / max(1, len(v["sat"])), 2) for k, v in agg.items()},
+         "latency_ms": {k: {"p50": sorted(v)[len(v)//2], "p95": sorted(v)[int(0.95*len(v))-1], "mean": sum(v)//len(v)} for k, v in lat.items() if v},
          "results": results}, ensure_ascii=False, indent=1))
 
 

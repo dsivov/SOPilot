@@ -125,7 +125,7 @@ async def pre_generate_reply(
         msgs.append({"role": "assistant" if h["role"] == "assistant" else "user", "content": h["content"]})
     async with speculative_slot():
         res = await _get_client().chat.completions.create(
-            model=settings.runtime_model,
+            model=settings.respond_model or settings.runtime_model,
             messages=msgs,
             temperature=0.5,
             max_tokens=200,
@@ -153,7 +153,7 @@ async def respond(prompt_text: str, history: list[dict], user_message: str) -> s
     msgs.append({"role": "user", "content": user_message})
     async with critical_path():
         res = await _get_client().chat.completions.create(
-            model=settings.runtime_model,
+            model=settings.respond_model or settings.runtime_model,
             messages=msgs,
             temperature=0.6,
             max_tokens=220,

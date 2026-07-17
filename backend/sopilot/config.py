@@ -48,9 +48,14 @@ class Settings(BaseSettings):
     embedding_dim: int = 1536
     # Authoring-time model (SOP ingestion + conversational builder). Never on the turn path.
     builder_model: str = "gpt-4o"
-    # Runtime classify/respond model for the TEXT channel. Strong by default — the
+    # Runtime classify model for the TEXT channel. Strong by default — the
     # research (and our bench rerun) showed cheap classify models collapsing success.
     runtime_model: str = "gpt-4o"
+    # Responder model (the voice the caller hears). Empty = runtime_model.
+    # Production runs a smaller/realtime-class model here — the supervisor
+    # carries the procedure, so the responder can be cheap (the SOPBench
+    # "supervised weak model" result is exactly this split).
+    respond_model: str = ""
     # Voice channel: OpenAI Realtime speech model + voice. The supervisor steers it
     # per turn via session.update; it never sees the SOP whole.
     # D-11 router: routes intake sessions to an SOP and checks mid-call
