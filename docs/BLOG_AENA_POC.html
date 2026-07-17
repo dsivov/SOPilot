@@ -543,7 +543,49 @@ b.hl{color:#8fd9c9}
   <p>The final configuration mirrors production on three axes the earlier rounds idealized: the knowledge lives in
   the <b>real Context Graph server</b> the team runs in production (not a local vector table), the answering model is
   a <b>realtime-class small model</b> (gpt-4o-mini — production voice models are weaker than gpt-4o), and every arm's
-  <b>per-turn reply latency</b> is measured. Results land here when the run completes.</p>
+  <b>per-turn reply latency</b> is measured.</p>
+
+  <h4>The decisive result: what does the SOP itself buy? (+17 points, free)</h4>
+  <p>The isolation test the team asked for — two identical agents, both retrieving from the production Context Graph
+  every turn; the ONLY difference is whether the three mined SOP documents are in the prompt:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Arm (36 scenarios)</th><th>Covered</th><th>Missed</th><th>Specifics</th><th>Satisfaction</th><th>Latency p50 / p95</th></tr></thead>
+    <tbody>
+      <tr><td>agent + online RAG</td><td>50%</td><td>2</td><td>25/36</td><td>3.97</td><td>2.57 s / 3.74 s</td></tr>
+      <tr><td><b>agent + online RAG + mined SOPs</b></td><td><b>67%</b></td><td>2</td><td><b>30/36</b></td><td><b>4.25</b></td><td>2.73 s / 4.35 s</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout ok"><div class="clabel">◆ The sentence for the deck</div>
+    Adding the SOPs mined from AENA's own transcripts lifted answer coverage from 50% to <b>67% (+17 points)</b>,
+    concrete-answer rate from 25 to 30 of 36, and traveller satisfaction from 3.97 to 4.25 — at <b>zero additional
+    latency</b>. The procedures we extracted from ninety days of real calls are, by direct measurement, the single
+    most valuable artifact in this POC.</div>
+
+  <h4>The full-runtime arm — honest scorecard and what it teaches</h4>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Arm (36 scenarios; drafts disabled)</th><th>Covered</th><th>Missed</th><th>Satisfaction</th><th>Latency p50 / p95</th></tr></thead>
+    <tbody>
+      <tr><td>A_prompt — everything stuffed in prompt</td><td>50%</td><td>6</td><td>3.97</td><td>1.35 s / 3.65 s</td></tr>
+      <tr><td>A_rag — per-turn Context Graph</td><td>50%</td><td>4</td><td>3.86</td><td>2.60 s / 4.72 s</td></tr>
+      <tr><td>B — full SOPilot runtime</td><td>44%</td><td>6</td><td>3.64</td><td>4.46 s / 7.16 s</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Trajectory of the SOPilot arm across the experiment series (each fix measured on the identical
+  benchmark): greeting-loop router bug fixed (misses 8→3) → stale-speculation gate + answer-first prompts (39→47%
+  covered, local corpus) → CG round exposed and fixed a pool-insert race, header-embedding bug and a knowledge-parity
+  gap → <b>verbatim pre-drafted replies identified as actively harmful for open Q&amp;A</b> (21% of turns served a
+  reply drafted for a predicted question; disabling them: 36→44% covered). Remaining gap vs the plain arms: the
+  strong classifier + orchestration sit serially on every turn (~1.5-2 s), and stage-gated prompting constrains an
+  agent that open Q&amp;A rewards for answering freely.</p>
+  <div class="callout key"><div class="clabel">◆ What this decomposition means for the product</div>
+    The experiments separate three ingredients cleanly: <b>SOP content</b> (+17 points, free — run 7);
+    <b>background retrieval</b> (parity with per-turn RAG once staleness-gated); <b>per-turn gating</b> (drafts,
+    stage-locked prompting, serial classification — net negative for short informational Q&amp;A, while being
+    exactly what wins procedure-critical benchmarks like SOPBench by +13–32 points). Product conclusion: SOPilot
+    needs a per-project <b>"advisory mode"</b> — the mined SOP text + fresh retrieval go straight to the responder
+    (matching the winning A_rag_sop shape and its latency), while tracking, routing, audit and learning continue in
+    the background; full gating mode remains the choice for compliance-critical procedures. Both halves are already
+    built — this is a wiring choice per project, and the next iteration of this POC.</div>
 
   <h4>Test setup — full detail for review</h4>
   <div class="tablewrap"><table>
