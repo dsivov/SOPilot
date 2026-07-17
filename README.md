@@ -4,6 +4,7 @@ SOP-based conversation agent management — productization of the
 [MCPlanner](https://github.com/dsivov/MCPlanner) research. Multi-tenant,
 multi-project, realtime-voice-first.
 
+- **Onboarding playbook**: [`docs/ONBOARDING.md`](docs/ONBOARDING.md) — the repeatable recipe for a new customer/topic (raw recordings → live agent), with the human-judgment gates marked
 - **Installation guide**: [`docs/INSTALL.md`](docs/INSTALL.md) — requirements,
   fresh vs existing Postgres/Redis, full `.env` reference, production topology,
   upgrades, ops notes

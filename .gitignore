@@ -21,3 +21,6 @@ use_case/**/*.jsonl
 use_case/**/*.json
 use_case/**/*.zip
 use_case/**/*.txt
+
+# onboarding configs may reference keys — commit only the example + reviewed instances
+use_case/onboarding/*.local.json
