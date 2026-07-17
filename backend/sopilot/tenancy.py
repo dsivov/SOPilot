@@ -18,7 +18,7 @@ from .db import get_db
 from .models import ApiKey, Project, Tenant
 
 
-VALID_SUBSYSTEMS = ("sop", "retrieval", "both")
+VALID_SUBSYSTEMS = ("sop", "retrieval", "both", "advisory")
 
 
 @dataclass(frozen=True)
@@ -33,11 +33,18 @@ class Scope:
 
     @property
     def sop_enabled(self) -> bool:
-        return self.subsystems in ("sop", "both")
+        return self.subsystems in ("sop", "both", "advisory")
 
     @property
     def retrieval_enabled(self) -> bool:
-        return self.subsystems in ("retrieval", "both")
+        return self.subsystems in ("retrieval", "both", "advisory")
+
+    @property
+    def advisory(self) -> bool:
+        """D-13: SOP + fresh data go straight to the responder; classification,
+        tracking, traces and prefetch run OFF the reply path. For knowledge-
+        delivery workloads; gated mode remains for compliance-critical flows."""
+        return self.subsystems == "advisory"
 
 
 def generate_api_key() -> tuple[str, str]:

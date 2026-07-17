@@ -130,7 +130,7 @@ class SessionStartRequest(BaseModel):
     sop_id: str = ""
     channel: Literal["text", "realtime_voice", "bench"] = "text"
     # D-9 override for THIS session only; empty = project default.
-    subsystems: Literal["", "sop", "retrieval", "both"] = ""
+    subsystems: Literal["", "sop", "retrieval", "both", "advisory"] = ""
     # Pin an explicit SOP version (drafts allowed) — A/B autopilot arms use this.
     # 0 = newest published version (the default behavior).
     sop_version: int = 0

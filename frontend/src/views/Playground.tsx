@@ -205,6 +205,7 @@ export default function PlaygroundView() {
               <option value="both">both — SOP management + predicted retrieval</option>
               <option value="sop">sop only — prompts/tracking, live data, no speculation</option>
               <option value="retrieval">retrieval only — prediction + context block, no prompt management</option>
+              <option value="advisory">advisory — SOP text + fresh data straight to the responder; tracking in background (D-13)</option>
             </select>
             {error && <span className="chip crit" style={{ whiteSpace: "normal" }}><span className="cd" />{error}</span>}
             <button className="btn primary" disabled={!sopId} onClick={start}>

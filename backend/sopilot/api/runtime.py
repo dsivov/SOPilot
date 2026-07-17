@@ -462,6 +462,109 @@ async def converse(
 
     import asyncio as _asyncio
 
+    if scope.advisory:
+        # D-13 advisory mode: the reply is SOP-document + fresh data through one
+        # responder call (the measured winning shape); classification runs in
+        # PARALLEL for tracking/traces/prefetch — never on the reply path.
+        from ..agent import classify_and_propose as _cap
+        from ..agent import respond as _respond
+
+        adv_dep_names = [
+            d.name for d in task_def.data_dependencies
+            if d.idempotent and d.query_template and "{user_text}" in d.query_template
+        ]
+        sop_text = (version.source_document or "").strip()
+        if not sop_text:
+            cp0 = task_def.conversation_profile
+            stages = "\n".join(
+                f"- {a.name}: {a.description}" + (f" MUST SAY: {' | '.join(a.must_say)}" if a.must_say else "")
+                for a in task_def.agent_actions
+            )
+            sop_text = f"{task_def.name}\n{task_def.description}\nROLE: {cp0.agent_role}\nGOAL: {cp0.goal}\nSTAGES:\n{stages}"
+
+        async def _advisory_reply():
+            payloads, stats = await request.app.state.prefetch.consume(
+                scope=scope, session_id=session.id, task_def=task_def,
+                action_name="__advisory", current_turn_index=turn_index_adv,
+                user_text=body.user_message, dep_names=adv_dep_names,
+            )
+            data_block = "\n".join(f"- {k}: {v}" for k, v in payloads.items())
+            payload_text = (
+                "STANDARD OPERATING PROCEDURE (follow it; answer the caller's question directly and concretely):\n"
+                + sop_text
+                + ("\n\nDATA FOR THIS TURN (fresh, retrieved for the caller's words — answer from it first):\n" + data_block if data_block else "")
+            )
+            t_r = _time.perf_counter()
+            reply = await _respond(payload_text, history, body.user_message)
+            return reply, payloads, stats, payload_text, int((_time.perf_counter() - t_r) * 1000)
+
+        turn_index_adv = len(prior_turns)
+        (reply, payloads, consume_stats, payload_text, respond_ms), proposal, query_emb = await _asyncio.gather(
+            _advisory_reply(),
+            _cap(task_def, history, body.user_message, [a.name for a in task_def.agent_actions],
+                 prior_cohort=prior_turns[-1].cohort if prior_turns else ""),
+            _embed_query(),
+        )
+
+        debug = {
+            "mode": "advisory",
+            "prompt_text": payload_text,
+            "retrieval": {k: str(v)[:400] for k, v in payloads.items()},
+            "consume_stats": consume_stats,
+            "respond_ms": respond_ms,
+            "reply_source": "advisory",
+        }
+        db.add(Turn(
+            session_id=session.id, turn_index=turn_index_adv, user_message=body.user_message,
+            cohort=proposal["cohort"], mood=proposal["mood"], state=proposal["state"],
+            action=proposal["action"] or "", assistant_message=reply,
+            duration_ms=int((_time.perf_counter() - t0) * 1000), debug=debug,
+        ))
+        db.add(PrecedentTrace(
+            tenant_id=scope.tenant_id, project_id=scope.project_id, sop_id=session.sop_id,
+            session_id=session.id, turn_index=turn_index_adv, cohort=proposal["cohort"],
+            mood=proposal["mood"], action=proposal["action"] or "", immediate_state=proposal["state"],
+            response_text=reply, situation_embedding=query_emb,
+        ))
+        await db.commit()
+        await publish_turn_event(
+            request.app.state.redis,
+            TurnEvent(
+                tenant_id=scope.tenant_id, project_id=scope.project_id, subsystems=scope.subsystems,
+                session_id=session.id, sop_id=session.sop_id, sop_version=session.sop_version,
+                turn_index=turn_index_adv, user_message=body.user_message,
+                cohort=proposal["cohort"], mood=proposal["mood"],
+                state=proposal["state"], action=proposal["action"] or "",
+            ),
+        )
+        cp = task_def.conversation_profile
+        terminal = (
+            "success" if proposal["state"] in set(cp.success_markers)
+            else "failure" if proposal["state"] in set(cp.failure_markers)
+            else None
+        )
+        if terminal and session.terminal_outcome is None:
+            session.terminal_outcome = terminal
+            await db.execute(
+                update(PrecedentTrace)
+                .where(PrecedentTrace.tenant_id == scope.tenant_id, PrecedentTrace.session_id == session.id)
+                .values(terminal_outcome=terminal, terminal_reward=TERMINAL_REWARDS[terminal])
+            )
+            await db.commit()
+        log.info(
+            "advisory turn session=%s turn=%d respond_ms=%d consumed=%s",
+            session.id, turn_index_adv, respond_ms, consume_stats,
+        )
+        return {
+            "reply": reply, "terminal": terminal, "classification": proposal,
+            "turn": {"turn_index": turn_index_adv, "chosen_action": proposal["action"] or "",
+                      "allowed_actions": [], "subsystems": scope.subsystems,
+                      "prompt_text": payload_text, "context_block": "", "instruction_hit": False,
+                      "picks": [], "consume_stats": consume_stats, "rerank_ms": 0},
+            "routing": routing_info,
+            "total_ms": int((_time.perf_counter() - t0) * 1000),
+        }
+
     proposal, query_emb = await _asyncio.gather(
         classify_and_propose(
             task_def, history, body.user_message, allowed,

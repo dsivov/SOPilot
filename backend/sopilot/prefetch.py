@@ -290,17 +290,23 @@ class PrefetchManager:
         mood: str = "",
         state: str = "",
         query_emb=None,
+        dep_names: list[str] | None = None,
     ) -> tuple[dict[str, str], dict[str, int]]:
         """Resolve the chosen action's declared deps from the pool; poll briefly for
-        in-flight fetches; optionally live-fetch misses (audited as such)."""
-        action_obj = next((a for a in task_def.agent_actions if a.name == action_name), None)
+        in-flight fetches; optionally live-fetch misses (audited as such).
+        dep_names overrides the action's declaration (advisory mode, D-13)."""
         stats = {"consumed": 0, "live": 0, "latency_hidden_ms": 0, "live_latency_ms": 0}
-        if action_obj is None or not action_obj.data_dependencies:
+        if dep_names is None:
+            action_obj = next((a for a in task_def.agent_actions if a.name == action_name), None)
+            if action_obj is None or not action_obj.data_dependencies:
+                return {}, stats
+            dep_names = action_obj.data_dependencies
+        if not dep_names:
             return {}, stats
         dep_by_name = {d.name: d for d in task_def.data_dependencies}
         payloads: dict[str, str] = {}
 
-        for dep_name in action_obj.data_dependencies:
+        for dep_name in dep_names:
             dep = dep_by_name.get(dep_name)
             if dep is None:
                 continue
