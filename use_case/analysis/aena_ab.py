@@ -151,6 +151,11 @@ async def arm_a_reply(history: list[dict], variant: str) -> str:
     msgs = [{"role": "user" if h["role"] == "traveller" else "assistant", "content": h["text"]} for h in history]
     if variant == "A_prompt":
         system = BASE_SYS + " Follow the procedures and use the fact base.\n\n" + PACK
+    elif variant == "A_rag_sop":  # RAG + SOP documents — isolates the SOP-text effect vs plain A_rag
+        last = next(h["text"] for h in reversed(history) if h["role"] == "traveller")
+        sops = "\n\n".join((HERE / "mined" / f"sop_{t}.txt").read_text() for t in THEMES)
+        system = (BASE_SYS + " Follow the procedures.\n\nSTANDARD OPERATING PROCEDURES:\n" + sops
+                  + "\n\nRETRIEVED CONTEXT (production knowledge server, this turn):\n" + await _cg_retrieve(last))
     else:  # A_rag — same retrieval access as SOPilot, no SOP layer
         last = next(h["text"] for h in reversed(history) if h["role"] == "traveller")
         system = BASE_SYS + "\n\nRETRIEVED CONTEXT (production knowledge server, this turn):\n" + await _cg_retrieve(last)
@@ -219,7 +224,8 @@ async def main() -> None:
                 return {"id": s["id"], "theme": s["theme"], "arm": arm, "coverage": "error",
                         "specifics": False, "satisfaction": 0, "note": str(e)[:80], "turns": 0}
 
-    results = await asyncio.gather(*(guarded(s, arm) for s in scenarios for arm in ("A_prompt", "A_rag", "B")))
+    arms = tuple(sys.argv[2].split(",")) if len(sys.argv) > 2 else ("A_prompt", "A_rag", "B")
+    results = await asyncio.gather(*(guarded(s, arm) for s in scenarios for arm in arms))
     agg: dict[str, dict] = {}
     for r in results:
         a = agg.setdefault(r["arm"], {"covered": 0, "partial": 0, "missed": 0, "error": 0,
@@ -232,7 +238,7 @@ async def main() -> None:
     lat: dict[str, list[int]] = {}
     for r in results:
         lat.setdefault(r["arm"], []).extend(r.get("latencies_ms") or [])
-    for arm in ("A_prompt", "A_rag", "B"):
+    for arm in arms:
         a = agg[arm]
         n = a["covered"] + a["partial"] + a["missed"]
         xs = sorted(lat.get(arm) or [0])
