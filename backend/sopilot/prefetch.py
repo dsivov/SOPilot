@@ -310,7 +310,24 @@ class PrefetchManager:
             dep = dep_by_name.get(dep_name)
             if dep is None:
                 continue
-            item = await self._pool_lookup(scope, session_id, dep_name)
+            # freshness-first: an item fetched with EXACTLY the current query
+            # (the parallel turn-fetch) beats any older speculation; wait for
+            # it while it's in flight before settling for less.
+            current_qh = ""
+            if user_text and dep.query_template and "{user_text}" in dep.query_template:
+                try:
+                    current_qh = query_hash(dep.query_template.format(
+                        user_text=user_text, cohort=cohort, mood=mood, state=state, action=action_name
+                    ))
+                except (KeyError, IndexError):
+                    current_qh = ""
+
+            async def _lookup() -> PoolItem | None:
+                fresh = await self._pool_lookup_exact(scope, session_id, dep_name, current_qh) if current_qh else None
+                return fresh or await self._pool_lookup(scope, session_id, dep_name)
+
+            item = await self._pool_lookup_exact(scope, session_id, dep_name, current_qh) if current_qh else None
+            exact = item is not None
             if item is None and await_inflight_ms > 0:
                 keys = (fetch_key(dep_name, action_name), f"turnfetch:{dep_name}")
                 deadline = time.perf_counter() + await_inflight_ms / 1000.0
@@ -321,11 +338,15 @@ class PrefetchManager:
                             inflight = True
                             break
                     if not inflight:
-                        item = await self._pool_lookup(scope, session_id, dep_name)
+                        item = await _lookup()
                         break
                     await asyncio.sleep(0.1)
                 else:
-                    item = await self._pool_lookup(scope, session_id, dep_name)
+                    item = await _lookup()
+                if item is not None and current_qh and item.source_query and query_hash(item.source_query) == current_qh:
+                    exact = True
+            elif item is None:
+                item = await self._pool_lookup(scope, session_id, dep_name)
             if item is not None:
                 # D-12: staleness gate for user-text-driven deps — a speculatively
                 # fetched item answers the PREDICTED utterance; if its content is
@@ -334,7 +355,8 @@ class PrefetchManager:
                 stale = False
                 min_cos = get_settings().consume_stale_min_cos
                 if (
-                    min_cos > 0
+                    not exact
+                    and min_cos > 0
                     and live_fallback
                     and query_emb is not None
                     and item.summary_embedding is not None
@@ -395,6 +417,22 @@ class PrefetchManager:
         if stats["consumed"]:
             stats["latency_hidden_ms"] = await self._sum_hidden_latency(scope, session_id, payloads.keys())
         return payloads, stats
+
+    async def _pool_lookup_exact(
+        self, scope: Scope, session_id: str, dep_name: str, qh: str
+    ) -> PoolItem | None:
+        """Pool item fetched with EXACTLY this query hash (freshness-first)."""
+        if not qh:
+            return None
+        for p in await self.pool.get_pool(scope, session_id):
+            if (
+                p.kind == "data"
+                and p.dependency_name == dep_name
+                and p.source_query
+                and query_hash(p.source_query) == qh
+            ):
+                return p
+        return None
 
     async def _pool_lookup(self, scope: Scope, session_id: str, dep_name: str) -> PoolItem | None:
         """Freshest live pool item for a dependency (pool is recency-desc)."""
