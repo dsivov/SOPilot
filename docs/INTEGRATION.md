@@ -3,7 +3,10 @@
 Audience: an integration engineer or a coding agent (e.g. Claude Code) wiring a
 product into SOPilot. Everything here is exact and current as of this file's
 last commit; the illustrated human version is
-[`INTEGRATION.html`](INTEGRATION.html). Architecture rationale lives in
+[`INTEGRATION.html`](INTEGRATION.html). The **complete per-endpoint
+reference** (all 54 endpoints with request/response schemas) is
+[`API_REFERENCE.md`](API_REFERENCE.md), and an interactive Swagger UI is served
+at `/docs` on any running instance. Architecture rationale lives in
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — this file is operational only.
 
 ## 0. TL;DR integration flows
