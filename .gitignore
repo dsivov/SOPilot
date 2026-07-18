@@ -28,3 +28,6 @@ use_case/onboarding/*.local.json
 # onboarding configs are code, not data — no secrets (keys resolved from env/TENANT_KEYS)
 !use_case/onboarding/config.example.json
 !use_case/onboarding/aena.json
+
+# AENA delivery package — real customer data, sent by side channel, NEVER committed
+use_case/delivery/
