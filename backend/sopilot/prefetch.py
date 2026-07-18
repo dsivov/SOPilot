@@ -273,7 +273,12 @@ class PrefetchManager:
                     qh=query_hash(rendered),
                 )
 
-            asyncio.ensure_future(_go())
+            # Retain a strong reference — a bare ensure_future() is only weakly
+            # held by the loop and can be GC'd mid-flight, leaving the turnfetch
+            # claim stuck until TTL and silently killing the parallel-prefetch win.
+            task = asyncio.ensure_future(_go())
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
 
     async def consume(
         self,

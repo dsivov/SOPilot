@@ -412,7 +412,8 @@ async def converse(
             return {
                 "reply": reply, "terminal": None,
                 "classification": {"state": "", "action": "", "cohort": "", "mood": ""},
-                "turn": {"turn_index": len(prior), "chosen_action": "", "instruction_hit": False,
+                "turn": {"turn_index": len(prior), "chosen_action": "", "allowed_actions": [],
+                          "subsystems": scope.subsystems, "instruction_hit": False,
                           "picks": [], "consume_stats": {}, "rerank_ms": 0, "prompt_text": "", "context_block": ""},
                 "routing": {"kind": kind, "sop_id": None,
                              "reason": decision.reason if decision else "no published SOPs"},
@@ -576,8 +577,13 @@ async def converse(
 
     # D-11 switch check: only when the tracker lost the thread — the classified
     # state is outside (or absent from) the current SOP's vocabulary.
+    # Conservative trigger: fire ONLY on a non-empty state the current SOP does
+    # not define — a genuine "this doesn't belong here" signal. An EMPTY state is
+    # the normal not-yet-terminal case (classify_and_propose returns it on most
+    # turns), so triggering on it would run the switch router on nearly every
+    # turn and could spuriously re-route an ordinary conversation.
     state_vocab = {u.name for u in task_def.user_states}
-    if not proposal["state"] or proposal["state"] not in state_vocab:
+    if proposal["state"] and proposal["state"] not in state_vocab:
         from ..models import RoutingEvent
         from ..router import route_switch
 
@@ -614,6 +620,10 @@ async def converse(
                 task_def, history, body.user_message, allowed,
                 prior_cohort=prior_turns[-1].cohort if prior_turns else "",
             )
+            # Let plan_turn pick the action against the NEW SOP: it recomputes
+            # `allowed` independently (from prior turns vs the new graph), and a
+            # pre-chosen action from a different `allowed` set could 422 the turn.
+            proposal["action"] = ""
 
     plan = await plan_turn(
         session_id,
