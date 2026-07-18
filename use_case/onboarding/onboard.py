@@ -109,21 +109,45 @@ def provision(cfg: dict) -> None:
 
     sops_dir = ROOT / cfg.get("sops_dir", "")
     existing = {s["name"]: s["id"] for s in api(cfg, "GET", "/sops", key=key) if isinstance(s, dict)}
-    for txt in sorted(sops_dir.glob("sop_*.txt")):
-        text = txt.read_text()
-        name_hint = text.splitlines()[0][:200]
-        if name_hint in existing:
-            print(f"  SOP exists: {name_hint[:50]}")
-            sid = existing[name_hint]
-        else:
-            r = api(cfg, "POST", "/sops/ingest", {"text": text, "name_hint": name_hint}, key=key)
-            if "_status" in r:
-                print(f"  INGEST FAILED {txt.name}: {r['_body']}")
-                continue
-            sid = r["id"]
-            print(f"  ingested: {r['name'][:50]} (lint clean: {r['lint']['publishable']})")
-        pub = api(cfg, "POST", f"/sops/{sid}/publish", key=key)
-        print(f"    published v{pub.get('version', pub.get('_body', '?'))}")
+
+    # Preferred: load exact published SOP DEFINITIONS from JSON (deterministic —
+    # exactly what was validated). Fallback: re-ingest text through the LLM
+    # (use only when no definitions are shipped; the graph may differ).
+    defs = sorted(sops_dir.glob("*.json"))
+    if defs:
+        for jf in defs:
+            payload = json.loads(jf.read_text())
+            definition = payload.get("definition", payload)
+            name = definition.get("name", jf.stem)
+            if name in existing:
+                api(cfg, "PUT", f"/sops/{existing[name]}", {"definition": definition}, key=key)
+                sid = existing[name]
+                print(f"  updated: {name[:50]}")
+            else:
+                r = api(cfg, "POST", "/sops", {"definition": definition}, key=key)
+                if "_status" in r:
+                    print(f"  LOAD FAILED {jf.name}: {r['_body']}")
+                    continue
+                sid = r["id"]
+                print(f"  loaded: {name[:50]}")
+            pub = api(cfg, "POST", f"/sops/{sid}/publish", key=key)
+            print(f"    published v{pub.get('version', pub.get('_body', '?'))}")
+    else:
+        for txt in sorted(sops_dir.glob("sop_*.txt")):
+            text = txt.read_text()
+            name_hint = text.splitlines()[0][:200]
+            if name_hint in existing:
+                print(f"  SOP exists: {name_hint[:50]}")
+                sid = existing[name_hint]
+            else:
+                r = api(cfg, "POST", "/sops/ingest", {"text": text, "name_hint": name_hint}, key=key)
+                if "_status" in r:
+                    print(f"  INGEST FAILED {txt.name}: {r['_body']}")
+                    continue
+                sid = r["id"]
+                print(f"  ingested: {r['name'][:50]} (lint clean: {r['lint']['publishable']})")
+            pub = api(cfg, "POST", f"/sops/{sid}/publish", key=key)
+            print(f"    published v{pub.get('version', pub.get('_body', '?'))}")
     print("[provision] done")
 
 
