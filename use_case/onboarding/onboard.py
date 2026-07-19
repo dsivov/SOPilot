@@ -28,7 +28,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]  # repo root
+# Relative paths in the config resolve against the CURRENT WORKING DIRECTORY,
+# so run onboard.py from the root those paths are relative to (the repo root,
+# or the delivery bundle root). This keeps one script correct in both layouts.
+ROOT = Path.cwd()
 KEYS_FILE = ROOT / "TENANT_KEYS.local.txt"
 
 
