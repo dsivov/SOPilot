@@ -23,7 +23,8 @@ The POC's own measurements point at these as the highest-value next moves.
 | 1 | **Live counter/flight-status feed integration** | The measured #1 remaining quality lever — dynamic data (today's counter for this flight) that no static store can hold. The `flight-status` connector slot exists (mock); needs AENA's feed + a real fetcher/adapter. | 🔴 |
 | 2 | **Canonical terminal/floor data from AENA** | Desk/office locations drift over months; authoritative floor data replaces recollection. Loads as facts or a second connector. | 🔴 |
 | 3 | **Voice pilot on the lost-luggage procedure** | Voice channel is built + tested; this is the flagship demo (most emotional call type). Needs a pilot slot + a scripted run-through. | 🔴 |
-| 4 | **Expand beyond the top-4 topics** | Same onboarding recipe on a fresh batch of recordings. `docs/ONBOARDING.md` is the pipeline; each new topic follows Gates A–D. | 🟠 |
+| 4 | **Expand beyond the top-4 topics** | Same onboarding recipe on a fresh batch of recordings. `docs/ONBOARDING.md` is the pipeline; each new topic follows Gates A–D. Prioritise the next topics data-drivenly — see item 4a. | 🟠 |
+| 4a | **Data-driven next-topic discovery** *(EDA lead)* | The dataset analysis (`docs/AENA_DATASET_ANALYSIS.html`) showed unsupervised clustering is language-dominated and must run **within a language** to surface topic sub-structure, and that ~18% of conversations are lexicon-unmatched. Cluster the unmatched bucket within Spanish/English to size and name the next candidate procedures (security/documents, lost-and-found items, airport services already appear as minor themes) — turns topic expansion from guesswork into a ranked backlog. | 🟠 |
 | 5 | **Human A/B validation** | Deferred — needs testers. The in-product Autopilot A/B is the harness; run real evaluators against advisory-mode SOPilot once staffed. | 🟢 |
 
 ## Tier 2 — Product hardening before broad GA
@@ -48,6 +49,7 @@ customers with different setups.
 | 12 | **Studio: project-settings UI for modes** | Advisory/strict + subsystems are set via API/PATCH; surface them in the Studio project view. | 🟢 |
 | 13 | **API-doc drift guard** | Wire `scripts/gen_api_reference.py` into `scripts/check.sh` (and a pre-push step) so `API_REFERENCE.md` + `openapi.json` never drift from the code. | 🟢 |
 | 14 | **Onboarding toolkit generalization** | `intents.py`/`mine_sop.py` hardcode the airport lexicon/topics as the reference instance; make them fully config-driven from the onboarding config so a new domain needs no code edits (the orchestrator provisioning is already generic). | 🟢 |
+| 14a | **Multilingual long-tail support** *(EDA lead)* | The dataset analysis quantified a real minority beyond the Spanish/English majority — French, Welsh, Malay/Indonesian, Italian fragments (isolated as distinct clusters, `docs/AENA_DATASET_ANALYSIS.html`). Today the agent is built/tested on es/en. Decide the policy: (a) the underlying models already handle these languages — verify the router + responder degrade gracefully and answer in-language; (b) if volume warrants, add lexicon/eval coverage for the top tail languages. Cheap to check, concrete demand evidence in hand. | 🟢 |
 
 ## Tier 4 — Production/ops maturity
 
