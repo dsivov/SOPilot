@@ -31,3 +31,6 @@ use_case/onboarding/*.local.json
 
 # AENA delivery package — real customer data, sent by side channel, NEVER committed
 use_case/delivery/
+
+# internal infra screenshots (embedded into reports as data-URIs already)
+use_case/screenshots/
