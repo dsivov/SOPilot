@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Def = {
-  agent_actions?: Array<{ name: string; data_dependencies?: string[]; must_say?: string[] }>;
+  agent_actions?: Array<{ name: string; data_dependencies?: string[]; must_say?: string[]; prompt_blocks?: string[] }>;
   user_states?: Array<{ name: string }>;
   conversation_profile?: { success_markers?: string[]; failure_markers?: string[] };
   sop?: { edges?: Array<{ src: string; dst: string; direction?: string }> };
@@ -48,6 +48,7 @@ export default function GraphView({ def, sopId, onSelect, visits }: { def: Def; 
     const success = new Set(def.conversation_profile?.success_markers ?? []);
     const failure = new Set(def.conversation_profile?.failure_markers ?? []);
     const hasData = new Map((def.agent_actions ?? []).map((a) => [a.name, (a.data_dependencies ?? []).length > 0]));
+    const promptCount = new Map((def.agent_actions ?? []).map((a) => [a.name, (a.prompt_blocks ?? []).length]));
 
     const prereqs = new Map<string, string[]>(actions.map((a) => [a, []]));
     const triggers: Array<{ state: string; action: string }> = [];
@@ -122,7 +123,7 @@ export default function GraphView({ def, sopId, onSelect, visits }: { def: Def; 
     }
     const orderingEdges: Array<{ from: string; to: string }> = [];
     for (const [dst, ps] of prereqs) for (const src of ps) orderingEdges.push({ from: src, to: dst });
-    return { actions, orderedStates, pos, orderingEdges, triggers, success, failure, hasData, stateY };
+    return { actions, orderedStates, pos, orderingEdges, triggers, success, failure, hasData, promptCount, stateY };
   }, [def]);
 
   if (layout.actions.length === 0)
@@ -231,12 +232,13 @@ export default function GraphView({ def, sopId, onSelect, visits }: { def: Def; 
             const dimmed = visits !== undefined && visitCount === 0;
             return (
               <g key={name} onPointerDown={onPointerDown(name, p.kind)} style={{ cursor: "grab" }} opacity={dimmed ? 0.38 : 1}>
-                <title>{name}{isAction && layout.hasData.get(name) ? " — needs external data" : isGood ? " — ends: success" : isBad ? " — ends: failure" : ""}{visits !== undefined ? (visitCount ? ` — visited on ${visitCount} turn${visitCount === 1 ? "" : "s"}` : " — not visited") : ""}</title>
+                <title>{name}{isAction && layout.hasData.get(name) ? " — needs external data" : isGood ? " — ends: success" : isBad ? " — ends: failure" : ""}{isAction && (layout.promptCount.get(name) ?? 0) > 0 ? ` — ${layout.promptCount.get(name)} prompt block(s)` : ""}{visits !== undefined ? (visitCount ? ` — visited on ${visitCount} turn${visitCount === 1 ? "" : "s"}` : " — not visited") : ""}</title>
                 <rect x={p.x} y={p.y} width={p.w} height={NODE_H} rx={9} fill={fill} stroke={stroke} strokeWidth={visitCount ? 2.4 : 1.2} />
                 <text x={p.x + p.w / 2} y={p.y + 21} textAnchor="middle" style={{ fill: "var(--text)", fontSize: 12, fontWeight: 600, pointerEvents: "none", userSelect: "none" }}>
                   {name}{isGood ? " ✓" : isBad ? " ✕" : ""}
                 </text>
                 {isAction && layout.hasData.get(name) && <circle cx={p.x + p.w - 8} cy={p.y + 8} r={3.5} fill="var(--warn)" />}
+                {isAction && (layout.promptCount.get(name) ?? 0) > 0 && <circle cx={p.x + 8} cy={p.y + 8} r={3.5} fill="var(--comm)" />}
                 {visitCount > 0 && (
                   <g pointerEvents="none">
                     <circle cx={p.x + p.w - 2} cy={p.y - 2} r={9} fill="var(--accent)" />
@@ -249,7 +251,7 @@ export default function GraphView({ def, sopId, onSelect, visits }: { def: Def; 
             );
           })}
           <text x={16} y={height - 10} style={{ fill: "var(--muted)", fontSize: 10.5 }}>
-            solid = ordering · dashed = state trigger · amber dot = needs external data · ✓/✕ = conversation ends
+            solid = ordering · dashed = state trigger · amber dot (right) = needs data · blue dot (left) = approved wording · ✓/✕ = ends
           </text>
         </svg>
       </div>
