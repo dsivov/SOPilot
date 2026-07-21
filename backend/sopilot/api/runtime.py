@@ -482,41 +482,51 @@ async def converse(
                 for a in task_def.agent_actions
             )
             sop_text = f"{task_def.name}\n{task_def.description}\nROLE: {cp0.agent_role}\nGOAL: {cp0.goal}\nSTAGES:\n{stages}"
-        # D-7 in advisory mode: the pinned prompt blocks (approved wording,
-        # snapshotted at session start) apply as house wording. Advisory doesn't
-        # hard-gate stages, so all of the SOP's bound blocks are offered as
-        # approved phrasing to use where the turn fits — governance still holds.
-        adv_blocks = list(dict.fromkeys(
-            (session.prompt_bindings or {}).get(n, {}).get("content", "")
-            for a in task_def.agent_actions for n in (a.prompt_blocks or [])
-        ))
-        adv_blocks = [b for b in adv_blocks if b]
+        turn_index_adv = len(prior_turns)
 
-        async def _advisory_reply():
-            payloads, stats = await request.app.state.prefetch.consume(
+        async def _consume():
+            return await request.app.state.prefetch.consume(
                 scope=scope, session_id=session.id, task_def=task_def,
                 action_name="__advisory", current_turn_index=turn_index_adv,
                 user_text=body.user_message, dep_names=adv_dep_names,
             )
-            data_block = "\n".join(f"- {k}: {v}" for k, v in payloads.items())
-            payload_text = (
-                "STANDARD OPERATING PROCEDURE (follow it; answer the caller's question directly and concretely):\n"
-                + sop_text
-                + ("\n\nAPPROVED WORDING (use these phrasings where they fit the moment):\n"
-                   + "\n".join(f"- {b}" for b in adv_blocks) if adv_blocks else "")
-                + ("\n\nDATA FOR THIS TURN (fresh, retrieved for the caller's words — answer from it first):\n" + data_block if data_block else "")
-            )
-            t_r = _time.perf_counter()
-            reply = await _respond(payload_text, history, body.user_message)
-            return reply, payloads, stats, payload_text, int((_time.perf_counter() - t_r) * 1000)
 
-        turn_index_adv = len(prior_turns)
-        (reply, payloads, consume_stats, payload_text, respond_ms), proposal, query_emb = await _asyncio.gather(
-            _advisory_reply(),
+        # Retrieval, classification and embedding run in PARALLEL; the reply is
+        # generated after, so it can be scoped to the classified stage (D-13/14b).
+        # Retrieval usually dominates, so respond still starts when data lands —
+        # the latency win holds.
+        (payloads, consume_stats), proposal, query_emb = await _asyncio.gather(
+            _consume(),
             _cap(task_def, history, body.user_message, [a.name for a in task_def.agent_actions],
                  prior_cohort=prior_turns[-1].cohort if prior_turns else ""),
             _embed_query(),
         )
+
+        # D-7 + 14b: approved wording scoped to the CLASSIFIED stage's blocks
+        # (only the current stage's phrasing, not the whole SOP's), resolved from
+        # the session-pinned bindings. Falls back to the entry stage on turn 0
+        # when no action is classified yet, so a greeting still gets its wording.
+        bindings = session.prompt_bindings or {}
+        stage_action = next((a for a in task_def.agent_actions if a.name == (proposal.get("action") or "")), None)
+        if stage_action is None and turn_index_adv == 0 and task_def.agent_actions:
+            stage_action = task_def.agent_actions[0]
+        adv_blocks = [
+            bindings[n]["content"]
+            for n in (stage_action.prompt_blocks if stage_action else [])
+            if n in bindings and bindings[n].get("content")
+        ]
+
+        data_block = "\n".join(f"- {k}: {v}" for k, v in payloads.items())
+        payload_text = (
+            "STANDARD OPERATING PROCEDURE (follow it; answer the caller's question directly and concretely):\n"
+            + sop_text
+            + ("\n\nAPPROVED WORDING FOR THIS STAGE (use these phrasings where they fit):\n"
+               + "\n".join(f"- {b}" for b in adv_blocks) if adv_blocks else "")
+            + ("\n\nDATA FOR THIS TURN (fresh, retrieved for the caller's words — answer from it first):\n" + data_block if data_block else "")
+        )
+        _t_r = _time.perf_counter()
+        reply = await _respond(payload_text, history, body.user_message)
+        respond_ms = int((_time.perf_counter() - _t_r) * 1000)
 
         debug = {
             "mode": "advisory",
