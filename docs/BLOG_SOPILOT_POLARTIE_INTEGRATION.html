@@ -253,6 +253,18 @@ b.hl{color:#8fd9c9}
     instant the user stops. To reliably steer <i>before</i> the model answers, Stage&nbsp;2 must flip to client-driven
     responses (<span class="mono">setTurnDetection(createResponse=False)</span>) so the supervisor window actually exists.
     This is the single most important behavioral change on their side, and it's a one-line flip with an existing setter.</div>
+  <div class="callout key"><div class="clabel">◆ Prod-engineer feedback (round 1) — make the hook itself an MCP extension</div>
+    Reviewing this doc, PolarTie's prod engineer proposed a cleaner Stage-2 boundary: rather than SOPilot-specific code
+    at <span class="filepath">master.py:927</span>, <b>generalize the per-turn hook into a PolarTie MCP extension</b>. If a
+    connected MCP server advertises a method with an agreed name / metadata, PolarTie automatically enables the supervisor
+    behavior — flips to client-driven turns (<span class="mono">setCreateResponsePending(False)</span>) and calls that
+    method every turn. Then <b>Seam&nbsp;C collapses into Seam&nbsp;A</b>: SOPilot connects as a pure MCP server and
+    per-turn steering "just works" — add the server, done. Internalizing the loop (the <span class="filepath">master.py</span>
+    hook) becomes a <i>later latency optimization</i>, not the integration path. This mirrors their existing reserved
+    <span class="mono">polartie_*</span> tool + progress-notification extension pattern — so the whole integration, both
+    stages, is config-only until we choose to optimize. One implementation note they flagged:
+    <span class="mono">setCreateResponsePending(False)</span> must not conflict with the loop's other
+    <span class="mono">...(True)</span> calls.</div>
   <p>Which mode SOPilot runs is <b>per procedure</b>, not global. An info-desk procedure (PolarTie's help-desk shape,
   and AENA's) runs <b>advisory</b> — SOPilot suggests, the model stays fluent. A compliance procedure (identity checks,
   disclosures) runs <b>gated</b> — the SOP's must-say/avoid become hard constraints. Both are the same injection
@@ -300,6 +312,13 @@ b.hl{color:#8fd9c9}
     rather than mere presence, read <span class="mono">ctx.transcript_records("agent")</span> and check the matching
     lines' timestamps are monotonic. Note every conversational scenario needs <span class="mono">OPENAI_API_KEY</span>
     (both for the agent and for <span class="mono">ctx.say</span> TTS).</div>
+  <div class="callout info"><div class="clabel">◆ Two prod-team pointers for the test rig</div>
+    <b>Cost:</b> <span class="mono">gpt-realtime</span> is expensive for automated tests that don't need much
+    intelligence — override to <span class="mono">gpt-realtime-mini</span> (our Stage-1 scenarios already pin
+    <span class="mono">MODEL = "gpt-realtime-mini"</span>). <b>Real voice:</b> PolarTie already has a path to feed real
+    recorded voice into the agent (and the harness streams a real WAV via <span class="mono">ctx.audio_wav</span>) —
+    worth using for the supervisor case specifically, because synthesized TTS is unrealistically clean; real accented /
+    noisy audio is exactly where the transcript-reliability risk above shows up.</div>
 </section>
 
 <!-- 6 -->
@@ -337,6 +356,19 @@ b.hl{color:#8fd9c9}
   <p><b>Exit criterion for Stage&nbsp;1:</b> a lint-clean scenario per target procedure, green against a live SOPilot MCP
   endpoint, asserting correct step order and zero MCP errors — plus the prompt-only baseline scenario for comparison.
   These scenarios double as the regression suite for Stage&nbsp;2.</p>
+  <div class="callout ok"><div class="clabel">◆ First results — Seam&nbsp;B baseline, 4/4 AENA procedures green</div>
+    We built the Stage-1 scenarios against the <b>real AENA / Málaga info-desk SOPs</b> and ran them through PolarTie's
+    own harness (<span class="mono">gpt-realtime-mini</span>, prompt-only, no live SOPilot). All four —
+    <b>lost luggage, flight/check-in, ground transport, airport services</b> — <b>passed</b>, 5 assertions each: the agent
+    progressed every procedure in order (identify / answer → provide / route → close), with 17&nbsp;s+ of non-silent audio
+    and no dropped call. It also showed the SOPs' <i>answer-first</i> shape — e.g. on transport it offered the train, then
+    adapted when the caller asked for the bus. This is the deterministic baseline the MCP path (S1b) and Stage-2 steering
+    must match or beat; the scenarios are now the regression suite. Sample (lost luggage):
+    <span class="mono">"which airline and flight were you on?" → "please head to the baggage office for Ryanair" →
+    "you're welcome — have a good day."</span> Two repro notes: on SELinux-enforcing hosts pass
+    <span class="mono">--security-opt label=disable</span> via the runner's extra-args env; and the first container after a
+    <span class="mono">docker build</span> can exceed the harness's fixed 10&nbsp;s ready-timeout on the cold LightRAG
+    import — just re-run warm.</div>
 </section>
 
 <!-- 7 -->
@@ -435,7 +467,17 @@ b.hl{color:#8fd9c9}
     <div class="card"><span class="pill danger">per-turn latency budget</span>
       <p class="small" style="margin-top:8px">The steering window sits on the critical path between "user stopped" and
       "agent speaks." SOPilot's design keeps zero LLM calls there, but the round-trip to <span class="mono">/voice-turn</span>
-      must fit the voice budget. Measure p95 on their infra, not ours — network placement matters.</p></div>
+      must fit the voice budget. Measure p95 on their infra, not ours — network placement matters. <b>The prod engineer
+      expects this plug to raise response latency meaningfully</b> — treat it as a must-measure, not a footnote.</p></div>
+    <div class="card"><span class="pill danger">transcript reliability &amp; async timing</span>
+      <p class="small" style="margin-top:8px">Two prod-team facts that undercut naive transcript-based steering.
+      <b>(1) Timing:</b> the "client finished speaking" event fires <i>significantly earlier</i> than the completed
+      transcription — OpenAI's transcript runs asynchronously and slower than the realtime model, so at the
+      <span class="filepath">master.py:927</span> hook the final transcript often isn't ready yet. <b>(2) Quality:</b>
+      transcript and realtime voice run independently under the hood; the text SOPilot sees can be garbage (accents,
+      poor speech) while the realtime model understood the audio perfectly. Implication: SOPilot must not assume a clean,
+      ready transcript at the hook — options are to wait for/settle the transcript (costs latency), swap in a stronger
+      transcription model when a supervisor is attached, or steer on turn/state rather than verbatim text.</p></div>
     <div class="card"><span class="pill danger">whose code changes, and when</span>
       <p class="small" style="margin-top:8px">Stage&nbsp;1 is entirely our scenarios + a SOPilot endpoint — no PolarTie
       code. Stage&nbsp;2 needs a small change in <i>their</i> <span class="filepath">master.py</span>. That's a
