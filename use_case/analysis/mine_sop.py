@@ -49,6 +49,10 @@ THEMES = {
         "labels": {"transport_parking", "wayfinding"},
         "title": "Ground Transport, Parking and Wayfinding — Information Desk Procedure (Málaga Airport)",
     },
+    "airport_services": {
+        "labels": {"airport_services"},
+        "title": "Airport Services and Facilities — Information Desk Procedure (Málaga Airport)",
+    },
 }
 
 BATCHES = 3

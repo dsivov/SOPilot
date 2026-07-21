@@ -482,6 +482,15 @@ async def converse(
                 for a in task_def.agent_actions
             )
             sop_text = f"{task_def.name}\n{task_def.description}\nROLE: {cp0.agent_role}\nGOAL: {cp0.goal}\nSTAGES:\n{stages}"
+        # D-7 in advisory mode: the pinned prompt blocks (approved wording,
+        # snapshotted at session start) apply as house wording. Advisory doesn't
+        # hard-gate stages, so all of the SOP's bound blocks are offered as
+        # approved phrasing to use where the turn fits — governance still holds.
+        adv_blocks = list(dict.fromkeys(
+            (session.prompt_bindings or {}).get(n, {}).get("content", "")
+            for a in task_def.agent_actions for n in (a.prompt_blocks or [])
+        ))
+        adv_blocks = [b for b in adv_blocks if b]
 
         async def _advisory_reply():
             payloads, stats = await request.app.state.prefetch.consume(
@@ -493,6 +502,8 @@ async def converse(
             payload_text = (
                 "STANDARD OPERATING PROCEDURE (follow it; answer the caller's question directly and concretely):\n"
                 + sop_text
+                + ("\n\nAPPROVED WORDING (use these phrasings where they fit the moment):\n"
+                   + "\n".join(f"- {b}" for b in adv_blocks) if adv_blocks else "")
                 + ("\n\nDATA FOR THIS TURN (fresh, retrieved for the caller's words — answer from it first):\n" + data_block if data_block else "")
             )
             t_r = _time.perf_counter()

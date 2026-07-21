@@ -110,6 +110,17 @@ def provision(cfg: dict) -> None:
             {"slug": cfg["project_slug"], "subsystems": cfg.get("subsystems", "both")}, key=key)
     print(f"  project: {r if '_status' not in r else 'exists (ok)'}")
 
+    # Prompt blocks first — SOP publish fails if a bound block has no published
+    # version (D-7). Load + publish each before the SOPs that reference them.
+    if cfg.get("prompts_file"):
+        pf = ROOT / cfg["prompts_file"]
+        if pf.exists():
+            for b in json.loads(pf.read_text()):
+                api(cfg, "POST", "/prompt-blocks",
+                    {"name": b["name"], "kind": b.get("kind", "stage"), "content": b["content"]}, key=key)
+                api(cfg, "POST", f"/prompt-blocks/{b['name']}/publish", key=key)
+            print(f"  prompt blocks: {len(json.loads(pf.read_text()))} published")
+
     sops_dir = ROOT / cfg.get("sops_dir", "")
     existing = {s["name"]: s["id"] for s in api(cfg, "GET", "/sops", key=key) if isinstance(s, dict)}
 
