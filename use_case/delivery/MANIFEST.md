@@ -36,5 +36,5 @@ recipe is committed: `use_case/analysis/{mine_sop,bind_prompts}.py`,
 - **7 prompt blocks** bound across every stage of all 4 SOPs (24 stage bindings): greeting.welcome, intake.clarify, verify.confirm, directions.confirm, close.anything_else, empathy.delayed_bag, assistance.reassure.
 - **111-fact** knowledge base (corpus-backed by default; Context Graph optional).
 - Connectors: `airport-facts` (rag→corpus), `flight-status` (mock).
-- Prompt-impact measured (advisory, 48 held-out scenarios, on vs off): coverage/concreteness flat, satisfaction 4.15→4.27, +120ms p50 — value is consistency/governance, not a coverage change.
+- Prompt-impact measured (advisory, 48 held-out scenarios, on vs off): coverage/concreteness flat, satisfaction 4.06→4.38 (+0.32, stage-scoped/14b), +170ms — real satisfaction lift, quality ≥ all-blocks.
 - Secret scan: 0 keys, 0 internal hosts/paths.
