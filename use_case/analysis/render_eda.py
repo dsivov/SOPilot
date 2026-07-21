@@ -79,6 +79,56 @@ def tile(big, label, color="#9cc0ff"):
             f'<div class="small" style="margin-top:2px">{label}</div></div></div>')
 
 
+def _candidate_section():
+    """Item-4a discovery: what actionable topics live in the ~29% not covered
+    by the three current procedures (from candidate_topics.json)."""
+    f = HERE / "candidate_topics.json"
+    if not f.exists():
+        return ""
+    C = json.load(f.open())
+    # consolidate the LLM cluster names into clean procedure groups
+    GROUPS = [
+        ("Airport services & facilities", ["airport services inquiries", "assistance with facilities",
+         "airport services and information", "airport Wi-Fi assistance"], "wi-fi, ATMs, phones, pharmacies, lockers, maps — general facility questions"),
+        ("Language / translation assistance", ["language assistance", "language assistance requests"],
+         "travellers who need help communicating — the multilingual long tail (French, Italian, Welsh, Dutch…)"),
+        ("Special assistance (reduced mobility / PMR)", ["assistance for disabled travelers"],
+         "wheelchair and reduced-mobility assistance — a distinct, high-empathy procedure"),
+        ("Security, check-in & documents", ["security and check-in assistance"],
+         "security control, prohibited items, check-in and document questions"),
+        ("Lost & found personal items", ["lost items inquiry"],
+         "wallets, phones, documents left behind — the airport lost-property desk, distinct from airline baggage"),
+    ]
+    idx = {t["topic"].lower(): t for t in C["ranked_candidate_topics"]}
+    bars = []
+    for name, keys, _ in GROUPS:
+        n = sum(idx.get(k.lower(), {}).get("conversations", 0) for k in keys)
+        if n:
+            bars.append((name, n))
+    bars.sort(key=lambda x: -x[1])
+    noise = C["candidate_pool"] - round(C["actionable_share_of_pool"] * C["candidate_pool"])
+    rows = ""
+    for name, keys, desc in sorted(GROUPS, key=lambda g: -sum(idx.get(k.lower(), {}).get("conversations", 0) for k in g[1])):
+        n = sum(idx.get(k.lower(), {}).get("conversations", 0) for k in keys)
+        if n:
+            rows += f'<tr><td class="num">~{n}</td><td class="num">~{round(100*n/C["total"],1)}%</td><td><b>{name}</b></td><td class="small">{desc}</td></tr>'
+    return f"""<section id="candidates"><div class="kicker">What's in the uncovered demand</div>
+<h2>The next candidate topics</h2>
+<p class="lead-p">Beyond the four dominant themes, <b>{C['candidate_pool']:,} conversations ({round(100*C['candidate_pool']/C['total'])}%)</b>
+are not one of them. Clustering that pool within-language and labelling each group separates genuine service needs
+from noise (greetings, closings, chit-chat, unintelligible transcripts). About <b>{round(100*C['actionable_share_of_pool'])}%</b>
+of the pool is actionable demand; the rest is non-topic noise — itself a useful finding.</p>
+<figure><div class="fig">{hbars(bars, unit="", title="Actionable topics in the uncovered demand (conversations)")}</div>
+<figcaption>Data-driven candidate procedures, ranked by volume — a backlog grounded in the corpus rather than
+intuition.</figcaption></figure>
+<div class="tablewrap"><table><thead><tr><th>volume</th><th>share</th><th>candidate topic</th><th>what the traveller wants</th></tr></thead><tbody>{rows}</tbody></table></div>
+<p class="small">Method: the ~{round(100*C['candidate_pool']/C['total'])}% uncovered pool embedded and K-means clustered
+within Spanish and English; each cluster labelled (topic + actionable-vs-noise) from its term signature and sample
+openings. Volumes are consolidated across the language-specific clusters and are conservative — the same topics also
+appear inside the noise-heavy clusters. Language assistance overlaps the multilingual finding above.</p>
+</section>"""
+
+
 # -------- assemble sections --------
 css = (ROOT / "docs/BLOG_SOPILOT_KICKOFF.html").read_text()
 css = css[css.index("<style>"):css.index("</style>") + 8]
@@ -141,6 +191,7 @@ html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
   <li><a href="#dyn">Turn-taking dynamics</a></li>
   <li><a href="#stat">Statistical relationships</a></li>
   <li><a href="#cluster">Data-driven topics</a></li>
+  <li><a href="#candidates">Next candidate topics</a></li>
   <li><a href="#cohort">Cohorts</a></li>
   <li><a href="#find">Findings</a></li>
 </ol></nav>
@@ -240,6 +291,8 @@ transport/parking, wayfinding) <i>and</i> isolates multilingual pockets the lexi
 (“diolch/helo/iawn”), Malay/Indonesian (“saya”), and French/Italian fragments — a concrete sizing of the
 long-tail-language demand.</p>
 </section>
+
+{_candidate_section()}
 
 <section id="cohort"><div class="kicker">Segmentation</div><h2>Cohorts</h2>
 <div class="grid g2" style="margin:14px 0">
