@@ -89,6 +89,22 @@ def api(cfg: dict, method: str, path: str, body=None, *, key: str | None = None,
         return {"_status": e.code, "_body": e.read().decode()[:300]}
 
 
+# ---- helpers --------------------------------------------------------------
+
+def stage_blocks(stage: str, sop: str, rules: list) -> list[str]:
+    """Approved-wording blocks for a stage, from the config's `prompt_bindings`
+    rules (14c). Each rule: {stage_matches:[substrings], blocks:[names],
+    sop_matches?:[substrings]} — matched case-insensitively on stage/SOP name."""
+    nl, sl, out = stage.lower(), sop.lower(), []
+    for r in rules:
+        soms = r.get("sop_matches")
+        if soms and not any(m.lower() in sl for m in soms):
+            continue
+        if any(m.lower() in nl for m in r.get("stage_matches", [])):
+            out += r.get("blocks", [])
+    return sorted(set(out))
+
+
 # ---- stages ---------------------------------------------------------------
 
 def provision(cfg: dict) -> None:
@@ -127,12 +143,19 @@ def provision(cfg: dict) -> None:
     # Preferred: load exact published SOP DEFINITIONS from JSON (deterministic —
     # exactly what was validated). Fallback: re-ingest text through the LLM
     # (use only when no definitions are shipped; the graph may differ).
+    rules = cfg.get("prompt_bindings") or []
     defs = sorted(sops_dir.glob("*.json"))
     if defs:
         for jf in defs:
             payload = json.loads(jf.read_text())
             definition = payload.get("definition", payload)
             name = definition.get("name", jf.stem)
+            # 14c: apply the approved-wording placement declared in the config,
+            # so the binding map lives in config (not baked into the SOP JSON).
+            if rules:
+                for a in definition["agent_actions"]:
+                    b = stage_blocks(a["name"], name, rules)
+                    a["prompt_blocks"] = sorted(set((a.get("prompt_blocks") or []) + b))
             if name in existing:
                 api(cfg, "PUT", f"/sops/{existing[name]}", {"definition": definition}, key=key)
                 sid = existing[name]
@@ -160,6 +183,12 @@ def provision(cfg: dict) -> None:
                     continue
                 sid = r["id"]
                 print(f"  ingested: {r['name'][:50]} (lint clean: {r['lint']['publishable']})")
+            if rules:  # 14c: apply config-declared bindings to the ingested SOP
+                d = api(cfg, "GET", f"/sops/{sid}", key=key)["definition"]
+                for a in d["agent_actions"]:
+                    b = stage_blocks(a["name"], d.get("name", ""), rules)
+                    a["prompt_blocks"] = sorted(set((a.get("prompt_blocks") or []) + b))
+                api(cfg, "PUT", f"/sops/{sid}", {"definition": d}, key=key)
             pub = api(cfg, "POST", f"/sops/{sid}/publish", key=key)
             print(f"    published v{pub.get('version', pub.get('_body', '?'))}")
     print("[provision] done")

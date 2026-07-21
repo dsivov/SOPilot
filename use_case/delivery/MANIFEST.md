@@ -33,7 +33,7 @@ recipe is committed: `use_case/analysis/{mine_sop,bind_prompts}.py`,
 
 ## State captured in this build
 - **4 procedures** (v6): lost luggage, flight/boarding, transport/wayfinding, airport services & facilities.
-- **7 prompt blocks** bound across every stage of all 4 SOPs (24 stage bindings): greeting.welcome, intake.clarify, verify.confirm, directions.confirm, close.anything_else, empathy.delayed_bag, assistance.reassure.
+- **7 prompt blocks** (`prompts.json`), placed by the config's `prompt_bindings` rules across every stage of all 4 SOPs (24 bindings). SOP definitions ship **binding-free** — placement is config-driven (14c), changeable without editing procedures.
 - **111-fact** knowledge base (corpus-backed by default; Context Graph optional).
 - Connectors: `airport-facts` (rag→corpus), `flight-status` (mock).
 - Prompt-impact measured (advisory, 48 held-out scenarios, on vs off): coverage/concreteness flat, satisfaction 4.06→4.38 (+0.32, stage-scoped/14b), +170ms — real satisfaction lift, quality ≥ all-blocks.

@@ -9,6 +9,74 @@
   "sops_dir": "use_case/analysis/mined",
   "facts_file": "use_case/analysis/facts_full.jsonl",
   "prompts_file": "use_case/analysis/mined/prompts.json",
+  "prompt_bindings": [
+    {
+      "stage_matches": [
+        "greet"
+      ],
+      "blocks": [
+        "greeting.welcome"
+      ]
+    },
+    {
+      "stage_matches": [
+        "identif"
+      ],
+      "blocks": [
+        "intake.clarify"
+      ]
+    },
+    {
+      "stage_matches": [
+        "verif"
+      ],
+      "blocks": [
+        "verify.confirm"
+      ]
+    },
+    {
+      "stage_matches": [
+        "provide",
+        "resolve",
+        "route",
+        "inform"
+      ],
+      "blocks": [
+        "directions.confirm"
+      ]
+    },
+    {
+      "stage_matches": [
+        "clos"
+      ],
+      "blocks": [
+        "close.anything_else"
+      ]
+    },
+    {
+      "sop_matches": [
+        "Lost or Delayed Luggage"
+      ],
+      "stage_matches": [
+        "identif"
+      ],
+      "blocks": [
+        "empathy.delayed_bag"
+      ]
+    },
+    {
+      "sop_matches": [
+        "Airport Services"
+      ],
+      "stage_matches": [
+        "identif",
+        "resolve"
+      ],
+      "blocks": [
+        "assistance.reassure"
+      ]
+    }
+  ],
   "domain": {
     "descriptor": "Malaga Airport information desk knowledge",
     "topics": [
