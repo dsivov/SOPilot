@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landing SOPilot in a Real Voice Agent — the PolarTie integration, tests first</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.11), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.07), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(91,141,239,.08),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.05;margin:.3em 0 .25em;background:linear-gradient(92deg,#cfe0ff,#8fd9c9 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}.tag b{color:var(--ink)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(91,141,239,.2),transparent);color:#fff;border-left:2px solid var(--a)}
+main{min-width:0;max-width:772px}article section{margin:0 0 54px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}p{margin:.7em 0}.lead-p{font-size:19px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--a);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.1)}.callout.key .clabel{color:#9cc0ff}
+.callout.danger{border-color:rgba(239,91,110,.5);background:rgba(239,91,110,.08)}.callout.danger .clabel{color:#f6a2ad}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+.filepath{font-family:var(--mono);font-size:12.5px;color:#8fd9c9;background:rgba(25,184,154,.08);border:1px solid rgba(25,184,154,.25);border-radius:6px;padding:1px 6px;white-space:nowrap}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Customer integration · PolarTie voice agent · discussion I</div>
+    <h1>Landing SOPilot in a Real Voice Agent</h1>
+    <p class="lede">PolarTie already ships a production voice agent — OpenAI Realtime, a Python brain, an MCP tool loop,
+      and its own scenario-driven test harness. That is the best possible place for SOPilot to prove itself, because we
+      don't have to build the voice stack to demonstrate the supervisor. This is the discussion doc that maps the
+      integration seams from their code (file&nbsp;and&nbsp;line), and proposes a two-stage plan: <b>tests first</b>,
+      then <b>product</b>.</p>
+    <div class="byline">A read-through of <a href="https://github.com/PolarTie/pt-multirobot" target="_blank" rel="noopener">pt-multirobot</a>
+      (voice-agent + <span class="mono">tests/voice_agent_harness</span>) · integration targets for <b>SOPilot</b></div>
+    <div class="hero-tags">
+      <span class="tag">seam: <b>mcp_servers</b></span>
+      <span class="tag">seam: <b>prompt</b></span>
+      <span class="tag">seam: per-turn <b>session.update</b></span>
+      <span class="tag">stage 1: <b>harness scenarios</b></span>
+      <span class="tag">stage 2: <b>realtime steering</b></span>
+      <span class="tag">shared: <b>LightRAG</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this discussion</div>
+  <ol>
+    <li><a href="#premise">Why this is the right host</a></li>
+    <li><a href="#anatomy">Anatomy of their voice agent</a></li>
+    <li><a href="#seams">The three integration seams</a></li>
+    <li><a href="#decision">Which seam does which job</a></li>
+    <li><a href="#harness">What the harness can drive &amp; assert</a></li>
+    <li><a href="#stage1">Stage 1 — tests</a></li>
+    <li><a href="#stage2">Stage 2 — product</a></li>
+    <li><a href="#lightrag">The LightRAG tie-in</a></li>
+    <li><a href="#risks">Constraints &amp; unknowns</a></li>
+    <li><a href="#order">Build order &amp; open questions</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="premise">
+  <div class="kicker">The setup</div>
+  <h2>Why this is the right host</h2>
+  <p class="lead-p">The customer ask was to find integration points into PolarTie's voice agent and come up with a plan.
+  The finding that governs everything below: this is <b>not a greenfield build</b>. PolarTie's agent already runs the
+  exact pipeline SOPilot was designed to steer — an OpenAI Realtime session, a per-turn boundary where a supervisor
+  could inject instructions, and a standard MCP client that turns any external tool server into model-callable
+  functions. Three separate reads of the codebase converged on the same three seams.</p>
+  <p>The architecture is a thin C++ worker that only launches the agent and pipes audio/config, and a <b>Python brain</b>
+  that owns all the Realtime logic. Everything SOPilot needs to touch lives in that Python (<span class="filepath">src/voice-agent/</span>).
+  And it ships with a real test harness (<span class="filepath">tests/voice_agent_harness/</span>) that drives a caller
+  through a scripted call and asserts on transcripts, subtitles, events and audio — which means we can prove
+  SOP-following behavior <i>before</i> touching their production loop.</p>
+  <div class="callout key"><div class="clabel">◆ The plan in one sentence</div>
+    Stage&nbsp;1: add harness scenarios that stand SOPilot up behind the two zero-code seams (<span class="mono">mcp_servers</span>
+    and <span class="mono">prompt</span>) and prove procedure-following with the harness's existing assertions.
+    Stage&nbsp;2: wire SOPilot's per-turn steering into the real Realtime loop at the one hook their code already exposes,
+    with the mode (advisory vs. gated) chosen per procedure.</div>
+</section>
+
+<!-- 2 -->
+<section id="anatomy">
+  <div class="kicker">The lay of the land</div>
+  <h2>Anatomy of their voice agent</h2>
+  <p>Five facts about the code decide the integration. Every one is grounded in a file and line so the plan is auditable
+  against the repo, not against memory.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What</th><th>Where</th><th>Why it matters to us</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill a">Realtime session manager</span> the class that owns the OpenAI WebSocket</td>
+        <td><span class="filepath">gpt_voice_assistant.py:59</span> (<span class="mono">GPTVoiceAssistant</span>);
+          connect at&nbsp;:92/:275, initial <span class="mono">session.update</span> at&nbsp;:167</td>
+        <td>this is where instructions and tools are actually set; our steering primitives live on this class</td></tr>
+      <tr><td><span class="pill a">Config schema</span> the typed session config</td>
+        <td><span class="filepath">session_config.py:127</span> (<span class="mono">SessionConfig</span>);
+          <span class="mono">mcp_servers</span>&nbsp;:149, <span class="mono">prompt</span>&nbsp;:132</td>
+        <td><span class="mono">mcp_servers</span> and <span class="mono">prompt</span> are first-class fields — adding SOPilot needs <b>no schema change</b></td></tr>
+      <tr><td><span class="pill a">Turn orchestrator</span> where config is consumed &amp; turns are driven</td>
+        <td><span class="filepath">master.py</span>: config load&nbsp;:1268, <span class="mono">Session</span>&nbsp;:1292,
+          instruction build&nbsp;:976</td>
+        <td>the per-turn hook and the outcome-reporting points are module callbacks here</td></tr>
+      <tr><td><span class="pill a">MCP client</span> FastMCP-based, standard lifecycle</td>
+        <td><span class="filepath">mcp_session.py:346</span> (connect/<span class="mono">list_tools</span>),
+          <span class="mono">call_tool</span>&nbsp;:181; exposure at <span class="filepath">tool_mcp.py:12</span></td>
+        <td>a plain Streamable-HTTP MCP server is discovered and called with zero PolarTie-specific code</td></tr>
+      <tr><td><span class="pill a">Prompt origin</span> not hardcoded — delivered from their backend</td>
+        <td>worker payload <span class="filepath">scheduler_client.cpp:145</span>; merged over
+          <span class="filepath">defaults.json</span> at <span class="filepath">master.py:1268</span></td>
+        <td>the production <span class="mono">prompt</span>/<span class="mono">mcp_servers</span> come from PolarTie's scheduler — a config change, not a redeploy</td></tr>
+    </tbody>
+  </table></div>
+  <p class="pull">The whole brain is Python, the config already has the two fields we need, and the MCP client is
+  standard. The expensive parts of a voice integration — audio, turn detection, the Realtime socket — are already
+  built and tested. We are adding a supervisor to a working agent, not building an agent.</p>
+</section>
+
+<!-- 3 -->
+<section id="seams">
+  <div class="kicker">The findings</div>
+  <h2>The three integration seams</h2>
+  <p>SOPilot can enter the PolarTie agent at three distinct points. Two of them require <b>no code change on their side</b>
+  (they're config); the third is a small, well-precedented hook in their Python loop. Ranked by how much of SOPilot they expose.</p>
+
+  <h3><span class="pill b">Seam A</span> &nbsp;<span class="mono">mcp_servers</span> — SOPilot as a tool server (zero code)</h3>
+  <p>Their MCP client is a full standard implementation on top of FastMCP: connect and <span class="mono">initialize</span>,
+  <span class="mono">tools/list</span> (<span class="filepath">mcp_session.py:356</span>), <span class="mono">tools/call</span>
+  (<span class="filepath">mcp_session.py:181</span>), result-to-model, ping/reconnect, even sampling. Any tool a server
+  advertises surfaces to the Realtime model as a function named <span class="mono">mcp_&lt;toolname&gt;</span>
+  (<span class="filepath">tool_mcp.py:62</span>). To plug SOPilot in, the operator adds one entry to
+  <span class="mono">config.mcp_servers</span> — <span class="mono">{url, authorization}</span>
+  (<span class="filepath">session_config.py:72</span>) — and the model can call SOPilot's SOP tool. This is the exact
+  shape D-11 (the SOPilot MCP-server surface) was committed to.</p>
+  <div class="callout info"><div class="clabel">◆ The four rules a SOPilot MCP endpoint must obey</div>
+    <b>(1)</b> Expose <b>Streamable HTTP</b> — FastMCP infers transport from the URL string; an <span class="mono">http(s)://</span>
+    URL is Streamable HTTP. <b>(2)</b> Auth is a single <span class="mono">authorization</span> string (e.g.
+    <span class="mono">"Bearer …"</span>). <b>(3)</b> Avoid the six reserved <span class="mono">polartie_*</span> tool names
+    (<span class="filepath">pt-ai-agent-mcp/.../defines.py:5</span>) — everything else "just works" as a normal tool.
+    <b>(4)</b> Don't name input params <span class="mono">pt_client_context</span> or <span class="mono">image_jpeg_base64</span>
+    unless you want their special injection behavior (they're stripped from the schema shown to the model).</div>
+
+  <h3><span class="pill b">Seam B</span> &nbsp;<span class="mono">prompt</span> — SOP encoded in the system instructions (zero code)</h3>
+  <p>The <span class="mono">prompt</span> field (<span class="filepath">session_config.py:132</span>) becomes the system
+  instructions via <span class="mono">generateGptInstructions()</span> (<span class="filepath">master.py:976</span>).
+  This is the cheapest possible integration — a SOP compiled into prompt text — and the right shape for Stage&nbsp;1's
+  deterministic tests and for a first no-infrastructure pilot. It's static per session, so it can't do per-turn steering
+  or live retrieval, but it proves the procedure logic end-to-end.</p>
+
+  <h3><span class="pill ctrl">Seam C</span> &nbsp;per-turn <span class="mono">session.update{instructions}</span> — live steering (small hook)</h3>
+  <p>This is the seam that unlocks the full supervisor. There is a real per-turn boundary and a real injection primitive:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Step</th><th>Primitive (file:line)</th></tr></thead>
+    <tbody>
+      <tr><td>Turn boundary — user finished speaking</td><td><span class="mono">on_gpt_input_audio_buffer_speech_stopped()</span> — <span class="filepath">master.py:927</span></td></tr>
+      <tr><td>Stop the server auto-answering (client-driven turns)</td><td><span class="mono">setTurnDetection(createResponse=False)</span> — <span class="filepath">gpt_voice_assistant.py:1100</span></td></tr>
+      <tr><td>Inject steered instructions mid-session</td><td><span class="mono">sendUpdateInstructions(instructions)</span> — <span class="filepath">gpt_voice_assistant.py:831</span></td></tr>
+      <tr><td>Release the turn — model responds</td><td><span class="mono">setCreateResponsePending()</span> — <span class="filepath">gpt_voice_assistant.py:939</span></td></tr>
+      <tr><td>Report the turn outcome back to SOPilot</td><td><span class="mono">on_gpt_response_audio_ended()</span> — <span class="filepath">master.py:878</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout key"><div class="clabel">◆ There's already a working precedent for exactly this</div>
+    <span class="mono">doUpdateInstructions()</span> (<span class="filepath">master.py:347</span>) already calls
+    <span class="mono">sendUpdateInstructions(generateGptInstructions())</span> on a <b>60-second timer</b> to refresh
+    time-of-day and caller context. SOPilot's steering is the same call — moved from a coarse 60&nbsp;s poll to a
+    per-turn hook, with the text coming from SOPilot's <span class="mono">/voice-turn</span> instead of a static rebuild.
+    We are not inventing a mechanism; we're re-timing one they already run.</div>
+</section>
+
+<!-- 4 -->
+<section id="decision">
+  <div class="kicker">The design call</div>
+  <h2>Which seam does which job</h2>
+  <p class="lead-p">The two live seams are not competitors — they carry different traffic. MCP is the clean seam for
+  <b>tool calls</b> (the model asks SOPilot something and gets structured data back). Per-turn
+  <span class="mono">session.update</span> is the seam for <b>steering</b> (SOPilot decides how the agent should behave
+  this turn, before it speaks). SOPilot's own architecture already separates these — <span class="mono">/plan-turn</span>
+  is retrieval-only, <span class="mono">/voice-turn</span> is per-turn steering — so the mapping is one-to-one.</p>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill b">MCP seam — request/response</span>
+      <p class="small" style="margin-top:8px">Best when SOPilot answers a bounded question the model chose to ask:
+      look up a fact, fetch the current step's data, validate an entry. Fully closed loop —
+      <span class="mono">tools/call → content → function_call_output → response</span>
+      (<span class="filepath">mcp_session.py:181</span> → <span class="filepath">master.py:467</span>). Degrades
+      gracefully: a slow/unavailable endpoint retries 3× / 5&nbsp;s then the call proceeds
+      (<span class="filepath">multi_mcp.py:69</span>). <b>Zero code on their side.</b></p></div>
+    <div class="card"><span class="pill ctrl">session.update seam — steering</span>
+      <p class="small" style="margin-top:8px">Best when SOPilot must shape the reply the model is <i>about</i> to give —
+      inject the classified stage's prompt block, the speculative retrieved context, the must-say / avoid constraints.
+      This is the supervisor pattern: it runs in the window between "user stopped" and "agent speaks," and (per SOPilot's
+      locked design) contains no LLM call on the critical path. <b>Needs the small hook at
+      <span class="filepath">master.py:927</span>.</b></p></div>
+  </div>
+  <div class="callout caveat"><div class="clabel">◆ One caveat the code makes explicit</div>
+    Default turn detection is <span class="mono">semantic_vad</span> with <span class="mono">create_response: True</span>
+    (<span class="filepath">gpt_voice_assistant.py:147</span>) — meaning OpenAI's server auto-creates the response the
+    instant the user stops. To reliably steer <i>before</i> the model answers, Stage&nbsp;2 must flip to client-driven
+    responses (<span class="mono">setTurnDetection(createResponse=False)</span>) so the supervisor window actually exists.
+    This is the single most important behavioral change on their side, and it's a one-line flip with an existing setter.</div>
+  <p>Which mode SOPilot runs is <b>per procedure</b>, not global. An info-desk procedure (PolarTie's help-desk shape,
+  and AENA's) runs <b>advisory</b> — SOPilot suggests, the model stays fluent. A compliance procedure (identity checks,
+  disclosures) runs <b>gated</b> — the SOP's must-say/avoid become hard constraints. Both are the same injection
+  mechanism; only the strictness of the injected text changes.</p>
+</section>
+
+<!-- 5 -->
+<section id="harness">
+  <div class="kicker">The test surface</div>
+  <h2>What the harness can drive &amp; assert</h2>
+  <p>A harness scenario is a Python file exporting <span class="mono">async def run(ctx)</span>
+  (<span class="filepath">run_scenario.py:948</span>), optionally with <span class="mono">DESCRIPTION</span>,
+  <span class="mono">TIMEOUT_SECONDS</span>, <span class="mono">MODEL</span> module globals. The <span class="mono">ctx</span>
+  object (<span class="mono">ScenarioContext</span>, <span class="filepath">run_scenario.py:280</span>) is the whole API:
+  it starts a session with a config dict, synthesizes caller speech, and then waits on / asserts against everything the
+  agent emits. This is enough to test SOP-following without any mocking.</p>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill a">drive the caller</span>
+      <p class="small" style="margin-top:8px"><span class="mono">start_session(model, config)</span> (config takes
+      <span class="mono">prompt</span> + <span class="mono">mcp_servers</span> directly, <span class="filepath">:336</span>);
+      <span class="mono">say(text)</span> synthesizes caller TTS and appends trailing silence so VAD fires
+      (<span class="filepath">:373</span>); <span class="mono">audio_silence</span>, <span class="mono">audio_wav</span>,
+      <span class="mono">json_message</span> (simulate a UI button, <span class="filepath">:361</span>).</p></div>
+    <div class="card"><span class="pill a">observe the agent</span>
+      <p class="small" style="margin-top:8px"><span class="mono">wait_transcript(role)</span> and
+      <span class="mono">wait_transcript_text_matches(pattern, role)</span> (<span class="filepath">:535/:547</span>) — the
+      primary lever; roles are agent / client / system. Plus subtitles
+      (<span class="mono">wait_json_message_text_contains</span>), robot audio, and ptEvents.</p></div>
+    <div class="card"><span class="pill a">assert (hard-fail)</span>
+      <p class="small" style="margin-top:8px"><span class="mono">assert_transcript_text_matches(pattern, role)</span>
+      (<span class="filepath">:673</span>), <span class="mono">assert_pt_event_not_seen("mcp_error")</span>
+      (<span class="filepath">:640</span>), <span class="mono">assert_robot_audio_non_silent()</span>
+      (<span class="filepath">:698</span>), <span class="mono">assert_not_seen("media_eof")</span>. Assertions
+      <b>raise on first failure</b>, so ordering them along the procedure yields a hard stop at the first violated step.</p></div>
+    <div class="card"><span class="pill c">the one blind spot</span>
+      <p class="small" style="margin-top:8px">There is <b>no direct "tool was called" signal</b>. MCP compliance is
+      observed indirectly: through the agent's transcript reflecting the tool result, the <span class="mono">mcp_error</span>
+      ptEvent on failure, or — for exactness — by pointing <span class="mono">mcp_servers[].url</span> at a mock we control
+      and inspecting its logs. Plan for behavioral assertions, not tool-call spies.</p></div>
+  </div>
+  <div class="callout info"><div class="clabel">◆ Repeatability levers the harness gives us</div>
+    LLM output is nondeterministic; the harness offers two mitigations. Use tolerant regexes and generous per-step
+    timeouts, and — if a scenario needs to be truly deterministic — <span class="mono">openai_base_url</span>
+    (<span class="filepath">session_config.py</span>) can point OpenAI at a mock. To assert <i>strict step ordering</i>
+    rather than mere presence, read <span class="mono">ctx.transcript_records("agent")</span> and check the matching
+    lines' timestamps are monotonic. Note every conversational scenario needs <span class="mono">OPENAI_API_KEY</span>
+    (both for the agent and for <span class="mono">ctx.say</span> TTS).</div>
+</section>
+
+<!-- 6 -->
+<section id="stage1">
+  <div class="kicker">Stage 1</div>
+  <h2>Tests — prove SOP-following in their harness</h2>
+  <p class="lead-p">The goal of Stage&nbsp;1 is a green scenario suite in
+  <span class="filepath">tests/voice_agent_harness/scenarios/</span> that demonstrates the PolarTie agent following a
+  multi-step SOPilot procedure — using only the two zero-code seams and the harness's existing assertions. Nothing in
+  their production loop changes; this is the safe, reversible proof.</p>
+  <p>Two scenario shapes, built in order so the second only runs once the first is green:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Shape</th><th>Seam</th><th>What it proves</th></tr></thead>
+    <tbody>
+      <tr><td><b>1A — prompt-encoded SOP</b> (deterministic, no live SOPilot)</td>
+        <td><span class="pill b">prompt</span></td>
+        <td>the procedure logic itself: caller drives each step via <span class="mono">say()</span>, the agent's transcript
+        is asserted to ask for the right thing at each stage, in order. Runs with no SOPilot infrastructure at all —
+        the baseline the product must beat.</td></tr>
+      <tr><td><b>1B — SOPilot as MCP server</b> (the real integration)</td>
+        <td><span class="pill b">mcp_servers</span></td>
+        <td>the model consults SOPilot's SOP tool and follows the returned step order; asserts the transcript reflects
+        the procedure and <span class="mono">assert_pt_event_not_seen("mcp_error")</span> confirms the MCP round-trips
+        succeeded. This is the Stage-2 product path, tested end-to-end at the tool seam.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout ok"><div class="clabel">◆ The 1B scenario, concretely</div>
+    <span class="mono">start_session(model, {"prompt": "...follow the SOP tool step by step...", "mcp_servers":
+    [{"url": SOPILOT_MCP_URL, "authorization": "Bearer …"}]})</span>, then per step:
+    <span class="mono">say(caller_line)</span> → <span class="mono">wait_transcript_text_matches(step_pattern,
+    role="agent")</span>. Close with <span class="mono">assert_transcript_text_matches(...)</span> for each step in order,
+    <span class="mono">assert_pt_event_not_seen("mcp_error")</span>, <span class="mono">assert_robot_audio_non_silent()</span>.
+    A parametrized SOP fixture (e.g. a returns / lost-luggage procedure) drives the caller lines and the expected
+    per-step regexes from one table, so adding a procedure is data, not code.</div>
+  <p><b>Exit criterion for Stage&nbsp;1:</b> a lint-clean scenario per target procedure, green against a live SOPilot MCP
+  endpoint, asserting correct step order and zero MCP errors — plus the prompt-only baseline scenario for comparison.
+  These scenarios double as the regression suite for Stage&nbsp;2.</p>
+</section>
+
+<!-- 7 -->
+<section id="stage2">
+  <div class="kicker">Stage 2</div>
+  <h2>Product — wire the supervisor into the live loop</h2>
+  <p class="lead-p">Stage&nbsp;2 turns the tool-seam integration into the full supervisor by adding per-turn steering at
+  the one hook their code exposes. This is where SOPilot stops being "a tool the model can call" and becomes "the
+  supervisor deciding how the agent behaves this turn."</p>
+  <p>The change is localized and mirrors their existing 60-second refresh timer, so it sits inside a pattern their code
+  already runs:</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 720 210" role="img" aria-label="Per-turn steering wired into the PolarTie realtime loop">
+      <style>.tl{fill:#aab3c5;font:10.5px "Segoe UI",sans-serif}.tb{rx:8;stroke-width:1.1}.tt2{fill:#e7ebf3;font:11px "Segoe UI",sans-serif;font-weight:600;text-anchor:middle}.mn{fill:#8fd9c9;font:9.5px var(--mono),monospace;text-anchor:middle}.ax{stroke:#39425a;stroke-width:1}</style>
+      <line class="ax" x1="20" y1="40" x2="700" y2="40"/>
+      <text class="tl" x="20" y="30">user finishes speaking → the supervisor window (client-driven turns)</text>
+      <rect class="tb" x="20" y="52" width="150" height="34" fill="#161d33" stroke="rgba(91,141,239,.5)"/><text class="tt2" x="95" y="73">🎙 speech stopped</text>
+      <text class="mn" x="95" y="98">master.py:927</text>
+      <rect class="tb" x="196" y="52" width="168" height="34" fill="#1c2433" stroke="rgba(25,184,154,.6)"/><text class="tt2" x="280" y="73">SOPilot /voice-turn</text>
+      <text class="mn" x="280" y="98">no LLM on path</text>
+      <rect class="tb" x="390" y="52" width="150" height="34" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="tt2" x="465" y="73">sendUpdate-<tspan> Instructions</tspan></text>
+      <text class="mn" x="465" y="98">gpt…:831</text>
+      <rect class="tb" x="566" y="52" width="134" height="34" fill="#132a24" stroke="rgba(25,184,154,.5)"/><text class="tt2" x="633" y="73">release + speak</text>
+      <text class="mn" x="633" y="98">gpt…:939</text>
+      <line class="ax" x1="20" y1="130" x2="700" y2="130"/>
+      <text class="tl" x="20" y="150">after the agent speaks → report the outcome back to SOPilot for the precedent flywheel</text>
+      <rect class="tb" x="20" y="160" width="220" height="30" fill="#1b1f2a" stroke="#39425a"/><text class="tt2" x="130" y="179">on_gpt_response_audio_ended → /outcome</text>
+      <text class="mn" x="360" y="179" style="text-anchor:start">master.py:878 · turns become traces the counting predictor learns from</text>
+    </svg>
+    <figcaption><b>The supervisor never stands between the user and the agent.</b> Its window opens when the user stops,
+      contains a single SOPilot call and one <span class="mono">session.update</span>, then releases the turn.</figcaption>
+  </div></figure>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Wiring step</th><th>What SOPilot does</th></tr></thead>
+    <tbody>
+      <tr><td>Session start → <span class="mono">POST /sessions</span></td>
+        <td>bind the call to a SOP (or the intake router picks one); returns the mode (advisory / gated) for this procedure</td></tr>
+      <tr><td>Flip to client-driven turns once (<span class="filepath">gpt_voice_assistant.py:1100</span>)</td>
+        <td>opens the steering window so the server doesn't auto-answer before SOPilot weighs in</td></tr>
+      <tr><td>Each turn at <span class="filepath">master.py:927</span> → <span class="mono">POST /voice-turn</span></td>
+        <td>returns the steered instructions (classified stage's prompt block + speculative retrieved context, labelled
+        speculative); apply via <span class="mono">sendUpdateInstructions</span>, then <span class="mono">setCreateResponsePending</span></td></tr>
+      <tr><td>Turn end at <span class="filepath">master.py:878</span> → <span class="mono">POST /outcome</span></td>
+        <td>feeds the precedent store so the next call is cheaper — the flywheel SOPilot's prediction runs on</td></tr>
+      <tr><td>Call end → <span class="mono">POST /end</span> at the shutdown handler (<span class="filepath">master.py:1294</span>)</td>
+        <td>closes the SOPilot session, flushes audit</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout key"><div class="clabel">◆ Why this is a small, safe change on their side</div>
+    Every primitive already exists and is exercised in production: the hook (<span class="mono">on_..._speech_stopped</span>),
+    the injector (<span class="mono">sendUpdateInstructions</span>), the turn gate (<span class="mono">setTurnDetection</span>
+    / <span class="mono">setCreateResponsePending</span>). We add HTTP calls to SOPilot and flip one turn-detection flag.
+    The MCP seam from Stage&nbsp;1 stays in place for tool traffic. If SOPilot is unreachable, the fallback is the agent's
+    existing baseline prompt — the same graceful degradation their MCP retry logic already assumes.</div>
+</section>
+
+<!-- 8 -->
+<section id="lightrag">
+  <div class="kicker">The shared substrate</div>
+  <h2>The LightRAG tie-in — we already speak their retrieval</h2>
+  <p class="lead-p">PolarTie's knowledge base runs on <b>LightRAG</b> — the same engine as Context&nbsp;Graph, which SOPilot
+  already integrates with for the AENA deployment. That's not a coincidence to exploit later; it's a shortcut available
+  now. The session config carries a first-class <span class="mono">lightrag</span> field and a
+  <span class="mono">knowledge_base</span> list (<span class="filepath">session_config.py</span>), so the retrieval tier
+  the customer already populates is reachable from the same place SOPilot's corpora live.</p>
+  <div class="callout info"><div class="clabel">◆ What this buys the integration</div>
+    SOPilot's supervisor was designed to "query the knowledge graph during the user's speech-time" — its async lane
+    speaks MCP precisely so a Context&nbsp;Graph / LightRAG workspace can be a corpus or precedent backend. Because
+    PolarTie already runs LightRAG, SOPilot's retrieved-context injection can draw on the customer's existing knowledge
+    base rather than a duplicated store. The tie-in is optional (SOPilot can carry its own corpora), but where the
+    customer already has the data indexed, we don't re-index it — we point at it.</p></div>
+  <p class="small">Their MCP client also advertises a <b>sampling</b> capability (<span class="filepath">mcp_session.py:285</span>),
+  so a SOPilot MCP tool could request LLM sampling through the session's own key if it ever needed to — available, not
+  required. Worth noting only because it widens what the tool seam can do without new infrastructure.</p>
+</section>
+
+<!-- 9 -->
+<section id="risks">
+  <div class="kicker">The honest ledger</div>
+  <h2>Constraints &amp; unknowns</h2>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill danger">the auto-response default</span>
+      <p class="small" style="margin-top:8px">Steering only works if the server isn't already answering. Stage&nbsp;2
+      depends on flipping <span class="mono">create_response</span> to false
+      (<span class="filepath">gpt_voice_assistant.py:147</span>) — a one-line change, but one that alters turn timing and
+      needs a careful A/B against their current UX. This is the change to validate first, on one procedure.</p></div>
+    <div class="card"><span class="pill danger">no tool-call spy in the harness</span>
+      <p class="small" style="margin-top:8px">Stage&nbsp;1 can't directly assert "SOPilot's tool was called" — only that
+      the transcript reflects it and <span class="mono">mcp_error</span> didn't fire. For exact tool-invocation coverage
+      we point <span class="mono">mcp_servers[].url</span> at a mock we control. Plan the assertions behaviorally from
+      the start.</p></div>
+    <div class="card"><span class="pill danger">nondeterministic transcripts</span>
+      <p class="small" style="margin-top:8px">Realtime output varies run to run. Scenarios need tolerant regexes,
+      generous timeouts, and — where a test must be stable — the <span class="mono">openai_base_url</span> mock hook.
+      Expect occasional flakes on tight assertions; design for presence-and-order, not exact wording.</p></div>
+    <div class="card"><span class="pill danger">per-turn latency budget</span>
+      <p class="small" style="margin-top:8px">The steering window sits on the critical path between "user stopped" and
+      "agent speaks." SOPilot's design keeps zero LLM calls there, but the round-trip to <span class="mono">/voice-turn</span>
+      must fit the voice budget. Measure p95 on their infra, not ours — network placement matters.</p></div>
+    <div class="card"><span class="pill danger">whose code changes, and when</span>
+      <p class="small" style="margin-top:8px">Stage&nbsp;1 is entirely our scenarios + a SOPilot endpoint — no PolarTie
+      code. Stage&nbsp;2 needs a small change in <i>their</i> <span class="filepath">master.py</span>. That's a
+      coordination point, not a technical risk, but it sets the sequencing: prove everything at the tool seam before
+      asking for the loop hook.</p></div>
+    <div class="card"><span class="pill danger">config delivery path</span>
+      <p class="small" style="margin-top:8px">Production <span class="mono">prompt</span>/<span class="mono">mcp_servers</span>
+      come from PolarTie's scheduler (<span class="filepath">scheduler_connection.cpp:296/:310</span>), not a local file.
+      Standing SOPilot up for a real call means getting the MCP entry into their backend config — an operational step to
+      confirm with them, separate from the harness (where we control the config dict directly).</p></div>
+  </div>
+  <div class="callout caveat"><div class="clabel">◆ The reframe</div>
+    Nearly every risk here is about <i>evidence and coordination</i>, not feasibility. The mechanisms all exist in their
+    code and are exercised in production. That's the healthy profile for an integration: the host already does the hard
+    parts; what remains is proving our layer where it's cheap to be wrong (the harness) before it runs on real calls.</div>
+</section>
+
+<!-- 10 -->
+<section id="order">
+  <div class="kicker">Sequencing</div>
+  <h2>Build order &amp; open questions</h2>
+  <p>Ordered so each phase is demoable and no phase asks PolarTie to change code until we've proven the piece before it.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Phase</th><th>Scope</th><th>Exit criterion</th></tr></thead>
+    <tbody>
+      <tr><td><b>S1a — prompt-baseline scenario</b></td>
+        <td>one harness scenario per target procedure with the SOP encoded in <span class="mono">prompt</span>; asserts
+        per-step order (Seam&nbsp;B)</td>
+        <td>green scenario following the procedure end-to-end with no SOPilot infrastructure — the baseline to beat</td></tr>
+      <tr><td><b>S1b — SOPilot MCP scenario</b></td>
+        <td>stand up a SOPilot Streamable-HTTP MCP endpoint (D-11); scenario points <span class="mono">mcp_servers</span>
+        at it and asserts step order + no <span class="mono">mcp_error</span> (Seam&nbsp;A)</td>
+        <td>the model follows SOPilot's SOP tool through a multi-step call; suite is green and repeatable</td></tr>
+      <tr><td><b>S2a — per-turn steering (one procedure)</b></td>
+        <td>add the <span class="filepath">master.py:927</span> hook → <span class="mono">/voice-turn</span> →
+        <span class="mono">sendUpdateInstructions</span>; flip to client-driven turns; advisory mode
+        on the info-desk procedure</td>
+        <td>live steered call; per-turn p95 within the voice budget; the S1 scenarios still green as regression</td></tr>
+      <tr><td><b>S2b — outcome loop &amp; modes</b></td>
+        <td><span class="mono">/outcome</span> + <span class="mono">/end</span> wiring; gated mode on a compliance
+        procedure; LightRAG-backed retrieved context where the customer's KB has the data</td>
+        <td>the precedent flywheel is turning; a compliance procedure enforces must-say/avoid; a voice pilot is scriptable</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout key"><div class="clabel">◆ The one-sentence version</div>
+    PolarTie already built the voice agent SOPilot was designed to supervise — Python brain, standard MCP client, a real
+    per-turn hook, and LightRAG underneath. Stage&nbsp;1 proves the supervisor at the two zero-code seams inside their own
+    test harness; Stage&nbsp;2 adds one small, well-precedented hook to their loop and turns SOPilot from a tool the model
+    can call into the supervisor deciding how it behaves.</div>
+  <p class="small">Open items for this discussion: (1) which one or two procedures anchor the S1 suite (returns /
+  lost-luggage are the natural first, matching the AENA work); (2) whether the first live pilot runs advisory-only before
+  we introduce gated mode; (3) confirming with PolarTie the operational path to get a SOPilot MCP entry into their
+  scheduler config for a real (non-harness) call; and (4) where SOPilot is deployed relative to their agent, since that
+  sets the per-turn latency budget.</p>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  Discussion I of the SOPilot ↔ PolarTie integration — a read-through of
+  <a href="https://github.com/PolarTie/pt-multirobot" target="_blank" rel="noopener">pt-multirobot</a>
+  (<span class="mono">src/voice-agent/</span> and <span class="mono">tests/voice_agent_harness/</span>) mapped to SOPilot's
+  integration surface. All file:line references are to the repository as read; the two-stage plan is a proposal for
+  discussion, not a committed schedule. No customer conversation content or secrets appear in this document.
+</footer>
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
+</script>
+</body>
+</html>
