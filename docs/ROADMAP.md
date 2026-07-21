@@ -10,6 +10,16 @@ on production infrastructure and packaged for handover. The platform is
 shippable; this backlog is about turning a validated POC into a broadly
 deployable product.
 
+**AENA handover status:** the customer package (manifest: `use_case/delivery/MANIFEST.md`)
+now carries **four procedures** (lost luggage, flight/boarding, transport/wayfinding,
+airport services & facilities) with **approved-wording prompt blocks bound across
+every stage** (7 blocks, governance-versioned), the 111-fact knowledge base, and a
+one-command `onboard.py all` stand-up — verified on a fresh tenant, secret-scan clean.
+Prompt-block impact measured (advisory, 48 held-out scenarios, on vs off): coverage/
+concreteness flat, satisfaction 4.15→4.27, +120 ms p50 — value is consistency/
+governance, not coverage. Remaining Tier-1 items are customer-gated (data feeds,
+pilot slot).
+
 Legend: 🔴 blocks a customer go-live · 🟠 needed before broad GA · 🟢 opportunistic / research · ⚙️ platform-ops maturity
 
 ---
