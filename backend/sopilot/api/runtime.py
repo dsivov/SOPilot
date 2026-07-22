@@ -495,12 +495,69 @@ async def converse(
         # generated after, so it can be scoped to the classified stage (D-13/14b).
         # Retrieval usually dominates, so respond still starts when data lands —
         # the latency win holds.
-        (payloads, consume_stats), proposal, query_emb = await _asyncio.gather(
+        # D-11 switch (advisory): run the switch router EVERY turn (from turn 1)
+        # IN PARALLEL with classify/retrieval/embed. It only needs the recent
+        # utterances, so it adds no wall-clock latency, and it is the reliable
+        # drift signal the state-vocabulary heuristic was not (the classifier
+        # returns an empty state on most turns, so that heuristic rarely fired).
+        # The router keeps the current SOP unless the caller has CLEARLY moved to
+        # a different need (SWITCH_SYS), e.g. parking → flight.
+        _cands = await _routing_candidates(db, scope)
+        _cur_name = next((c["name"] for c in _cands if c["id"] == session.sop_id), "current")
+        # Judge the switch on the LATEST utterance: route_switch already excludes
+        # the current SOP, so a same-topic follow-up still keeps, while a genuine
+        # topic change (parking → flight) is caught on the turn it happens rather
+        # than a turn late (the transition window "parking + flight" reads mixed).
+        _recent = [body.user_message]
+
+        async def _switch_check():
+            if not prior_turns or len(_cands) <= 1:
+                return None
+            from ..router import route_switch
+            return await route_switch(_cands, session.sop_id, _cur_name, _recent)
+
+        (payloads, consume_stats), proposal, query_emb, _sw = await _asyncio.gather(
             _consume(),
             _cap(task_def, history, body.user_message, [a.name for a in task_def.agent_actions],
                  prior_cohort=prior_turns[-1].cohort if prior_turns else ""),
             _embed_query(),
+            _switch_check(),
         )
+
+        if _sw is not None and _sw.sop_id:
+            from ..models import RoutingEvent
+            db.add(RoutingEvent(
+                tenant_id=scope.tenant_id, project_id=scope.project_id, session_id=session.id,
+                turn_index=turn_index_adv, kind="switch", chosen_sop_id=_sw.sop_id,
+                previous_sop_id=session.sop_id, reason=_sw.reason, router_ms=_sw.router_ms,
+            ))
+            _ver = next(c["version"] for c in _cands if c["id"] == _sw.sop_id)
+            await _assign_sop(db, scope, session, _sw.sop_id, _ver)
+            await db.commit()
+            routing_info = {"kind": "switch", "sop_id": _sw.sop_id, "reason": _sw.reason}
+            log.info("switched (advisory) session=%s -> sop=%s (%s)", session.id, _sw.sop_id, _sw.reason)
+            # re-load the NEW SOP and re-plan this turn against it
+            version = (await db.execute(select(SopVersion).where(
+                SopVersion.sop_id == session.sop_id, SopVersion.version == session.sop_version))).scalar_one()
+            task_def = TaskDefinition.model_validate(version.definition)
+            sop_text = (version.source_document or "").strip()
+            if not sop_text:
+                _cp = task_def.conversation_profile
+                _stages = "\n".join(
+                    f"- {a.name}: {a.description}" + (f" MUST SAY: {' | '.join(a.must_say)}" if a.must_say else "")
+                    for a in task_def.agent_actions)
+                sop_text = f"{task_def.name}\n{task_def.description}\nROLE: {_cp.agent_role}\nGOAL: {_cp.goal}\nSTAGES:\n{_stages}"
+            adv_dep_names = [
+                d.name for d in task_def.data_dependencies
+                if d.idempotent and d.query_template and "{user_text}" in d.query_template]
+            (payloads, consume_stats), proposal = await _asyncio.gather(
+                request.app.state.prefetch.consume(
+                    scope=scope, session_id=session.id, task_def=task_def,
+                    action_name="__advisory", current_turn_index=turn_index_adv,
+                    user_text=body.user_message, dep_names=adv_dep_names),
+                _cap(task_def, history, body.user_message, [a.name for a in task_def.agent_actions],
+                     prior_cohort=prior_turns[-1].cohort if prior_turns else ""),
+            )
 
         # D-7 + 14b: approved wording scoped to the CLASSIFIED stage's blocks
         # (only the current stage's phrasing, not the whole SOP's), resolved from

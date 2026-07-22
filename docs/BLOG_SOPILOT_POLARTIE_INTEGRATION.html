@@ -396,6 +396,17 @@ b.hl{color:#8fd9c9}
     <span class="mono">session.update</span> and the agent speaks. <b>(6)</b> The turn outcome flows back to SOPilot's
     precedent store — the flywheel that makes the next call cheaper. Every numbered hop between repos is MCP; nothing
     reaches across a codebase boundary by any other means.</div>
+  <div class="callout info"><div class="clabel">◆ How SOPilot picks — and switches — the SOP</div>
+    The caller doesn't choose a procedure; SOPilot's <b>intake router</b> does, from the words. <b>Picking:</b> on the
+    first utterance that states a need, one cheap router call routes the session (verified: "where can I park?" →
+    the parking/wayfinding SOP on turn 1). A pure greeting <i>defers</i> (one intake reply), and the very next turn is
+    <b>forced</b> to the closest procedure — so routing costs <b>1 turn</b>, at most&nbsp;2. An explicit
+    <span class="mono">sop_id</span> from the integration (IVR / deep link) skips the router entirely.
+    <b>Switching mid-call:</b> on the voice path the switch router now runs <i>every turn, in parallel</i> with
+    classify/retrieval (no added latency), judged on the latest utterance — so if the caller starts on parking and then
+    asks about a flight, SOPilot re-routes to the flight SOP on that turn and re-plans it there, while same-topic
+    follow-ups stay put (verified: no over-switching). The speech-to-text can be garbled — the router is built to route
+    on the best plausible reading, not perfect clarity.</div>
 </section>
 
 <!-- 5 -->
