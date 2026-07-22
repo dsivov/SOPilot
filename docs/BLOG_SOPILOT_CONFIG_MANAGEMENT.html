@@ -188,6 +188,19 @@ b.hl{color:#8fd9c9}
       no database, and no validation gate — the Portal writes the file, the scheduler ships it, the agent runs it.</figcaption>
   </div></figure>
 
+  <div class="callout danger"><div class="clabel">◆ Where the prompts live — and the real pain</div>
+    The prompts a PolarTie user configures all sit in the same <span class="mono">config.json</span>: the <b>freeform
+    <span class="mono">prompt</span></b> (the main system prompt), plus every tool's <span class="mono">description</span>,
+    the <span class="mono">events</span> messages, and each transfer topic's prompt. That freeform
+    <span class="mono">prompt</span> is PolarTie's <b>original, default prompt-management system</b> — SOPilot's structured
+    SOPs are an <b>optional feature</b> on top, so <b>most robots keep the freeform prompt</b> and our product must manage
+    and validate <i>that</i> first, with SOPs opt-in. And the sharpest pain PolarTie engineers named is <b>logical prompt
+    validation</b>: does a freeform prompt make sense, and is it consistent with the rest of the config? — the prompt
+    promises to email the caller but <span class="mono">send_email</span> is off/broken; it says "answer in Spanish" but
+    the language/voice disagree; it references a knowledge base or transfer that isn't configured. That's an
+    <b>LLM-checked, semantic</b> validation (the soft-constraint side of §7A) — and it may be the single most valuable
+    thing we deliver, independent of whether the customer uses SOPs at all.</div>
+
   <h3>What we found — and what it means for us</h3>
   <div class="tablewrap"><table>
     <thead><tr><th>What PolarTie has today</th><th>What it means for our product</th></tr></thead>
@@ -357,8 +370,8 @@ b.hl{color:#8fd9c9}
         <td>Extend lint to the config rule-set + surface per-field, not just per-publish</td></tr>
       <tr><td>Configure tools &amp; MCP servers correctly</td><td><span class="pill c">Connector model + fetcher registry + live-test + MCP client</span></td>
         <td>Config is an <b>untyped dict</b>; build a catalog that <b>introspects servers via <span class="mono">list_tools</span></b> to get real tool schemas</td></tr>
-      <tr><td>Prompt management</td><td><span class="pill c">prompt blocks</span> — versioned, name-bound, snapshotted</td>
-        <td>Reuse as-is</td></tr>
+      <tr><td>Prompt management (freeform <span class="mono">prompt</span> is the default; SOPs opt-in)</td><td><span class="pill c">prompt blocks</span> + versioning; SOPilot is LLM-native</td>
+        <td>Manage the <b>freeform prompt</b> too, and add <b>logical prompt validation</b> (LLM: prompt ↔ config consistency) — the headline pain</td></tr>
       <tr><td>Roles &amp; permissions (admin vs user)</td><td><span class="pill a">Tenant/Project + <span class="mono">ApiKey.role</span> column</span></td>
         <td>Role is <b>never enforced</b>; no user identity; no policy envelope. Real RBAC to build</td></tr>
       <tr><td>Versioning &amp; change history</td><td><span class="pill b">immutable SopVersion/PromptBlockVersion</span></td>
