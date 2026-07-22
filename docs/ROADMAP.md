@@ -55,7 +55,7 @@ customers with different setups.
 | # | Item | Notes | Tag |
 |---|---|---|---|
 | 10 | **`instruction_prefetch` as a per-project knob** | Currently deployment-wide env. Should be project-level like D-9 `subsystems` (pre-drafts help repeat-shaped flows, hurt open Q&A — proven on AENA). | 🟠 |
-| 11 | **MCP server surface** | D-11 committed to MCP as an *integration surface* (one entry tool, routed by us) — not yet built. The path for customers with existing agent platforms to call SOPilot. | 🟠 |
+| 11 | **MCP server surface** ✅ first cut | D-11 one-entry-tool MCP surface built: `sopilot/mcp_server.py` (FastMCP, Streamable HTTP) exposes `sop_guidance`, wrapping the running HTTP API with intake routing. Validated end-to-end against PolarTie's voice agent (S1b) — the agent consults it per turn, SOPilot auto-routes to the right AENA SOP and steers. Next: in-process mount (share `app.state`, cut latency) + the generic PolarTie MCP-extension pattern for per-turn steering. | 🟠 |
 | 12 | **Studio: project-settings UI for modes** | Advisory/strict + subsystems are set via API/PATCH; surface them in the Studio project view. | 🟢 |
 | 13 | **API-doc drift guard** | Wire `scripts/gen_api_reference.py` into `scripts/check.sh` (and a pre-push step) so `API_REFERENCE.md` + `openapi.json` never drift from the code. | 🟢 |
 | 14 | **Onboarding toolkit generalization** | `intents.py`/`mine_sop.py` hardcode the airport lexicon/topics as the reference instance; make them fully config-driven from the onboarding config so a new domain needs no code edits (the orchestrator provisioning is already generic). | 🟢 |
