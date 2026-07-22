@@ -562,6 +562,23 @@ b.hl{color:#8fd9c9}
     / <span class="mono">setCreateResponsePending</span>). We add HTTP calls to SOPilot and flip one turn-detection flag.
     The MCP seam from Stage&nbsp;1 stays in place for tool traffic. If SOPilot is unreachable, the fallback is the agent's
     existing baseline prompt — the same graceful degradation their MCP retry logic already assumes.</div>
+  <div class="callout ok"><div class="clabel">◆ Stage 2 — built &amp; validated (the supervisor extension, pure-MCP)</div>
+    We implemented the prod engineer's design: a <b>generic supervisor MCP extension</b> in PolarTie plus a reserved
+    tool on the SOPilot side — no per-integration code. <b>SOPilot</b> (<span class="mono">mcp_server.py</span>) exposes
+    <span class="mono">polartie_ai_agent_supervisor</span> (a <span class="mono">SOPILOT_MCP_MODE</span> gate can serve it
+    alone). <b>PolarTie</b> (6 small edits): a new reserved name in <span class="mono">pt-ai-agent-mcp</span>;
+    <span class="mono">mcp_session.py</span> detects the tool at connect and keeps it hidden from the model;
+    <span class="mono">multi_mcp.py</span> gains <span class="mono">hasSupervisor()/callSupervisor()</span>;
+    <span class="mono">gpt_voice_assistant.py</span> fires a new <span class="mono">onUserTranscriptCompletedCb</span> at the
+    <b>transcript-completed</b> event (the correct async trigger — the transcript lags speech-stopped);
+    <span class="mono">master.py</span> flips to client-driven turns when a supervisor is present and, each turn, calls the
+    supervisor → <span class="mono">sendUpdateInstructions</span> → releases the turn.
+    <b>End-to-end result:</b> with a prompt containing <i>no SOP and no instruction to call any tool</i>, the agent still
+    followed the AENA lost-luggage SOP — producing SOP-specific facts like "the Ryanair baggage office in front of belt&nbsp;38" —
+    with <b>0 model tool invocations</b> (the extension drove it), client-driven turns confirmed in the log, and
+    <b>0 <span class="mono">mcp_error</span></b> after making the supervisor tool degrade gracefully on any backend hiccup.
+    So Stage&nbsp;1's model-driven MCP path and Stage&nbsp;2's automatic per-turn steering both run today; the remaining
+    optimization is the in-process mount to shave the extra hop's latency.</div>
 </section>
 
 <!-- 8 -->

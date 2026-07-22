@@ -43,6 +43,10 @@ PROJECT = os.environ.get("SOPILOT_PROJECT", "")
 SOP_ID = os.environ.get("SOPILOT_SOP_ID", "")
 CHANNEL = os.environ.get("SOPILOT_CHANNEL", "realtime_voice")
 SUBSYSTEMS = os.environ.get("SOPILOT_SUBSYSTEMS", "advisory")
+# Which tools to expose: "both" (default), "tool" (model-driven sop_guidance only),
+# or "supervisor" (the reserved polartie_ai_agent_supervisor only — for the
+# generic PolarTie supervisor extension, so the model never sees a tool to call).
+MODE = os.environ.get("SOPILOT_MCP_MODE", "both").strip()
 
 mcp = FastMCP("SOPilot")
 
@@ -82,28 +86,31 @@ async def _ensure_session(client: httpx.AsyncClient, key: str) -> str:
     return sid
 
 
-@mcp.tool
-async def sop_guidance(user_message: str, ctx: Context = None) -> str:
-    """Get SOPilot's guidance for the current turn of a customer-service call.
-
-    Call this every turn with the caller's latest message. Returns the standard
-    operating procedure's stage guidance for how to handle this turn — the step
-    to take, what to say, and any must-say / must-not-say constraints. Follow the
-    returned guidance in your own words; do not read it out verbatim.
-    """
+async def _guidance(user_message: str, ctx: "Context | None", prev_assistant_message: str = "") -> str:
+    """Shared core: route/track the SOPilot session for this connection and return
+    the per-turn stage steering. Used by both the model-driven tool (sop_guidance)
+    and the auto-driven supervisor extension tool (polartie_ai_agent_supervisor).
+    prev_assistant_message is accepted for forward-compat (voice-turn steering)."""
     if not API_KEY or not PROJECT:
         raise RuntimeError("SOPilot MCP server misconfigured: set SOPILOT_API_KEY and SOPILOT_PROJECT")
 
     key = _conn_key(ctx)
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        sid = await _ensure_session(client, key)
-        r = await client.post(
-            f"{BASE_URL}/sessions/{sid}/converse",
-            headers=_headers(),
-            json={"user_message": user_message},
-        )
-        r.raise_for_status()
-        data = r.json()
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            sid = await _ensure_session(client, key)
+            r = await client.post(
+                f"{BASE_URL}/sessions/{sid}/converse",
+                headers=_headers(),
+                json={"user_message": user_message},
+            )
+            r.raise_for_status()
+            data = r.json()
+    except Exception:
+        # Graceful degradation: a supervisor hiccup (backend error, timeout,
+        # post-terminal turn) must NEVER break the live call. Drop the cached
+        # session so the next turn re-routes cleanly, and return benign guidance.
+        _sessions.pop(key, None)
+        return "Continue assisting the caller naturally and courteously."
 
     turn = data.get("turn") or {}
     guidance = (turn.get("prompt_text") or turn.get("context_block") or data.get("reply") or "").strip()
@@ -115,6 +122,39 @@ async def sop_guidance(user_message: str, ctx: Context = None) -> str:
     if data.get("terminal"):
         guidance = (guidance + "\n[The procedure is complete — close the conversation politely.]").strip()
     return guidance or "No specific guidance for this turn; respond naturally and helpfully."
+
+
+async def sop_guidance(user_message: str, ctx: Context = None) -> str:
+    """Get SOPilot's guidance for the current turn of a customer-service call.
+
+    Call this every turn with the caller's latest message. Returns the standard
+    operating procedure's stage guidance for how to handle this turn — the step
+    to take, what to say, and any must-say / must-not-say constraints. Follow the
+    returned guidance in your own words; do not read it out verbatim.
+    """
+    return await _guidance(user_message, ctx)
+
+
+async def polartie_ai_agent_supervisor(
+    user_message: str, prev_assistant_message: str = "", ctx: Context = None
+) -> str:
+    """[PolarTie supervisor extension — reserved tool] Per-turn SOP steering.
+
+    When a PolarTie voice agent discovers this reserved tool on a connected MCP
+    server, it treats the server as a supervisor: it switches to client-driven
+    turns and calls this tool every turn with the caller's latest transcript,
+    then applies the returned text as session.update instructions before letting
+    the model respond. Returns the SOP stage steering for this turn (SOP chosen
+    by SOPilot's intake router). The agent should follow it in its own voice.
+    """
+    return await _guidance(user_message, ctx, prev_assistant_message)
+
+
+# Register tools per mode (see MODE above).
+if MODE in ("both", "tool"):
+    mcp.tool(sop_guidance)
+if MODE in ("both", "supervisor"):
+    mcp.tool(polartie_ai_agent_supervisor)
 
 
 def main() -> None:
