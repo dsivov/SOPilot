@@ -283,71 +283,71 @@ b.hl{color:#8fd9c9}
   the same.</p>
 
   <figure><div class="fig">
-    <svg viewBox="0 0 760 402" role="img" aria-label="Prod-grade architecture across PolarTie, SOPilot and Context Graph">
+    <svg viewBox="0 0 760 412" role="img" aria-label="Prod-grade architecture: PolarTie, Context Graph (center), SOPilot">
       <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
       <style>
-        .lane{rx:12;stroke-width:1.2;fill-opacity:1}
+        .lane{rx:12;stroke-width:1.2}
         .lh{font:700 12px "Segoe UI",sans-serif;text-anchor:middle}
         .bx{rx:9;stroke-width:1.2}
         .tt{fill:#e7ebf3;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}
-        .ss{fill:#aab3c5;font:9.5px var(--mono),monospace;text-anchor:middle}
+        .ss{fill:#aab3c5;font:9px var(--mono),monospace;text-anchor:middle}
+        .role{font:700 9px "Segoe UI",sans-serif;text-anchor:middle}
         .ln{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#a2)}
         .ln2{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#a2);marker-start:url(#a2)}
         .lnd{stroke:#a974f0;stroke-width:1.5;fill:none;stroke-dasharray:5 4;marker-end:url(#a2)}
         .lbl{fill:#c9d3e6;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}
-        .tag{rx:3}.tags{fill:#f0a73c}.tagc{fill:none;stroke:#5b8def;stroke-width:1}
-        .tagt{font:700 8px "Segoe UI",sans-serif;text-anchor:middle}
       </style>
-      <!-- lanes -->
-      <rect class="lane" x="12" y="40" width="228" height="350" fill="rgba(91,141,239,.05)" stroke="rgba(91,141,239,.45)"/>
-      <rect class="lane" x="254" y="40" width="252" height="350" fill="rgba(25,184,154,.05)" stroke="rgba(25,184,154,.45)"/>
-      <rect class="lane" x="520" y="40" width="228" height="350" fill="rgba(169,116,240,.05)" stroke="rgba(169,116,240,.45)"/>
-      <text class="lh" x="126" y="30" fill="#9cc0ff">PolarTie — voice agent (their repo)</text>
-      <text class="lh" x="380" y="30" fill="#7fe3cf">SOPilot — supervisor (our repo)</text>
-      <text class="lh" x="634" y="30" fill="#cdb1f7">Context Graph — knowledge (shared)</text>
+      <!-- lanes: PolarTie | Context Graph (center) | SOPilot -->
+      <rect class="lane" x="12" y="40" width="224" height="356" fill="rgba(91,141,239,.05)" stroke="rgba(91,141,239,.45)"/>
+      <rect class="lane" x="250" y="40" width="200" height="356" fill="rgba(169,116,240,.05)" stroke="rgba(169,116,240,.45)"/>
+      <rect class="lane" x="464" y="40" width="284" height="356" fill="rgba(25,184,154,.05)" stroke="rgba(25,184,154,.45)"/>
+      <text class="lh" x="124" y="30" fill="#9cc0ff">PolarTie — voice agent (their repo)</text>
+      <text class="lh" x="350" y="30" fill="#cdb1f7">Context Graph — knowledge (shared)</text>
+      <text class="lh" x="606" y="30" fill="#7fe3cf">SOPilot — supervisor (our repo)</text>
 
       <!-- PolarTie -->
-      <rect class="bx" x="30" y="52" width="192" height="26" fill="#131722" stroke="#39425a" stroke-dasharray="4 3"/>
-      <text class="tt" x="126" y="69" style="font-weight:600">☁ OpenAI Realtime (cloud)</text>
-      <rect class="bx" x="30" y="96" width="192" height="46" fill="#161d33" stroke="rgba(91,141,239,.55)"/>
-      <text class="tt" x="126" y="116">Voice Agent · Python</text><text class="ss" x="126" y="132">GPTVoiceAssistant · Master</text>
-      <rect class="bx" x="30" y="160" width="192" height="50" fill="#161d33" stroke="rgba(91,141,239,.55)"/>
-      <text class="tt" x="120" y="180">MCP client + supervisor ext.</text><text class="ss" x="120" y="196">MultiMcp · pt-ai-agent-mcp</text>
-      <rect class="tag tagc" x="196" y="164" width="40" height="12"/><text class="tagt tt" x="216" y="173" style="fill:#9cc0ff">MCP client</text>
-      <rect class="bx" x="66" y="348" width="120" height="28" fill="#101826" stroke="#39425a"/><text class="tt" x="126" y="366">📞 Caller</text>
+      <rect class="bx" x="28" y="52" width="192" height="26" fill="#131722" stroke="#39425a" stroke-dasharray="4 3"/>
+      <text class="tt" x="124" y="69" style="font-weight:600">☁ OpenAI Realtime (cloud)</text>
+      <rect class="bx" x="28" y="94" width="192" height="44" fill="#161d33" stroke="rgba(91,141,239,.55)"/>
+      <text class="tt" x="124" y="113">Voice Agent · Python</text><text class="ss" x="124" y="128">GPTVoiceAssistant · Master</text>
+      <rect class="bx" x="28" y="156" width="192" height="52" fill="#161d33" stroke="rgba(91,141,239,.55)"/>
+      <text class="tt" x="124" y="175">MCP client + supervisor ext.</text><text class="ss" x="124" y="190">MultiMcp · pt-ai-agent-mcp</text>
+      <text class="role" x="124" y="203" fill="#9cc0ff">◇ MCP client</text>
+      <rect class="bx" x="64" y="352" width="120" height="28" fill="#101826" stroke="#39425a"/><text class="tt" x="124" y="370">📞 Caller</text>
+
+      <!-- Context Graph (center) -->
+      <rect class="bx" x="262" y="176" width="176" height="52" fill="#201830" stroke="rgba(169,116,240,.6)"/>
+      <text class="tt" x="350" y="195" style="font-size:11px">Context Graph / KnowledgeRag</text><text class="ss" x="350" y="209">LightRAG</text>
+      <text class="role" x="350" y="222" fill="#ffce86">▣ MCP SERVER</text>
+      <rect class="bx" x="262" y="250" width="176" height="42" fill="#1b1f2a" stroke="#39425a"/><text class="tt" x="350" y="275">Knowledge graph + docs</text>
 
       <!-- SOPilot -->
-      <rect class="bx" x="268" y="96" width="224" height="46" fill="#14261f" stroke="rgba(25,184,154,.6)"/>
-      <text class="tt" x="374" y="116">SOPilot MCP Server</text><text class="ss" x="374" y="132">mcp_server.py · sop_guidance</text>
-      <rect class="tag tags" x="452" y="100" width="36" height="12"/><text class="tagt" x="470" y="109" fill="#20242e">SERVER</text>
-      <rect class="bx" x="268" y="160" width="224" height="42" fill="#1b1f2a" stroke="#39425a"/>
-      <text class="tt" x="380" y="178">Supervisor backend · :8100</text><text class="ss" x="380" y="194">intake router · plan-turn · voice</text>
-      <rect class="bx" x="268" y="216" width="108" height="40" fill="#1b1f2a" stroke="#39425a"/><text class="tt" x="322" y="234">Session Pool</text><text class="ss" x="322" y="248">Redis</text>
-      <rect class="bx" x="384" y="216" width="108" height="40" fill="#1b1f2a" stroke="#39425a"/><text class="tt" x="438" y="234">Postgres</text><text class="ss" x="438" y="248">+pgvector · SOPs</text>
-      <rect class="bx" x="268" y="332" width="224" height="44" fill="#1b1f2a" stroke="#39425a"/>
-      <text class="tt" x="374" y="352">Retrieval fetchers</text><text class="ss" x="374" y="368">fetchers/mcp.py</text>
-      <rect class="tag tagc" x="452" y="336" width="40" height="12"/><text class="tagt" x="472" y="345" fill="#9cc0ff">MCP client</text>
-
-      <!-- Context Graph -->
-      <rect class="bx" x="536" y="150" width="196" height="48" fill="#201830" stroke="rgba(169,116,240,.6)"/>
-      <text class="tt" x="634" y="170">Context Graph / KnowledgeRag</text><text class="ss" x="634" y="186">LightRAG</text>
-      <rect class="tag tags" x="692" y="154" width="36" height="12"/><text class="tagt" x="710" y="163" fill="#20242e">SERVER</text>
-      <rect class="bx" x="536" y="238" width="196" height="42" fill="#1b1f2a" stroke="#39425a"/><text class="tt" x="634" y="263">Knowledge graph + docs</text>
+      <rect class="bx" x="478" y="94" width="256" height="52" fill="#14261f" stroke="rgba(25,184,154,.6)"/>
+      <text class="tt" x="606" y="113">SOPilot MCP Server</text><text class="ss" x="606" y="128">mcp_server.py · sop_guidance</text>
+      <text class="role" x="606" y="141" fill="#ffce86">▣ MCP SERVER</text>
+      <rect class="bx" x="478" y="162" width="256" height="42" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="tt" x="606" y="180">Supervisor backend · :8100</text><text class="ss" x="606" y="196">intake router · plan-turn · voice</text>
+      <rect class="bx" x="478" y="218" width="124" height="40" fill="#1b1f2a" stroke="#39425a"/><text class="tt" x="540" y="236">Session Pool</text><text class="ss" x="540" y="250">Redis</text>
+      <rect class="bx" x="610" y="218" width="124" height="40" fill="#1b1f2a" stroke="#39425a"/><text class="tt" x="672" y="236">Postgres</text><text class="ss" x="672" y="250">+pgvector · SOPs</text>
+      <rect class="bx" x="478" y="336" width="256" height="48" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="tt" x="606" y="355">Retrieval fetchers</text><text class="ss" x="606" y="369">fetchers/mcp.py</text>
+      <text class="role" x="606" y="381" fill="#9cc0ff">◇ MCP client</text>
 
       <!-- arrows -->
-      <line class="ln2" x1="126" y1="96" x2="126" y2="80"/>
-      <polyline class="ln" points="126,348 46,348 46,122 30,120"/><text class="lbl" x="60" y="250" transform="rotate(-90 60 250)">audio</text>
-      <path class="ln2" d="M222,178 C245,172 250,124 268,120"/>
-      <text class="lbl" x="250" y="150">MCP · sop_guidance /turn</text><text class="lbl" x="250" y="90">guidance ↔ outcome</text>
-      <line class="ln" x1="380" y1="142" x2="380" y2="160"/><text class="lbl" x="416" y="155" style="font-size:8.5px">in-proc / HTTP</text>
-      <line class="ln" x1="360" y1="202" x2="330" y2="216"/><line class="ln" x1="400" y1="202" x2="430" y2="216"/>
-      <line class="ln" x1="380" y1="202" x2="380" y2="332"/>
-      <path class="ln" d="M492,348 C516,330 520,190 536,178"/><text class="lbl" x="520" y="300">MCP · knowledge</text>
-      <path class="lnd" d="M222,150 C300,84 470,84 536,160"/><text class="lbl" x="380" y="76" style="fill:#cdb1f7">LightRAG (native, optional)</text>
+      <line class="ln2" x1="124" y1="94" x2="124" y2="78"/>
+      <polyline class="ln" points="124,352 20,352 20,114 28,114"/><text class="lbl" x="30" y="250" transform="rotate(-90 30 250)">audio</text>
+      <path class="ln2" d="M220,174 C320,66 400,66 478,112"/>
+      <text class="lbl" x="350" y="46">MCP · sop_guidance per turn</text><text class="lbl" x="350" y="59">guidance ↔ outcome</text>
+      <line class="ln" x1="606" y1="146" x2="606" y2="162"/><text class="lbl" x="662" y="157" style="font-size:8.5px">in-proc / HTTP</text>
+      <line class="ln" x1="586" y1="204" x2="556" y2="218"/><line class="ln" x1="626" y1="204" x2="656" y2="218"/>
+      <line class="ln" x1="606" y1="204" x2="606" y2="336"/>
+      <path class="ln" d="M478,356 C448,332 448,214 440,206"/><text class="lbl" x="470" y="290" transform="rotate(-90 470 290)">MCP · knowledge</text>
+      <path class="lnd" d="M220,190 C238,196 248,198 262,200"/><text class="lbl" x="246" y="182" style="fill:#cdb1f7;font-size:8.5px">LightRAG (native)</text>
     </svg>
-    <figcaption><b>Every cross-repo hop is MCP.</b> PolarTie's agent consults the SOPilot MCP server each turn; SOPilot
-      queries Context&nbsp;Graph over MCP for knowledge; PolarTie can also reach LightRAG natively. Yellow tag = MCP
-      <b>server</b>, blue outline = MCP <b>client</b>, dashed = optional.</figcaption>
+    <figcaption><b>Every cross-repo hop is MCP.</b> Context&nbsp;Graph sits in the centre because both neighbours use it —
+      PolarTie's agent consults the SOPilot MCP server each turn (arc, over the top); SOPilot queries Context&nbsp;Graph
+      over MCP for knowledge; PolarTie can also reach LightRAG natively (dashed). <span style="color:#ffce86">▣ = MCP
+      server</span>, <span style="color:#9cc0ff">◇ = MCP client</span>.</figcaption>
   </div></figure>
 
   <h3>Which component comes from which codebase</h3>
