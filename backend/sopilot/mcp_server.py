@@ -86,6 +86,67 @@ async def _ensure_session(client: httpx.AsyncClient, key: str) -> str:
     return sid
 
 
+# --- in-process mode (mounted inside the SOPilot API app) --------------------
+# When mounted via attach_app(), the tool calls the runtime directly using the
+# host app's live state (pool/prefetch/embedder/redis) instead of HTTP — no
+# separate process, no localhost hop. Single-tenant, from SOPILOT_API_KEY/PROJECT.
+_APP = None
+_INPROC = False
+_SCOPE = None
+
+
+def attach_app(app) -> None:
+    global _APP, _INPROC
+    _APP = app
+    _INPROC = True
+
+
+async def _inproc_scope(db):
+    global _SCOPE
+    if _SCOPE is not None:
+        return _SCOPE
+    from sqlalchemy import select
+
+    from .models import ApiKey, Project, Tenant
+    from .tenancy import Scope, hash_api_key
+    row = (await db.execute(
+        select(ApiKey, Tenant).join(Tenant, Tenant.id == ApiKey.tenant_id)
+        .where(ApiKey.key_hash == hash_api_key(API_KEY), ApiKey.revoked_at.is_(None))
+    )).first()
+    if row is None:
+        raise RuntimeError("SOPilot MCP in-process: API key not found")
+    tenant = row[1]
+    proj = (await db.execute(
+        select(Project).where(Project.tenant_id == tenant.id, Project.slug == PROJECT)
+    )).scalar_one_or_none()
+    if proj is None:
+        raise RuntimeError(f"SOPilot MCP in-process: project '{PROJECT}' not found")
+    _SCOPE = Scope(tenant_id=tenant.id, project_id=proj.id, subsystems=(proj.subsystems or "both"))
+    return _SCOPE
+
+
+async def _guidance_inproc(user_message: str, key: str) -> dict:
+    from types import SimpleNamespace
+
+    from .api.runtime import ConverseRequest, converse
+    from .api.sessions import start_session
+    from .db import get_sessionmaker
+    from .schemas import SessionStartRequest
+    sm = get_sessionmaker()
+    async with sm() as db:
+        scope = await _inproc_scope(db)
+        sid = _sessions.get(key)
+        if not sid:
+            resp = await start_session(
+                SessionStartRequest(sop_id=SOP_ID, channel=CHANNEL, subsystems=SUBSYSTEMS), scope, db)
+            sid = resp.session_id
+            _sessions[key] = sid
+        # converse reads request.app.state.* and writes request.state.query_emb
+        req = SimpleNamespace(app=SimpleNamespace(state=_APP.state), state=SimpleNamespace())
+        return await converse(
+            sid, ConverseRequest(user_message=user_message, steer_only=True), req, scope, db)
+
+
 async def _guidance(user_message: str, ctx: "Context | None", prev_assistant_message: str = "") -> str:
     """Shared core: route/track the SOPilot session for this connection and return
     the per-turn stage steering. Used by both the model-driven tool (sop_guidance)
@@ -96,17 +157,20 @@ async def _guidance(user_message: str, ctx: "Context | None", prev_assistant_mes
 
     key = _conn_key(ctx)
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            sid = await _ensure_session(client, key)
-            r = await client.post(
-                f"{BASE_URL}/sessions/{sid}/converse",
-                headers=_headers(),
-                # steer_only: we only use turn.prompt_text — skip SOPilot's own
-                # responder LLM call (routing/switch/tracking/pool still run).
-                json={"user_message": user_message, "steer_only": True},
-            )
-            r.raise_for_status()
-            data = r.json()
+        if _INPROC:
+            data = await _guidance_inproc(user_message, key)
+        else:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                sid = await _ensure_session(client, key)
+                r = await client.post(
+                    f"{BASE_URL}/sessions/{sid}/converse",
+                    headers=_headers(),
+                    # steer_only: we only use turn.prompt_text — skip SOPilot's own
+                    # responder LLM call (routing/switch/tracking/pool still run).
+                    json={"user_message": user_message, "steer_only": True},
+                )
+                r.raise_for_status()
+                data = r.json()
     except Exception:
         # Graceful degradation: a supervisor hiccup (backend error, timeout,
         # post-terminal turn) must NEVER break the live call. Drop the cached

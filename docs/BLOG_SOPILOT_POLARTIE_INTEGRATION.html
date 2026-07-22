@@ -591,8 +591,12 @@ b.hl{color:#8fd9c9}
     So Stage&nbsp;1's model-driven MCP path and Stage&nbsp;2's automatic per-turn steering both run today.
     <b>Latency:</b> the supervisor only needs the steering, not SOPilot's own reply, so a <span class="mono">steer_only</span>
     mode skips the responder LLM call — measured <b>~26% faster per turn (2262 → 1673 ms</b>, 5 samples each) while
-    routing, mid-call switching, tracking and the pool all still run. The remaining lever is the in-process mount to drop
-    the localhost hop (small next to the per-turn model calls).</div>
+    routing, mid-call switching, tracking and the pool all still run. And the MCP surface can now be <b>mounted inside
+    the SOPilot API process</b> (<span class="mono">SOPILOT_MCP_MOUNT</span>): one process serves both REST and
+    <span class="mono">/mcp</span>, sharing the pool / Redis / embedder and calling the runtime in-process — no separate
+    server, no localhost hop. Verified end-to-end through the mounted endpoint (routing, mid-call switching and steer-only
+    all intact). The latency saving is small next to the per-turn model calls; the real win is the simpler single-process
+    deployment.</div>
 </section>
 
 <!-- 8 -->

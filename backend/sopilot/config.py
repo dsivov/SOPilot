@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     # D-1: run a supervisor consumer inside the API process (dev convenience).
     # Production runs `sopilot-supervisor` as its own deployment.
     embedded_supervisor: bool = False
+    # D-11: mount the MCP surface (/mcp) inside this API process so it shares
+    # app.state (pool/prefetch/embedder/redis) and calls the runtime in-process
+    # — no separate `python -m sopilot.mcp_server` process, no localhost hop.
+    # Uses SOPILOT_API_KEY + SOPILOT_PROJECT (single-tenant) for the surface.
+    mcp_mount: bool = False
     supervisor_group: str = "supervisor"
     supervisor_block_ms: int = 1000
     supervisor_batch: int = 10

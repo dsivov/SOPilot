@@ -21,6 +21,13 @@ def create_app() -> FastAPI:
     # its own loggers, so give the root logger a handler if nobody has yet.
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
+    # D-11: optionally mount the MCP surface (/mcp) in-process (shares app.state).
+    _mcp_app = None
+    if get_settings().mcp_mount:
+        from ..mcp_server import mcp as _mcp
+        # internal path "/" + mount at "/mcp" → MCP served at /mcp
+        _mcp_app = _mcp.http_app(path="/")
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         import asyncio
@@ -41,7 +48,15 @@ def create_app() -> FastAPI:
         if settings.embedded_supervisor:
             worker = SupervisorWorker(redis, embedder=embedder, consumer_name="embedded")
             worker_task = asyncio.create_task(worker.run())
-        yield
+        if _mcp_app is not None:
+            # run the mounted MCP app's session-manager lifespan alongside ours,
+            # and switch the tool to in-process calls (shared app.state)
+            from ..mcp_server import attach_app
+            async with _mcp_app.lifespan(app):
+                attach_app(app)
+                yield
+        else:
+            yield
         if worker is not None:
             worker.stop()
             if worker_task is not None:
@@ -65,6 +80,9 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health() -> dict:
         return {"status": "ok", "service": "sopilot", "version": "0.1.0"}
+
+    if _mcp_app is not None:
+        app.mount("/mcp", _mcp_app)
 
     return app
 
