@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Configurator in Disguise — can SOPilot power PolarTie's guided configuration management?</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.11), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.07), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(91,141,239,.08),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.05;margin:.3em 0 .25em;background:linear-gradient(92deg,#cfe0ff,#8fd9c9 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}.tag b{color:var(--ink)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(91,141,239,.2),transparent);color:#fff;border-left:2px solid var(--a)}
+main{min-width:0;max-width:772px}article section{margin:0 0 54px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}p{margin:.7em 0}.lead-p{font-size:19px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--a);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.1)}.callout.key .clabel{color:#9cc0ff}
+.callout.danger{border-color:rgba(239,91,110,.5);background:rgba(239,91,110,.08)}.callout.danger .clabel{color:#f6a2ad}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line)}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+.filepath{font-family:var(--mono);font-size:12.5px;color:#8fd9c9;background:rgba(25,184,154,.08);border:1px solid rgba(25,184,154,.25);border-radius:6px;padding:1px 6px;white-space:nowrap}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Feature discussion · configuration management · SOPilot fit</div>
+    <h1>A Configurator in Disguise</h1>
+    <p class="lede">PolarTie wants to kill manual setup: an <b>admin</b> defines templates, a dependency graph, and
+      validation rules; an <b>end-user</b> is then walked — with LLM help — through a guided, validated configuration
+      that can never leave the valid region; all of it visualised and versioned. Read that description again and squint:
+      it is <b>SOPilot's own engine</b>, pointed at a new domain. This doc maps the feature onto what SOPilot already is,
+      names the honest gaps, and proposes how we help.</p>
+    <div class="byline">A discussion doc, grounded in the SOPilot codebase (file:line throughout) · in response to
+      <span class="mono">docs/NEW_FEATURES.md</span></div>
+    <div class="hero-tags">
+      <span class="tag">reuse: the <b>graph + constraint engine</b></span>
+      <span class="tag">reuse: <b>validate → gate</b></span>
+      <span class="tag">reuse: <b>chat-to-build</b></span>
+      <span class="tag">build: the <b>config-domain layer</b></span>
+      <span class="tag">verdict: <b>hybrid</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this discussion</div>
+  <ol>
+    <li><a href="#ask">What PolarTie asked for</a></li>
+    <li><a href="#realization">The realization</a></li>
+    <li><a href="#already">What SOPilot already is</a></li>
+    <li><a href="#reframe">Configuration as a guided procedure</a></li>
+    <li><a href="#mapping">The mapping — need → primitive → gap</a></li>
+    <li><a href="#newlayer">The config-domain layer</a></li>
+    <li><a href="#decisions">Two design decisions</a></li>
+    <li><a href="#deploy">Dedicated vs SaaS</a></li>
+    <li><a href="#verdict">Verdict &amp; recommendation</a></li>
+    <li><a href="#build">Build sketch &amp; open questions</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="ask">
+  <div class="kicker">The ask</div>
+  <h2>What PolarTie asked for</h2>
+  <p class="lead-p">Today a PolarTie instance is configured by hand — prompts, permissions, and (the sharp edge) the
+  <b>tools and MCP servers</b> an agent can use, which customers wire up manually and often get wrong. The proposal is a
+  configuration-management feature that removes the manual toil and the foot-guns, in <b>two LLM-assisted stages</b> plus
+  a visualisation layer.</p>
+  <div class="grid g3" style="margin:16px 0">
+    <div class="card"><span class="pill ctrl">stage 1 · admin</span>
+      <p class="small" style="margin-top:8px">A PolarTie engineer defines, with LLM help, the <b>templates</b>, the
+      possible configurations, the <b>dependency graph</b>, the <b>validation rules</b>, and the roles/permissions.
+      Constraint-based: the admin sets the rules, everything downstream must obey them.</p></div>
+    <div class="card"><span class="pill a">stage 2 · user</span>
+      <p class="small" style="margin-top:8px">The end-user is <b>guided</b> through setup within those rules — pick a
+      template or customise, with <b>real-time feedback</b> on conflicts, and a view of how one choice affects others.
+      No deep knowledge required; the system keeps them valid.</p></div>
+    <div class="card"><span class="pill b">stage 3 · see</span>
+      <p class="small" style="margin-top:8px"><b>Visualisation &amp; reporting</b>: config status, change history over
+      time, dependency/relationship views, reports. Transparency into what is set and why.</p></div>
+  </div>
+  <p>Two cross-cutting constraints: every stage is <b>chat-mode LLM-assisted</b> (ask questions, get guidance, move
+  back and forth iteratively), and it must serve <b>two deployment shapes</b> — a <b>dedicated</b> customer (their own
+  instance, heavy customisation) and a <b>SaaS</b> customer (shared service, limited customisation). The open question
+  they put to us: <i>is SOPilot the right tool, do we extend it, or do we build something new that reuses its parts?</i></p>
+</section>
+
+<!-- 2 -->
+<section id="realization">
+  <div class="kicker">The realization</div>
+  <h2>They described SOPilot</h2>
+  <p class="lead-p">Strip the domain words and the feature is a precise description of what SOPilot already does for
+  conversation procedures. SOPilot is, underneath, a <b>constraint-graph engine with LLM-assisted authoring, validation,
+  versioning, multi-tenancy, and a studio UI</b>. Swap "conversation procedure" for "instance configuration" and the
+  machine is the same one.</p>
+  <p class="pull">An SOP is a graph of steps with dependencies and constraints, authored by an expert with LLM help and
+  then <i>run</i> by a non-expert while the engine keeps them inside the valid region. That is also the exact definition
+  of guided, constraint-based configuration.</p>
+  <p>This isn't a loose analogy — the correspondence is structural, primitive by primitive (§5). And there's a recursive
+  neatness to it: <b>SOPilot already configures PolarTie agents</b>. The AENA voice agent's procedures, prompt blocks,
+  and — via the connector model and the MCP work we just shipped — its <i>tools and MCP servers</i> are SOPilot
+  artefacts today. This feature is that capability, generalised into a product: SOPilot as the configuration plane for
+  PolarTie itself.</p>
+</section>
+
+<!-- 3 -->
+<section id="already">
+  <div class="kicker">The inventory</div>
+  <h2>What SOPilot already is</h2>
+  <p>Everything below exists and runs in production. These are the load-bearing pieces a configuration-management product
+  would otherwise have to build from scratch.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Primitive</th><th>Where</th><th>What it already does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill b">dependency-graph + constraint engine</span></td>
+        <td><span class="filepath">sop_graph.py</span> (SOPGraph)</td>
+        <td>AND-prerequisites, conditional triggers, reachability, cycle detection, and a live "what's allowed next given
+        what's satisfied so far" evaluation. A real constraint-satisfaction core.</td></tr>
+      <tr><td><span class="pill b">validate → publishable → gate</span></td>
+        <td><span class="filepath">sop_graph.py</span> <span class="mono">lint()</span> + <span class="filepath">api/sops.py</span> publish</td>
+        <td>Collects problems (dangling refs, cycles, unreachable steps, bad markers) → a publishable boolean → blocks
+        publish until clean. Wired for <b>continuous editor linting</b> and <b>gated release</b>.</td></tr>
+      <tr><td><span class="pill b">append-only versioning</span></td>
+        <td><span class="filepath">models.py</span> SopVersion / PromptBlockVersion</td>
+        <td>Immutable draft / published / retired versions, full JSON snapshot, provenance (source document), and
+        <b>version pinning</b> at instantiation. Rollback is implicit (pin an older version).</td></tr>
+      <tr><td><span class="pill b">iterative LLM chat-to-build</span></td>
+        <td><span class="filepath">builder.py</span> + <span class="filepath">api/sops.py</span> build-turn</td>
+        <td>Natural language → a smallest-safe patch per turn → merge-by-name → re-derive graph → re-validate. Asks one
+        focused question at a time; back-and-forth. Plus whole-document ingest.</td></tr>
+      <tr><td><span class="pill c">reusable, name-bound config units</span></td>
+        <td>prompt blocks, connectors, corpora</td>
+        <td>Separately-versioned units bound by name to graph nodes and <b>resolved-and-snapshotted</b> at instantiation
+        — a mid-flight change never lands mid-session.</td></tr>
+      <tr><td><span class="pill c">a tool / MCP connector model</span></td>
+        <td><span class="filepath">models.py</span> Connector + <span class="filepath">fetchers/</span> + <span class="filepath">api/connectors.py</span></td>
+        <td>Named connectors (<span class="mono">kind: mcp|rag|http|mock</span>), a fetcher registry, secret indirection
+        (Fernet), a <b>live connectivity test</b>, and health stats. The seed of a "tool catalog".</td></tr>
+      <tr><td><span class="pill a">tenancy spine</span></td>
+        <td><span class="filepath">tenancy.py</span> · Tenant → Project → Scope</td>
+        <td>Hard isolation by hashed API key, per-tenant Redis quotas, and an <span class="mono">ApiKey.role</span>
+        column already in the schema (see the gaps).</td></tr>
+      <tr><td><span class="pill a">a studio UI</span></td>
+        <td><span class="filepath">frontend/src/views/</span></td>
+        <td>A draggable <b>dependency-graph view</b> (GraphView), an authoring surface with live lint + publish gate
+        (Sops), a connector registry with health + live-test, a KPI dashboard, and history explorers (Traces/Sessions).</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Sources: full file:line maps behind this doc. The point isn't the exact lines — it's that the graph,
+  the constraint checks, the versioning, the LLM authoring loop, the connector model, and the visual studio are
+  <b>already here</b> and battle-tested on a real customer.</p>
+</section>
+
+<!-- 4 -->
+<section id="reframe">
+  <div class="kicker">The reframe</div>
+  <h2>Configuration as a guided procedure</h2>
+  <p class="lead-p">The unlock is to treat the <b>configuration process itself as a procedure</b>. The admin authors a
+  <i>config model</i> (nodes = configuration decisions; edges = dependencies; constraints = validation rules; the
+  connector catalog = the available tools). The user then <i>runs</i> that model in a guided wizard, and the output isn't
+  a resolved dialogue — it's a <b>validated configuration artefact</b> that gets applied to their instance.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 400" role="img" aria-label="Configuration-as-a-procedure mapped onto the SOPilot engine">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>
+        .bx{rx:10;stroke-width:1.2}.tt{fill:#e7ebf3;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}
+        .ss{fill:#aab3c5;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}
+        .ln{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#ar)}
+        .band{font:700 10px "Segoe UI",sans-serif;letter-spacing:.1em}
+        .lbl{fill:#7b8499;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}
+      </style>
+      <!-- ADMIN band -->
+      <text class="band" x="20" y="24" fill="#cdb1f7">① ADMIN STAGE — authors the config model (LLM chat-to-build + lint)</text>
+      <rect class="bx" x="20" y="32" width="150" height="46" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="tt" x="95" y="52">Templates</text><text class="ss" x="95" y="67">starter setups (NEW)</text>
+      <rect class="bx" x="184" y="32" width="150" height="46" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="tt" x="259" y="52">Dependency graph</text><text class="ss" x="259" y="67">SOPGraph (reuse)</text>
+      <rect class="bx" x="348" y="32" width="176" height="46" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="tt" x="436" y="52">Validation rules</text><text class="ss" x="436" y="67">lint + admin rules (extend)</text>
+      <rect class="bx" x="538" y="32" width="202" height="46" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="tt" x="639" y="52">Tool / MCP catalog</text><text class="ss" x="639" y="67">Connector model (extend)</text>
+
+      <!-- ENGINE band -->
+      <text class="band" x="20" y="122" fill="#7fe3cf">SOPilot ENGINE — reused as-is</text>
+      <rect class="bx" x="20" y="130" width="720" height="70" fill="#14261f" stroke="rgba(25,184,154,.5)"/>
+      <text class="tt" x="130" y="158">graph + constraints</text><text class="ss" x="130" y="173">allowed-next · reachability</text>
+      <text class="tt" x="300" y="158">validate → gate</text><text class="ss" x="300" y="173">lint · publishable</text>
+      <text class="tt" x="450" y="158">versioning</text><text class="ss" x="450" y="173">draft/published · pin</text>
+      <text class="tt" x="600" y="158">chat-to-build</text><text class="ss" x="600" y="173">patch · merge · re-lint</text>
+      <text class="ss" x="380" y="192" style="fill:#7b8499">multi-tenant scope · connectors + secrets · studio UI (GraphView, dashboards, history)</text>
+
+      <!-- USER band -->
+      <text class="band" x="20" y="246" fill="#9cc0ff">② USER STAGE — runs the model in a guided wizard (NEW runtime)</text>
+      <rect class="bx" x="20" y="254" width="200" height="52" fill="#161d33" stroke="rgba(91,141,239,.55)"/><text class="tt" x="120" y="276">Guided wizard</text><text class="ss" x="120" y="291">LLM chat, bounded by rules</text>
+      <rect class="bx" x="250" y="254" width="200" height="52" fill="#161d33" stroke="rgba(91,141,239,.55)"/><text class="tt" x="350" y="276">Live validation</text><text class="ss" x="350" y="291">conflicts as you go</text>
+      <rect class="bx" x="480" y="254" width="120" height="52" fill="#1c2433" stroke="rgba(25,184,154,.6)"/><text class="tt" x="540" y="276">Config artefact</text><text class="ss" x="540" y="291">typed · validated</text>
+      <rect class="bx" x="620" y="254" width="120" height="52" fill="#132a24" stroke="rgba(62,207,142,.5)"/><text class="tt" x="680" y="274">Bundle out</text><text class="ss" x="680" y="288">→ PolarTie provision</text><text class="ss" x="680" y="300" style="fill:#7b8499">apply: later phase</text>
+
+      <!-- ③ visualization -->
+      <text class="band" x="20" y="344" fill="#ffce86">③ VISUALISE &amp; REPORT — status · dependency view · change history (mostly reuse)</text>
+      <rect class="bx" x="20" y="352" width="720" height="34" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="ss" x="380" y="373" style="fill:#aab3c5">GraphView (dependency map) · Dashboard (status/SLIs) · Traces/Sessions (history) · + config-change/diff view (NEW)</text>
+
+      <!-- arrows -->
+      <line class="ln" x1="380" y1="78" x2="380" y2="128"/><text class="lbl" x="430" y="112">authored into</text>
+      <line class="ln" x1="380" y1="200" x2="380" y2="252"/><text class="lbl" x="430" y="232">instantiated by</text>
+      <line class="ln" x1="450" y1="280" x2="478" y2="280"/><line class="ln" x1="600" y1="280" x2="618" y2="280"/>
+    </svg>
+    <figcaption><b>The same engine, two roles.</b> Purple = admin authoring (mostly reuse); green band = the SOPilot
+      engine reused wholesale; blue = the user wizard (the one genuinely new runtime); amber = visualise/report (mostly
+      reuse). "NEW"/"extend"/"reuse" flags the build effort per box.</figcaption>
+  </div></figure>
+  <p>Read the diagram as effort: the <b>green band and most of the purple and amber</b> already exist. The genuinely new
+  work is a stateful <b>guided-wizard runtime</b> (blue), plus four extensions (templates, admin-authored rules, a typed
+  tool catalog, and an apply step) — the <b>config-domain layer</b> of §6.</p>
+</section>
+
+<!-- 5 -->
+<section id="mapping">
+  <div class="kicker">Primitive by primitive</div>
+  <h2>The mapping — need → primitive → gap</h2>
+  <p>The honest ledger: what each PolarTie need maps to in SOPilot today, and precisely what's missing.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>PolarTie need</th><th>SOPilot primitive (reuse)</th><th>Gap to build</th></tr></thead>
+    <tbody>
+      <tr><td>Dependency graph between config choices</td><td><span class="pill b">SOPGraph</span> — prereqs, triggers, reachability</td>
+        <td>Node semantics are conversation-specific; abstract them to generic config nodes</td></tr>
+      <tr><td>Admin-defined validation rules / constraints</td><td><span class="pill b">lint → publishable → gate</span> pattern</td>
+        <td>Lint checks are <b>hard-coded</b>; need <b>data-driven, admin-authored</b> rules (incl. value-level: A requires B, A conflicts C)</td></tr>
+      <tr><td>Templates &amp; presets for common scenarios</td><td><span class="pill c">a published version is a copyable JSON</span></td>
+        <td>No <b>template / clone / fork / scaffold</b> at all — the biggest single gap</td></tr>
+      <tr><td>Admin authoring, LLM-assisted</td><td><span class="pill b">chat-to-build</span> (patch/merge/re-lint)</td>
+        <td>Reuse almost as-is; teach it the config schema instead of the SOP schema</td></tr>
+      <tr><td>User guided setup, LLM-assisted, bounded by rules</td><td><span class="pill b">allowed-next + lint</span> give per-step gating</td>
+        <td><span class="mono">build-turn</span> is <b>stateless</b> — no server-side wizard/session; this runtime is new</td></tr>
+      <tr><td>Real-time conflict feedback</td><td><span class="pill b">continuous lint</span> (already in the editor)</td>
+        <td>Extend lint to the config rule-set + surface per-field, not just per-publish</td></tr>
+      <tr><td>Configure tools &amp; MCP servers correctly</td><td><span class="pill c">Connector model + fetcher registry + live-test + MCP client</span></td>
+        <td>Config is an <b>untyped dict</b>; build a catalog that <b>introspects servers via <span class="mono">list_tools</span></b> to get real tool schemas</td></tr>
+      <tr><td>Prompt management</td><td><span class="pill c">prompt blocks</span> — versioned, name-bound, snapshotted</td>
+        <td>Reuse as-is</td></tr>
+      <tr><td>Roles &amp; permissions (admin vs user)</td><td><span class="pill a">Tenant/Project + <span class="mono">ApiKey.role</span> column</span></td>
+        <td>Role is <b>never enforced</b>; no user identity; no policy envelope. Real RBAC to build</td></tr>
+      <tr><td>Versioning &amp; change history</td><td><span class="pill b">immutable SopVersion/PromptBlockVersion</span></td>
+        <td>Connectors/projects have only <span class="mono">updated_at</span> — no per-change audit or diff</td></tr>
+      <tr><td>Visualisation &amp; reporting</td><td><span class="pill a">GraphView · Dashboard · Traces</span></td>
+        <td>Add a config-change/diff view + a project-settings UI</td></tr>
+      <tr><td>Dedicated vs SaaS</td><td><span class="pill a">multi-tenant spine; single-tenant via env</span></td>
+        <td>No <span class="mono">deployment_type</span> notion; template scoping (platform vs tenant) to design</td></tr>
+    </tbody>
+  </table></div>
+  <p class="pull">Roughly two-thirds of the machine already exists. What's missing is coherent and nameable — it's a
+  configuration-<i>domain</i> layer sitting on a general engine, not a rebuild.</p>
+</section>
+
+<!-- 6 -->
+<section id="newlayer">
+  <div class="kicker">The delta</div>
+  <h2>The config-domain layer</h2>
+  <p>Collected, the gaps form one coherent layer on top of the SOPilot engine. Six pieces:</p>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill a">1 · typed config artefact</span>
+      <p class="small" style="margin-top:8px">SOPilot assembles conversation <i>state</i>; here we assemble a
+      <b>typed configuration object</b> with fields, values, and referential integrity. It's the same "typed object →
+      validate → immutable version" loop the SOP definition already uses (<span class="mono">TaskDefinition</span>), just
+      a config schema instead of a dialogue schema.</p></div>
+    <div class="card"><span class="pill a">2 · admin-authored constraint rules</span>
+      <p class="small" style="margin-top:8px">Lift validation from hard-coded structural checks to a <b>data-driven rule
+      set</b> the admin writes: requires / conflicts / implies / value-bounds across fields and tools. The
+      collect-problems→publishable→gate pattern stays; the rules become content, not code.</p></div>
+    <div class="card"><span class="pill a">3 · tool / MCP catalog (introspected)</span>
+      <p class="small" style="margin-top:8px">Promote the connector model into a <b>catalog of tool types</b>, but
+      <b>derive the schemas live</b>: point our existing MCP client at a server and <span class="mono">list_tools</span>
+      gives its tools + input schemas directly — the catalog builds itself from what's actually connected, rather than a
+      hand-maintained registry. The wizard then validates a tool's config against the real schema at author time.</p></div>
+    <div class="card"><span class="pill a">4 · guided-wizard runtime</span>
+      <p class="small" style="margin-top:8px">The one substantially new service: a <b>stateful, resumable</b> guided
+      session that walks the user through the config model, uses <span class="mono">allowed-next</span> + the rules to
+      gate each step, gives live feedback, and lets them move back and forth — all LLM-chat-driven.</p></div>
+    <div class="card"><span class="pill a">5 · RBAC &amp; policy envelope</span>
+      <p class="small" style="margin-top:8px">Enforce the dormant <span class="mono">ApiKey.role</span>, add a user
+      identity for attribution, and model the <b>policy envelope</b> — the admin-set bounds the user's choices must stay
+      within. This is what makes "admin stage constrains user stage" real.</p></div>
+    <div class="card"><span class="pill a">6 · config bundle + change audit</span>
+      <p class="small" style="margin-top:8px">Near-term output is a <b>validated config bundle</b> that PolarTie's existing
+      provisioning consumes — we don't write into a live instance yet. Every config mutation still emits an <b>audit row
+      with attribution</b> (copying the SopVersion pattern to connectors/projects/settings). <span class="pill c">later</span>
+      a first-party <b>apply/enforce</b> path (transactional, dry-run, rollback) becomes a planned phase once we have
+      PolarTie's feedback on the bundle.</p></div>
+  </div>
+  <div class="callout ok"><div class="clabel">◆ The shape of the estimate</div>
+    Of the whole feature, the <b>engine</b> (graph, constraints, validation-gate, versioning, chat-authoring, connectors,
+    studio, tenancy) is reuse. The <b>config-domain layer</b> above is the real build — and it is well-bounded: a typed
+    artefact, a rules format, a tool catalog, a wizard runtime, RBAC, and an apply path. None of it fights the existing
+    architecture; all of it extends patterns already in the codebase.</div>
+</section>
+
+<!-- 7 -->
+<section id="decisions">
+  <div class="kicker">Forks in the road</div>
+  <h2>Two design decisions</h2>
+  <h3>A. Formal constraints vs LLM-checked constraints</h3>
+  <p>The feature says "LLM assistance" everywhere, but constraint checking has two flavours and we should be deliberate.
+  <b>Hard, structural constraints</b> (dependency ordering, reachability, required-tool-present, type/enum validity) want
+  a <b>formal</b> check — fast, deterministic, and exactly what SOPilot's graph + lint already do. <b>Soft, semantic
+  constraints</b> ("this prompt contradicts that policy", "these two tools overlap confusingly") want the <b>LLM</b>,
+  reading admin rules written in plain language. SOPilot already blends both — a formal graph plus LLM classification —
+  so the recommendation is a <b>hybrid</b>: formal engine for what must be provably correct, LLM for what's judgemental,
+  and the admin authors rules in whichever register fits. Don't try to make the LLM a solver, or the solver a critic.</p>
+  <div class="callout ok"><div class="clabel">◆ Decided: feature-model rules</div>
+    We're holding the admin rules to <b>enum / requires / conflicts</b> — not value arithmetic. That is squarely the
+    <b>formal</b> side and mostly already built: SOPilot's graph is exactly a <span class="mono">requires</span> engine
+    (prerequisites); we add <span class="mono">conflicts</span> (mutual-exclusion edges) and <span class="mono">enum</span>
+    option sets, and reuse the lint-gate to report violations. The LLM layer stays for the soft, semantic checks on top.
+    Bounding expressiveness here is what keeps this a tractable extension rather than a constraint-solver project.</div>
+  <h3>B. Reuse the SOP model literally, or abstract the engine</h3>
+  <p>Tempting shortcut: model a config as an "SOP" with agent_actions and user_states. <b>Resist it</b> — configuration
+  isn't a dialogue, and the vocabulary would leak awkwardly. Better to <b>abstract the engine</b> (graph, constraint
+  evaluation, lint-gate, versioning, chat-to-build) away from the conversation-specific node types, then instantiate it
+  with a <b>config node kind</b>. It's more work than a literal reuse, but it's the difference between a clean second
+  product on a shared core and a conversation tool wearing a config costume.</p>
+</section>
+
+<!-- 8 -->
+<section id="deploy">
+  <div class="kicker">Two shapes</div>
+  <h2>Dedicated vs SaaS</h2>
+  <p>The two deployment types map cleanly onto SOPilot's tenancy — with one layer to add.</p>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill ctrl">dedicated</span>
+      <p class="small" style="margin-top:8px">A single-tenant instance (SOPilot already runs this way via env —
+      <span class="mono">SOPILOT_API_KEY</span> + one project, the same shape as the mounted MCP surface). Templates and
+      rules are <b>tenant-owned</b> and can be deeply customised; the admin stage is that customer's own engineer.</p></div>
+    <div class="card"><span class="pill b">saas <span style="font-size:10px;color:#ffce86">· later</span></span>
+      <p class="small" style="margin-top:8px">Multi-tenant on the Tenant → Project spine (per-tenant Redis quotas
+      already enforced). Templates and rules are <b>platform-level</b>, owned by a <b>PolarTie expert per use-case
+      group</b>; a tenant customises only within that envelope — "admin bounds the user" one level up.</p></div>
+  </div>
+  <div class="callout key"><div class="clabel">◆ Decided: dedicated first</div>
+    We start with the <b>dedicated</b> shape — single-tenant, the customer's own engineer as admin, which SOPilot already
+    runs (single-tenant via env). That defers the harder SaaS questions (template scope, the policy envelope owned by a
+    PolarTie expert per use-case group, multi-user RBAC granularity) until dedicated is proven and we've folded in
+    PolarTie's feedback. The data spine already supports both shapes, so this is a sequencing choice, not a fork.</div>
+</section>
+
+<!-- 9 -->
+<section id="verdict">
+  <div class="kicker">The call</div>
+  <h2>Verdict &amp; recommendation</h2>
+  <p class="lead-p">Yes — SOPilot is the right foundation, and the answer to "extend or build new?" is <b>both, precisely
+  split</b>: reuse SOPilot's engine as a shared core, and build a new <b>configuration product surface</b> (a
+  config-domain layer) on top of it. Not a from-scratch build (it would re-implement a graph, a constraint checker,
+  versioning, an LLM authoring loop, a connector model, and a studio that already exist and are proven on a real
+  customer). Not a literal cram into the SOP model (configuration isn't a conversation).</p>
+  <div class="callout key"><div class="clabel">◆ Why SOPilot specifically, over a generic configurator</div>
+    Off-the-shelf product configurators and feature-model tools solve the constraint half — but none of them are
+    <b>LLM-native at both ends</b> (chat-to-build for the admin, chat-guided for the user), and none already sit inside
+    the platform that manages the very things being configured: PolarTie's prompts, connectors, and MCP tools. SOPilot's
+    differentiator is exactly the two things this feature is made of — <b>guided-by-LLM</b> and <b>integrated with the
+    agent config</b>. We'd be extending the tool that already configures the agent, not bolting a configurator beside it.</div>
+  <div class="callout caveat"><div class="clabel">◆ The honest risks — and how round-1 already shrank them</div>
+    <b>Scope creep into a second product</b> stays the headline risk: this is a product, not a feature — but the round-1
+    calls cut it hard. <b>Constraint expressiveness → contained:</b> bounded to enum/requires/conflicts (§7A), no
+    half-solver. <b>Apply → parked:</b> deferred to a later phase (P4) after feedback, so we don't build into a live
+    instance blind. <b>SaaS/RBAC → sequenced out:</b> dedicated-first means a single admin, not a multi-user policy
+    engine, for now. What remains genuinely new and worth watching: the <b>stateful guided-wizard runtime</b> (the one
+    net-new service) and, when apply lands, its dry-run/rollback safety.</div>
+</section>
+
+<!-- 10 -->
+<section id="build">
+  <div class="kicker">Sequencing</div>
+  <h2>Build sketch &amp; open questions</h2>
+  <p>Phased so each step is demoable and the riskiest new piece (the wizard runtime) lands on hardened plumbing.
+  Crucially, the <b>visualisation comes first</b>, not last.</p>
+  <div class="callout key"><div class="clabel">◆ Visualisation is the proof, and it's nearly free</div>
+    The fastest way to prove this direction to PolarTie is to <b>show it</b> — take a real PolarTie configuration (its
+    tools, MCP servers, prompts, dependencies) and render it in SOPilot's <b>existing</b> Studio: the dependency graph in
+    <span class="mono">GraphView</span>, the status/health in the Dashboard, the change history in the Traces/versioning
+    views. That's a tangible, screen-shareable artefact built almost entirely from components we already have —
+    <b>before</b> a line of the wizard is written. It turns an abstract pitch into "here is your config, as a graph, with
+    every dependency and every recent change." Lead with it: it de-risks the whole conversation and buys the runway to
+    build the rest.</div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Phase</th><th>Scope</th><th>Leans on</th></tr></thead>
+    <tbody>
+      <tr><td><b>Spike — visual proof</b> <span class="pill win">demo first</span></td>
+        <td>Ingest a real PolarTie config and render it in the existing Studio — dependency graph + status + change
+        history. A screen-shareable proof of the whole thesis, before any new backend</td>
+        <td><span class="filepath">GraphView.tsx</span>, Dashboard, Traces (reuse)</td></tr>
+      <tr><td><b>P0 — engine abstraction</b></td>
+        <td>Generalise graph + lint-gate + versioning + chat-to-build off the conversation node types; add a config node kind + typed config artefact</td>
+        <td><span class="filepath">sop_graph.py</span>, <span class="filepath">builder.py</span>, SopVersion</td></tr>
+      <tr><td><b>P1 — admin stage</b></td>
+        <td>Config-model authoring (chat-to-build for config); feature-model rules (<b>enum / requires / conflicts</b>);
+        the tool catalog <b>built by introspecting MCP servers via <span class="mono">list_tools</span></b>; templates + clone</td>
+        <td>build-turn, lint pattern, Connector model, <span class="filepath">mcp_client.py</span></td></tr>
+      <tr><td><b>P2 — user wizard</b></td>
+        <td>Stateful, resumable guided-config runtime: allowed-next + rules gate each step, live feedback, back/forward,
+        LLM chat → emits a <b>validated config bundle</b></td>
+        <td>allowed-next, continuous lint (new session model)</td></tr>
+      <tr><td><b>P3 — output, audit, UI</b></td>
+        <td>Config-bundle export for PolarTie provisioning to consume; config-change audit + diff view; project-settings +
+        change-history views in the existing Studio. <span class="pill c">deferred</span> multi-user RBAC granularity
+        and the SaaS policy envelope</td>
+        <td>SopVersion audit pattern, Studio views</td></tr>
+      <tr><td><b>P4 — apply</b> <span class="pill c">after feedback</span></td>
+        <td>First-party apply/enforce into a live instance — transactional, dry-run, rollback — once PolarTie has used the
+        bundle and told us what they need</td>
+        <td>the config bundle + audit from P3</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout ok"><div class="clabel">◆ Decisions (round 1) — scope sharpened, all toward less to build</div>
+    <b>(1) Rule expressiveness:</b> feature-model level — <b>enum / requires / conflicts</b>, not full value arithmetic.
+    Keeps the check mostly formal (§7A). <b>(2) Apply:</b> not first — we ship a <b>validated config
+    bundle</b> for PolarTie's existing provisioning to consume, then add a first-party apply/enforce path as a
+    <b>planned later phase once we have PolarTie's feedback</b>. <b>(3) Surface:</b> <b>one product</b> — extend the
+    SOPilot Studio UI, no separate app. <b>(4) Deployment:</b> <b>dedicated first</b>; SaaS (platform templates owned by a
+    PolarTie expert per use-case group, and the policy envelope) is deferred until dedicated is proven. <b>(5) Tool
+    catalog:</b> <b>introspect live</b> — reuse our MCP client's <span class="mono">list_tools</span> to derive each
+    server's tools + schemas rather than hand-maintain a catalog (direction, to validate with PolarTie).</div>
+  <p class="small">This is a discussion draft, not a plan of record — the mapping and the gaps are grounded in the current
+  SOPilot code; the phasing and the verdict are for us to argue with.</p>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  Discussion doc · SOPilot fit for PolarTie's LLM-guided configuration-management feature. Grounded in the SOPilot
+  backend (<span class="mono">sop_graph.py</span>, <span class="mono">builder.py</span>, <span class="mono">api/sops.py</span>,
+  <span class="mono">models.py</span>, <span class="mono">connectors.py</span>, <span class="mono">tenancy.py</span>) and
+  frontend (<span class="mono">views/</span>). In response to <span class="mono">docs/NEW_FEATURES.md</span>. No decisions
+  are final here — this is for thinking together.
+</footer>
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
+</script>
+</body>
+</html>
