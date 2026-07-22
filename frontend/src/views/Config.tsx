@@ -33,6 +33,7 @@ export default function ConfigView() {
   const [intro, setIntro] = useState<Introspection>(MCP_INTROSPECTION);
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [introMsg, setIntroMsg] = useState("");
 
   const load = (v: string) => { try { setCfg(JSON.parse(v)); setErr(""); } catch (e: any) { setErr(String(e?.message ?? e)); } };
   const preset = (c: any) => { setText(JSON.stringify(c, null, 2)); setCfg(c); setErr(""); setIntro(MCP_INTROSPECTION); setLive(false); };
@@ -45,9 +46,10 @@ export default function ConfigView() {
       const r = await api<{ results: Array<{ url: string; tools?: string[]; error?: string }> }>("POST", "/config/introspect-mcp", { servers });
       const map: Introspection = {};
       for (const res of r.results) map[res.url] = res.error ? { tools: [], error: res.error } : { tools: res.tools ?? [] };
-      setIntro(map); setLive(true);
+      setIntro(map); setLive(true); setIntroMsg("");
     } catch (e: any) {
-      setErr(`introspect failed: ${e?.message ?? e}`);
+      const m = String(e?.message ?? e);
+      setIntroMsg(m.includes("Not Found") ? "Introspection endpoint not found — the backend needs the /config/introspect-mcp route (restart it)." : `Introspection failed: ${m}`);
     } finally { setBusy(false); }
   };
 
@@ -117,7 +119,10 @@ export default function ConfigView() {
               {busy ? "Introspecting…" : live ? "Re-introspect" : "Introspect live"}
             </button>
           </span></div>
-        <div className="cbody"><Findings items={mcp} /></div>
+        <div className="cbody">
+          {introMsg && <div className="lintline" style={{ color: "var(--crit)", marginBottom: 6 }}>{introMsg}</div>}
+          <Findings items={mcp} />
+        </div>
       </div>
 
       <div className="card">
