@@ -100,6 +100,7 @@ b.hl{color:#8fd9c9}
   <ol>
     <li><a href="#ask">What PolarTie asked for</a></li>
     <li><a href="#realization">The realization</a></li>
+    <li><a href="#polartie">Our reading of PolarTie — confirm</a></li>
     <li><a href="#already">What SOPilot already is</a></li>
     <li><a href="#reframe">Configuration as a guided procedure</a></li>
     <li><a href="#mapping">The mapping — need → primitive → gap</a></li>
@@ -157,6 +158,66 @@ b.hl{color:#8fd9c9}
   and — via the connector model and the MCP work we just shipped — its <i>tools and MCP servers</i> are SOPilot
   artefacts today. This feature is that capability, generalised into a product: SOPilot as the configuration plane for
   PolarTie itself.</p>
+</section>
+
+<!-- 2b -->
+<section id="polartie">
+  <div class="kicker">Ground truth — please confirm</div>
+  <h2>Our reading of PolarTie's system</h2>
+  <p class="lead-p">Before designing, we read the <span class="mono">pt-multirobot</span> repo so this targets your real
+  architecture, not a guess. Here's what we understand — flagged for your confirmation, so we don't miss anything.</p>
+
+  <h3>How a robot is configured today</h3>
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 176" role="img" aria-label="PolarTie config lifecycle: Portal writes S3, scheduler fetches, worker loads, agent runs">
+      <defs><marker id="c-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.cbx{rx:9;stroke-width:1.2}.ctt{fill:#e7ebf3;font:700 11.5px "Segoe UI",sans-serif;text-anchor:middle}.css{fill:#aab3c5;font:9px var(--mono),monospace;text-anchor:middle}.cln{stroke:#8a93a8;stroke-width:1.7;fill:none;marker-end:url(#c-ar)}.clb{fill:#7b8499;font:9px "Segoe UI",sans-serif;text-anchor:middle}</style>
+      <rect class="cbx" x="14" y="44" width="128" height="52" fill="#231b33" stroke="rgba(169,116,240,.55)"/><text class="ctt" x="78" y="64">Portal</text><text class="css" x="78" y="80">writes today</text>
+      <rect class="cbx" x="170" y="44" width="150" height="52" fill="#1c2433" stroke="rgba(25,184,154,.6)"/><text class="ctt" x="245" y="64">S3 config.json</text><text class="css" x="245" y="80">robots/&lt;id&gt;/config.json</text>
+      <rect class="cbx" x="348" y="44" width="132" height="52" fill="#1b1f2a" stroke="#39425a"/><text class="ctt" x="414" y="64">Scheduler</text><text class="css" x="414" y="80">aws s3 cp on start</text>
+      <rect class="cbx" x="508" y="44" width="118" height="52" fill="#1b1f2a" stroke="#39425a"/><text class="ctt" x="567" y="64">Worker</text><text class="css" x="567" y="80">LOAD_CONFIG_FIELD</text>
+      <rect class="cbx" x="654" y="44" width="98" height="52" fill="#161d33" stroke="rgba(91,141,239,.55)"/><text class="ctt" x="703" y="64">Voice-agent</text><text class="css" x="703" y="80">SessionConfig</text>
+      <line class="cln" x1="142" y1="70" x2="168" y2="70"/><line class="cln" x1="320" y1="70" x2="346" y2="70"/>
+      <line class="cln" x1="480" y1="70" x2="506" y2="70"/><line class="cln" x1="626" y1="70" x2="652" y2="70"/>
+      <text class="clb" x="245" y="30" style="fill:#cdb1f7">◆ we'd write validated config.json here</text>
+      <text class="clb" x="414" y="118">lazy: re-fetched on each call · no hot-reload</text>
+      <text class="clb" x="567" y="118">~30 fields, 1:1 to SessionConfig</text>
+      <text class="clb" x="380" y="140" style="font-size:9.5px">no config API/CLI · no DB · no validate-before-publish · defaults.json supplies the 39-tool catalog</text>
+    </svg>
+    <figcaption><b>Config is a per-robot JSON file in S3, picked up lazily on the next call.</b> There's no config API,
+      no database, and no validation gate — the Portal writes the file, the scheduler ships it, the agent runs it.</figcaption>
+  </div></figure>
+
+  <h3>What we found — and what it means for us</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What PolarTie has today</th><th>What it means for our product</th></tr></thead>
+    <tbody>
+      <tr><td><b>Config = <span class="mono">robots/&lt;id&gt;/config.json</span> in S3</b>, delivered field-by-field
+        (<span class="filepath">scheduler_connection.cpp</span> LOAD_CONFIG_FIELD → <span class="mono">SessionConfig</span>)</td>
+        <td>Our <b>validated bundle IS that config.json</b> — same format; "apply" = an atomic, validated write to that S3 prefix</td></tr>
+      <tr><td><b>Tool catalog = <span class="mono">defaults.json</span></b> (39 tools, <span class="mono">enabled</span> + tunable <span class="mono">description</span>); classes hardcoded, no dynamic registry</td>
+        <td>Our catalog = <b><span class="mono">defaults.json</span> (built-ins) + MCP <span class="mono">list_tools</span></b> (external tools) — both feed the same picker</td></tr>
+      <tr><td><b>An LLM config <i>optimizer</i> already exists</b> (<span class="filepath">ai_config.py</span> · gpt-5.3-codex): rewrites the prompt, tunes tool descriptions at session start</td>
+        <td>We <b>complement, not duplicate</b> — they optimize an authored config; we author, constrain &amp; validate it. Natural handoff (they optimize what we produce)</td></tr>
+      <tr><td><b>Effectively no validation</b>: Pydantic coercion + <span class="mono">extra="ignore"</span>; misconfig (e.g. email tools without <span class="mono">notification_service_url</span>) silently yields a missing tool</td>
+        <td><b>Validate-before-publish is the headline value</b> — concrete compatibility rules (email↔notification service, KB↔backend, tool↔required config) we can author</td></tr>
+      <tr><td><b>No RBAC / identity</b> anywhere; scheduler ports unauthenticated; <span class="mono">manager_id</span> self-asserted</td>
+        <td>Roles/permissions are <b>greenfield</b> — nothing to integrate against; we introduce the first identity layer (deferred, dedicated-first)</td></tr>
+      <tr><td><b>Thin tenancy</b>: <span class="mono">robot_id</span> is the key; <span class="mono">account_id</span> is a telemetry label; the real primitive is the scheduler "manager + special-worker" reservation</td>
+        <td>A config "instance" = one <span class="mono">robot_id</span>'s config.json. Dedicated = own scheduler + own S3 bucket; SaaS = shared scheduler partitioned by manager</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout key"><div class="clabel">◆ Please confirm (so we don't miss a topic)</div>
+    <b>(1)</b> Is <span class="mono">robots/&lt;robot_id&gt;/config.json</span> in S3 the right and only write target — and does our product
+    <b>replace or feed the Portal</b> that writes it today? <b>(2)</b> Is the full configurable surface the <span class="mono">SessionConfig</span>
+    tree (prompt, voice, language, the 39-tool catalog, transfer topics, visual hints, knowledge bases, MCP servers,
+    events, <span class="mono">custom_config</span>) — anything outside the repo (billing, phone numbers, REM/media, recording)
+    that also needs configuring? <b>(3)</b> Should we <b>reuse your existing <span class="mono">ai_config.py</span> optimizer</b>
+    as the "polish" step after our authoring, or keep them separate? <b>(4)</b> For validation rules, what are the real
+    compatibility constraints we should encode first (the ones that actually bite customers)? <b>(5)</b> Is "dedicated =
+    own scheduler + own S3 bucket" the correct mental model, and where should <b>identity/roles</b> eventually anchor —
+    the scheduler's manager concept, or a new layer?</div>
 </section>
 
 <!-- 3 -->
@@ -318,14 +379,17 @@ b.hl{color:#8fd9c9}
       validate → immutable version" loop the SOP definition already uses (<span class="mono">TaskDefinition</span>), just
       a config schema instead of a dialogue schema.</p></div>
     <div class="card"><span class="pill a">2 · admin-authored constraint rules</span>
-      <p class="small" style="margin-top:8px">Lift validation from hard-coded structural checks to a <b>data-driven rule
-      set</b> the admin writes: requires / conflicts / implies / value-bounds across fields and tools. The
-      collect-problems→publishable→gate pattern stays; the rules become content, not code.</p></div>
-    <div class="card"><span class="pill a">3 · tool / MCP catalog (introspected)</span>
-      <p class="small" style="margin-top:8px">Promote the connector model into a <b>catalog of tool types</b>, but
-      <b>derive the schemas live</b>: point our existing MCP client at a server and <span class="mono">list_tools</span>
-      gives its tools + input schemas directly — the catalog builds itself from what's actually connected, rather than a
-      hand-maintained registry. The wizard then validates a tool's config against the real schema at author time.</p></div>
+      <p class="small" style="margin-top:8px">Lift validation from hard-coded checks to a <b>data-driven rule set</b> the
+      admin writes — <b>enum / requires / conflicts</b> (§7A). Grounded in real PolarTie foot-guns: <i>email tools require
+      <span class="mono">notification_service_url</span></i>; <i>a LightRAG knowledge base requires its Postgres config</i>;
+      <i>a tool requires the backend it depends on</i>. The collect-problems→publishable→gate pattern stays; the rules
+      become content, not code — and catch the silent missing-tool failures today's config can't.</p></div>
+    <div class="card"><span class="pill a">3 · tool / MCP catalog</span>
+      <p class="small" style="margin-top:8px">Two sources, one picker: PolarTie's <b>built-in catalog</b> from
+      <span class="mono">defaults.json</span> (39 tools with their tunable descriptions), plus <b>external tools derived
+      live</b> — point our MCP client at a server and <span class="mono">list_tools</span> yields its tools + input
+      schemas. The wizard validates a tool's config against the real schema at author time, instead of the silent
+      missing-tool failure PolarTie has today.</p></div>
     <div class="card"><span class="pill a">4 · guided-wizard runtime</span>
       <p class="small" style="margin-top:8px">The one substantially new service: a <b>stateful, resumable</b> guided
       session that walks the user through the config model, uses <span class="mono">allowed-next</span> + the rules to
@@ -335,11 +399,11 @@ b.hl{color:#8fd9c9}
       identity for attribution, and model the <b>policy envelope</b> — the admin-set bounds the user's choices must stay
       within. This is what makes "admin stage constrains user stage" real.</p></div>
     <div class="card"><span class="pill a">6 · config bundle + change audit</span>
-      <p class="small" style="margin-top:8px">Near-term output is a <b>validated config bundle</b> that PolarTie's existing
-      provisioning consumes — we don't write into a live instance yet. Every config mutation still emits an <b>audit row
-      with attribution</b> (copying the SopVersion pattern to connectors/projects/settings). <span class="pill c">later</span>
-      a first-party <b>apply/enforce</b> path (transactional, dry-run, rollback) becomes a planned phase once we have
-      PolarTie's feedback on the bundle.</p></div>
+      <p class="small" style="margin-top:8px">Near-term output is a <b>validated <span class="mono">config.json</span></b>
+      in exactly PolarTie's format — the same file their Portal writes to <span class="mono">robots/&lt;id&gt;/</span> S3
+      today. We hand it off; every mutation emits an <b>audit row with attribution</b> (copying the SopVersion pattern).
+      <span class="pill c">later</span> a first-party <b>apply</b> = an atomic, validated write to that S3 prefix (effect
+      picked up on the next call), with dry-run/rollback — a planned phase after PolarTie's feedback.</p></div>
   </div>
   <div class="callout ok"><div class="clabel">◆ The shape of the estimate</div>
     Of the whole feature, the <b>engine</b> (graph, constraints, validation-gate, versioning, chat-authoring, connectors,
