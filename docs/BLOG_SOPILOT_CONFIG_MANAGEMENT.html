@@ -179,7 +179,7 @@ b.hl{color:#8fd9c9}
       <rect class="cbx" x="654" y="44" width="98" height="52" fill="#161d33" stroke="rgba(91,141,239,.55)"/><text class="ctt" x="703" y="64">Voice-agent</text><text class="css" x="703" y="80">SessionConfig</text>
       <line class="cln" x1="142" y1="70" x2="168" y2="70"/><line class="cln" x1="320" y1="70" x2="346" y2="70"/>
       <line class="cln" x1="480" y1="70" x2="506" y2="70"/><line class="cln" x1="626" y1="70" x2="652" y2="70"/>
-      <text class="clb" x="245" y="30" style="fill:#cdb1f7">◆ we'd write validated config.json here</text>
+      <text class="clb" x="245" y="30" style="fill:#cdb1f7">◆ our output: validated config.json (integration = PolarTie's later call)</text>
       <text class="clb" x="414" y="118">lazy: re-fetched on each call · no hot-reload</text>
       <text class="clb" x="567" y="118">~30 fields, 1:1 to SessionConfig</text>
       <text class="clb" x="380" y="140" style="font-size:9.5px">no config API/CLI · no DB · no validate-before-publish · defaults.json supplies the 39-tool catalog</text>
@@ -208,9 +208,15 @@ b.hl{color:#8fd9c9}
     </tbody>
   </table></div>
 
+  <div class="callout ok"><div class="clabel">◆ Decided: our own UI for now</div>
+    We build the config-management experience on the <b>SOPilot Studio</b> (our UI) and emit a validated
+    <span class="mono">config.json</span> in PolarTie's format. <b>How it integrates into PolarTie's product</b> — replace
+    or feed the Portal, who writes to S3, any apply pipeline — is <b>PolarTie's decision later</b>. That keeps us moving
+    without blocking on their productization, and keeps the integration seam a clean, well-understood handoff (a file in
+    their format).</div>
   <div class="callout key"><div class="clabel">◆ Please confirm (so we don't miss a topic)</div>
-    <b>(1)</b> Is <span class="mono">robots/&lt;robot_id&gt;/config.json</span> in S3 the right and only write target — and does our product
-    <b>replace or feed the Portal</b> that writes it today? <b>(2)</b> Is the full configurable surface the <span class="mono">SessionConfig</span>
+    <b>(1)</b> Do we emit <span class="mono">config.json</span> in exactly your format (the <span class="mono">SessionConfig</span>
+    fields)? <b>(2)</b> Is the full configurable surface the <span class="mono">SessionConfig</span>
     tree (prompt, voice, language, the 39-tool catalog, transfer topics, visual hints, knowledge bases, MCP servers,
     events, <span class="mono">custom_config</span>) — anything outside the repo (billing, phone numbers, REM/media, recording)
     that also needs configuring? <b>(3)</b> Should we <b>reuse your existing <span class="mono">ai_config.py</span> optimizer</b>
