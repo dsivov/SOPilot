@@ -6,7 +6,8 @@ import ConfigGraph from "./ConfigGraph";
 import AENA from "../config/aenaConfig.json";
 import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import { MCP_INTROSPECTION } from "../config/mcpIntrospection";
-import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, type Finding } from "../config/configModel";
+import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, type Finding, type Introspection } from "../config/configModel";
+import { api } from "../api";
 
 const ICON: Record<Finding["level"], string> = { error: "✖", warn: "⚠", ok: "✔", info: "·" };
 const COLOR: Record<Finding["level"], string> = { error: "var(--crit)", warn: "var(--warn)", ok: "var(--good)", info: "var(--muted)" };
@@ -29,17 +30,34 @@ export default function ConfigView() {
   const [text, setText] = useState(JSON.stringify(AENA, null, 2));
   const [cfg, setCfg] = useState<Record<string, any>>(AENA as Record<string, any>);
   const [err, setErr] = useState("");
+  const [intro, setIntro] = useState<Introspection>(MCP_INTROSPECTION);
+  const [live, setLive] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const load = (v: string) => { try { setCfg(JSON.parse(v)); setErr(""); } catch (e: any) { setErr(String(e?.message ?? e)); } };
-  const preset = (c: any) => { const s = JSON.stringify(c, null, 2); setText(s); setCfg(c); setErr(""); };
+  const preset = (c: any) => { setText(JSON.stringify(c, null, 2)); setCfg(c); setErr(""); setIntro(MCP_INTROSPECTION); setLive(false); };
 
-  const graph = useMemo(() => configToGraph(cfg, MCP_INTROSPECTION), [cfg]);
+  const introspect = async () => {
+    const servers = (cfg.mcp_servers ?? []).map((m: any) => ({ url: m.url, authorization: m.authorization }));
+    if (!servers.length) return;
+    setBusy(true);
+    try {
+      const r = await api<{ results: Array<{ url: string; tools?: string[]; error?: string }> }>("POST", "/config/introspect-mcp", { servers });
+      const map: Introspection = {};
+      for (const res of r.results) map[res.url] = res.error ? { tools: [], error: res.error } : { tools: res.tools ?? [] };
+      setIntro(map); setLive(true);
+    } catch (e: any) {
+      setErr(`introspect failed: ${e?.message ?? e}`);
+    } finally { setBusy(false); }
+  };
+
+  const graph = useMemo(() => configToGraph(cfg, intro), [cfg, intro]);
   const struct = useMemo(() => validateConfig(cfg), [cfg]);
-  const mcp = useMemo(() => promptMcpFindings(cfg, MCP_INTROSPECTION), [cfg]);
+  const mcp = useMemo(() => promptMcpFindings(cfg, intro), [cfg, intro]);
   const logical = useMemo(() => logicalPromptFindings(cfg), [cfg]);
   const tools = enabledTools(cfg);
   const mcpToolCount = (cfg.mcp_servers ?? []).reduce((n: number, s: any) => {
-    const info = MCP_INTROSPECTION[s.url]; return n + (info && !info.error ? info.tools.filter((t) => !t.startsWith("polartie_")).length : 0);
+    const info = intro[s.url]; return n + (info && !info.error ? info.tools.filter((t) => !t.startsWith("polartie_")).length : 0);
   }, 0);
   const problems = [...struct, ...mcp, ...logical].filter((f) => f.level === "error").length;
 
@@ -93,7 +111,12 @@ export default function ConfigView() {
 
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="chead"><span>MCP tools ↔ prompt</span>
-          <span className="sub" style={{ marginLeft: "auto" }}>introspected live via list_tools · does the prompt reflect the real tools?</span></div>
+          <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+            <span className="sub">{live ? "introspected live via list_tools" : "does the prompt reflect the tools the servers actually provide?"}</span>
+            <button className="btn sm ghost" onClick={introspect} disabled={busy || !(cfg.mcp_servers ?? []).length}>
+              {busy ? "Introspecting…" : live ? "Re-introspect" : "Introspect live"}
+            </button>
+          </span></div>
         <div className="cbody"><Findings items={mcp} /></div>
       </div>
 
