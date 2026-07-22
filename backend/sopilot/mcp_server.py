@@ -101,7 +101,9 @@ async def _guidance(user_message: str, ctx: "Context | None", prev_assistant_mes
             r = await client.post(
                 f"{BASE_URL}/sessions/{sid}/converse",
                 headers=_headers(),
-                json={"user_message": user_message},
+                # steer_only: we only use turn.prompt_text — skip SOPilot's own
+                # responder LLM call (routing/switch/tracking/pool still run).
+                json={"user_message": user_message, "steer_only": True},
             )
             r.raise_for_status()
             data = r.json()

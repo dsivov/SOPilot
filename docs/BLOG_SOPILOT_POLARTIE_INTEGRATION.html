@@ -588,8 +588,11 @@ b.hl{color:#8fd9c9}
     followed the AENA lost-luggage SOP — producing SOP-specific facts like "the Ryanair baggage office in front of belt&nbsp;38" —
     with <b>0 model tool invocations</b> (the extension drove it), client-driven turns confirmed in the log, and
     <b>0 <span class="mono">mcp_error</span></b> after making the supervisor tool degrade gracefully on any backend hiccup.
-    So Stage&nbsp;1's model-driven MCP path and Stage&nbsp;2's automatic per-turn steering both run today; the remaining
-    optimization is the in-process mount to shave the extra hop's latency.</div>
+    So Stage&nbsp;1's model-driven MCP path and Stage&nbsp;2's automatic per-turn steering both run today.
+    <b>Latency:</b> the supervisor only needs the steering, not SOPilot's own reply, so a <span class="mono">steer_only</span>
+    mode skips the responder LLM call — measured <b>~26% faster per turn (2262 → 1673 ms</b>, 5 samples each) while
+    routing, mid-call switching, tracking and the pool all still run. The remaining lever is the in-process mount to drop
+    the localhost hop (small next to the per-turn model calls).</div>
 </section>
 
 <!-- 8 -->

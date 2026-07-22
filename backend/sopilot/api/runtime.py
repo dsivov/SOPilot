@@ -285,6 +285,11 @@ async def plan_turn(
 
 class ConverseRequest(BaseModel):
     user_message: str
+    # Steering-only: skip generating SOPilot's own reply (the responder LLM
+    # call). A supervisor (e.g. the voice MCP path) only needs the per-turn
+    # steering in `turn.prompt_text`, not a reply — so this drops one LLM call
+    # per turn while keeping routing, switching, tracking and the pool intact.
+    steer_only: bool = False
 
 
 async def _routing_candidates(db: AsyncSession, scope: Scope) -> list[dict]:
@@ -582,7 +587,7 @@ async def converse(
             + ("\n\nDATA FOR THIS TURN (fresh, retrieved for the caller's words — answer from it first):\n" + data_block if data_block else "")
         )
         _t_r = _time.perf_counter()
-        reply = await _respond(payload_text, history, body.user_message)
+        reply = "" if body.steer_only else await _respond(payload_text, history, body.user_message)
         respond_ms = int((_time.perf_counter() - _t_r) * 1000)
 
         debug = {
@@ -719,8 +724,10 @@ async def converse(
 
     payload_for_agent = plan["prompt_text"] or plan["context_block"]
     t_respond = _time.perf_counter()
-    reply = plan["prompt_text"] if plan["instruction_hit"] else await respond(
-        payload_for_agent, history, body.user_message
+    reply = "" if body.steer_only else (
+        plan["prompt_text"] if plan["instruction_hit"] else await respond(
+            payload_for_agent, history, body.user_message
+        )
     )
     respond_ms = int((_time.perf_counter() - t_respond) * 1000)
     turn_row = (
