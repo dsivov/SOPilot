@@ -98,12 +98,16 @@ class TaskDefinition(BaseModel):
 class TenantCreateRequest(BaseModel):
     slug: str
     name: str = ""
+    # First project, created atomically with the tenant — a tenant without a
+    # project is a dead end (nothing to log into). "" = don't create one.
+    project_slug: str = "main"
 
 
 class TenantCreateResponse(BaseModel):
     tenant_id: str
     slug: str
     api_key: str  # returned exactly once
+    project_slug: str = ""  # first project, if one was created
 
 
 class ProjectCreateRequest(BaseModel):

@@ -48,8 +48,13 @@ async def create_tenant(req: TenantCreateRequest, db: AsyncSession = Depends(get
     db.add(tenant)
     await db.flush()
     db.add(ApiKey(tenant_id=tenant.id, key_hash=key_hash, label="bootstrap", role="admin"))
+    # First project in the same transaction — a tenant without one is a dead end.
+    project_slug = req.project_slug.strip()
+    if project_slug:
+        db.add(Project(tenant_id=tenant.id, slug=project_slug, name=project_slug))
     await db.commit()
-    return TenantCreateResponse(tenant_id=tenant.id, slug=tenant.slug, api_key=raw_key)
+    return TenantCreateResponse(tenant_id=tenant.id, slug=tenant.slug, api_key=raw_key,
+                                project_slug=project_slug)
 
 
 @router.post("/projects")

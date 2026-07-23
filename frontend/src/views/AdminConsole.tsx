@@ -173,6 +173,7 @@ function Console({ onExit, onLogin }: { onExit: () => void; onLogin: (key: strin
   const [expanded, setExpanded] = useState<string | null>(null);
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
+  const [firstProject, setFirstProject] = useState("main");
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [loginBusy, setLoginBusy] = useState<string | null>(null);
@@ -222,9 +223,13 @@ function Console({ onExit, onLogin }: { onExit: () => void; onLogin: (key: strin
     if (!slug.trim()) return;
     setBusy(true); setErr("");
     try {
-      const r = await adminApi<{ slug: string; api_key: string }>("POST", "/admin/tenants", { slug: slug.trim(), name: name.trim() });
-      setReveal({ title: `Tenant "${r.slug}" created · bootstrap admin key`, apiKey: r.api_key });
-      setSlug(""); setName(""); await load();
+      const r = await adminApi<{ slug: string; api_key: string; project_slug?: string }>(
+        "POST", "/admin/tenants", { slug: slug.trim(), name: name.trim(), project_slug: firstProject.trim() });
+      setReveal({
+        title: `Tenant "${r.slug}" created` + (r.project_slug ? ` with project "${r.project_slug}"` : "") + ` · bootstrap admin key`,
+        apiKey: r.api_key,
+      });
+      setSlug(""); setName(""); setFirstProject("main"); await load();
     } catch (e: any) { setErr(String(e?.message ?? e)); } finally { setBusy(false); }
   };
   const del = async (s: string) => {
@@ -258,6 +263,8 @@ function Console({ onExit, onLogin }: { onExit: () => void; onLogin: (key: strin
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <input className="qinput mono" style={{ flex: 1, minWidth: 140 }} placeholder="slug (e.g. acme)" value={slug} onChange={(e) => setSlug(e.target.value)} />
               <input className="qinput" style={{ flex: 1, minWidth: 140 }} placeholder="display name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
+              <input className="qinput mono" style={{ flex: "0 0 130px" }} placeholder="first project" title="First project, created with the tenant — clear to skip"
+                value={firstProject} onChange={(e) => setFirstProject(e.target.value)} />
               <button className="btn primary" onClick={create} disabled={busy || !slug.trim()}>{busy ? "Creating…" : "Create"}</button>
             </div>
             {ioMsg && <div className="lintline" style={{ color: ioMsg.startsWith("Imported") ? "var(--good)" : "var(--crit)", whiteSpace: "normal" }}>{ioMsg}</div>}
