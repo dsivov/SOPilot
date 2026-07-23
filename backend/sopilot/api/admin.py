@@ -196,6 +196,26 @@ async def issue_key(slug: str, req: KeyCreateRequest, db: AsyncSession = Depends
     return {"key_id": key.id, "label": key.label, "role": key.role, "api_key": raw_key}
 
 
+@router.post("/tenants/{slug}/login-key", dependencies=[Depends(require_admin_token)])
+async def issue_login_key(slug: str, db: AsyncSession = Depends(get_db)) -> dict:
+    """One-click console login: mint a fresh admin-role key for the tenant (raw
+    keys are never stored, so an existing key can't be reused) and revoke the
+    previous console-login key so they don't accumulate. The key is handed
+    straight to the Studio's stored creds — never displayed."""
+    tenant = (await db.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=404, detail=f"tenant '{slug}' not found")
+    # Ephemeral machine-minted keys: hard-delete stale ones (revoked or not)
+    # rather than striking through — they'd otherwise pile up in the key list.
+    await db.execute(delete(ApiKey).where(ApiKey.tenant_id == tenant.id, ApiKey.label == "console-login"))
+    raw_key, key_hash = generate_api_key()
+    db.add(ApiKey(tenant_id=tenant.id, key_hash=key_hash, label="console-login", role="admin"))
+    projects = (await db.execute(
+        select(Project.slug).where(Project.tenant_id == tenant.id).order_by(Project.slug))).scalars().all()
+    await db.commit()
+    return {"api_key": raw_key, "projects": list(projects)}
+
+
 @router.post("/tenants/{slug}/keys/{key_id}/revoke", dependencies=[Depends(require_admin_token)])
 async def revoke_key(slug: str, key_id: str, db: AsyncSession = Depends(get_db)) -> dict:
     tenant = (await db.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()

@@ -189,7 +189,16 @@ export default function App() {
     return () => window.removeEventListener("sopilot-auth-failed", onAuthFail);
   }, []);
 
-  if (adminMode) return <AdminConsole onExit={() => setAdminMode(false)} />;
+  // One-click tenant login from the admin console: creds are set with the minted
+  // (hidden) key; with a single project we land in the Studio directly, otherwise
+  // the Connect screen opens on its project picker.
+  const adminLogin = (key: string, project: string) => {
+    setCreds(key, project);
+    setAdminMode(false);
+    setConnected(Boolean(project));
+  };
+
+  if (adminMode) return <AdminConsole onExit={() => setAdminMode(false)} onLogin={adminLogin} />;
   if (!connected) return <Connect onDone={() => setConnected(true)} onAdmin={() => setAdminMode(true)} />;
   const { project } = getCreds();
 
