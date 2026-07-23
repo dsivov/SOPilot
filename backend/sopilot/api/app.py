@@ -21,6 +21,17 @@ def create_app() -> FastAPI:
     # its own loggers, so give the root logger a handler if nobody has yet.
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
+    # Deploy-hardening guard: a copied dev .env boots and works silently, which
+    # is exactly how weak admin tokens reach internet-facing instances. Warn
+    # loudly (don't refuse — that would brick a running prod remotely).
+    _tok = get_settings().admin_token
+    if _tok in ("", "change-me", "dev-admin-token-p0") or len(_tok) < 16:
+        logging.getLogger("sopilot").warning(
+            "SOPILOT_ADMIN_TOKEN is %s — the platform-admin plane (tenants, keys, exports) is guessable. "
+            "Generate a strong token before exposing this instance: openssl rand -hex 24",
+            "unset" if not _tok else "a weak or well-known placeholder",
+        )
+
     # D-11: optionally mount the MCP surface (/mcp) in-process (shares app.state).
     _mcp_app = None
     if get_settings().mcp_mount:
