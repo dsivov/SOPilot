@@ -215,6 +215,7 @@ class DraftEditRequest(BaseModel):
     tools: list[dict] = []             # [{name, enabled}] — current tool states
     fields: list[dict] = []            # [{field, value, options?}] — editable scalars (+ enum options)
     rules: list[str] = []              # the admin ruleset, described (bounds shown to the LLM)
+    structures: dict = {}              # current lists: mcp_servers (urls), knowledge_bases, transfer_topics (ids)
 
 
 _DRAFT_EDIT_SYS = (
@@ -224,12 +225,20 @@ _DRAFT_EDIT_SYS = (
     "  {\"op\":\"disable_tool\",\"tool\":<name>}\n"
     "  {\"op\":\"set_field\",\"field\":<dot.path>,\"value\":<string>}\n"
     "  {\"op\":\"unset_field\",\"field\":<dot.path>}\n"
-    "Only reference tools and fields from the provided lists — never invent names. The ADMIN RULES bound what a "
-    "valid config may look like: your proposal must keep the config within them (use only allowed enum options; "
-    "if enabling a tool requires a field per a rule, include a set_field for it — ask for a placeholder value "
-    "only when none can be inferred). Propose the MINIMAL set of edits for the request. Return ONLY JSON: "
-    "{\"edits\":[...], \"note\":\"<one sentence: what the edits do and any caveat>\"}. If the request cannot be "
-    "done within the vocabulary or would necessarily violate a rule, return {\"edits\":[], \"note\":\"<why>\"}."
+    "  {\"op\":\"add_mcp_server\",\"url\":<url>,\"authorization\":<optional bearer>}\n"
+    "  {\"op\":\"remove_mcp_server\",\"url\":<existing url>}\n"
+    "  {\"op\":\"add_kb\",\"knowledge_id\":<id>,\"index_mode\":\"simple\"|\"lightrag\",\"function_tag\":<optional>}\n"
+    "  {\"op\":\"remove_kb\",\"knowledge_id\":<existing id>}\n"
+    "  {\"op\":\"add_transfer_topic\",\"topic_id\":<id>,\"function_tag\":<optional>,\"prompt\":<when to transfer here>}\n"
+    "  {\"op\":\"remove_transfer_topic\",\"topic_id\":<existing id>}\n"
+    "Only reference tools and fields from the provided lists, and remove only listed structure entries — never "
+    "invent names. The ADMIN RULES bound what a valid config may look like: your proposal must keep the config "
+    "within them (use only allowed enum options; if enabling a tool or adding a structure requires a field per a "
+    "rule, include a set_field for it — ask for a placeholder value only when none can be inferred; e.g. a "
+    "lightrag knowledge base typically requires the lightrag.postgres.host field). Propose the MINIMAL set of "
+    "edits for the request. Return ONLY JSON: {\"edits\":[...], \"note\":\"<one sentence: what the edits do and "
+    "any caveat>\"}. If the request cannot be done within the vocabulary or would necessarily violate a rule, "
+    "return {\"edits\":[], \"note\":\"<why>\"}."
 )
 
 
@@ -255,6 +264,10 @@ async def draft_edit(req: DraftEditRequest, scope: Scope = Depends(resolve_scope
             for f in req.fields[:40])
         + "\n\nADMIN RULES (the config must satisfy these):\n"
         + "\n".join(f"  - {r}" for r in req.rules[:40])
+        + "\n\nCURRENT STRUCTURES:\n"
+        + "  mcp_servers: " + _json.dumps((req.structures.get("mcp_servers") or [])[:20])
+        + "\n  knowledge_bases: " + _json.dumps((req.structures.get("knowledge_bases") or [])[:20])
+        + "\n  transfer_topics: " + _json.dumps((req.structures.get("transfer_topics") or [])[:20])
         + "\n\nCHANGE REQUEST:\n" + req.instruction[:1000]
     )
     try:
@@ -278,6 +291,25 @@ async def draft_edit(req: DraftEditRequest, scope: Scope = Depends(resolve_scope
             edits.append({"op": op, "field": str(e["field"]), "value": str(e.get("value", ""))})
         elif op == "unset_field" and e.get("field"):
             edits.append({"op": op, "field": str(e["field"])})
+        elif op in ("add_mcp_server", "remove_mcp_server") and e.get("url"):
+            out_e = {"op": op, "url": str(e["url"])}
+            if op == "add_mcp_server" and e.get("authorization"):
+                out_e["authorization"] = str(e["authorization"])
+            edits.append(out_e)
+        elif op in ("add_kb", "remove_kb") and e.get("knowledge_id"):
+            out_e = {"op": op, "knowledge_id": str(e["knowledge_id"])}
+            if op == "add_kb":
+                out_e["index_mode"] = e.get("index_mode") if e.get("index_mode") in ("simple", "lightrag") else "simple"
+                if e.get("function_tag"):
+                    out_e["function_tag"] = str(e["function_tag"])
+            edits.append(out_e)
+        elif op in ("add_transfer_topic", "remove_transfer_topic") and e.get("topic_id"):
+            out_e = {"op": op, "topic_id": str(e["topic_id"])}
+            if op == "add_transfer_topic":
+                for k in ("function_tag", "prompt"):
+                    if e.get(k):
+                        out_e[k] = str(e[k])
+            edits.append(out_e)
     return {"edits": edits[:20], "note": str(data.get("note", ""))[:400]}
 
 

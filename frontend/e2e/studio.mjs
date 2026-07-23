@@ -71,6 +71,17 @@ await page.getByRole("button", { name: "Apply to draft" }).click();
 await page.waitForTimeout(300);
 ok("proposal applied → draft dirty, Apply enabled", await applyBtn.isEnabled());
 
+// ---- 5. Complex structures: adding a KB without its backend must block ----
+// (example config has neither opensearch_endpoint nor lightrag.postgres —
+// a new KB row violates the simple-kb-needs-opensearch rule immediately)
+await card.getByRole("button", { name: "+ Add knowledge base" }).click();
+await page.waitForTimeout(300);
+ok("KB without backend → blocking violation", (await page.locator(".chip.crit", { hasText: "blocking" }).count()) > 0);
+ok("Apply blocked by structure edit", await applyBtn.isDisabled());
+await card.locator("button[title='Remove knowledge base']").last().click();
+await page.waitForTimeout(300);
+ok("removing the KB clears the violation", (await page.locator(".chip.crit", { hasText: "blocking" }).count()) === 0);
+
 await browser.close();
 console.log(failures === 0 ? "ALL PASS" : `${failures} FAILURES`);
 process.exit(failures ? 1 : 0);

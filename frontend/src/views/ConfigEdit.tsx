@@ -42,26 +42,81 @@ export type EditOp =
   | { op: "enable_tool"; tool: string }
   | { op: "disable_tool"; tool: string }
   | { op: "set_field"; field: string; value: string }
-  | { op: "unset_field"; field: string };
+  | { op: "unset_field"; field: string }
+  | { op: "add_mcp_server"; url: string; authorization?: string }
+  | { op: "remove_mcp_server"; url: string }
+  | { op: "add_kb"; knowledge_id: string; index_mode?: string; function_tag?: string }
+  | { op: "remove_kb"; knowledge_id: string }
+  | { op: "add_transfer_topic"; topic_id: string; function_tag?: string; prompt?: string }
+  | { op: "remove_transfer_topic"; topic_id: string };
 
 export function describeOp(e: EditOp): string {
-  if (e.op === "enable_tool") return `Enable ${e.tool}`;
-  if (e.op === "disable_tool") return `Disable ${e.tool}`;
-  if (e.op === "set_field") return `Set ${e.field} = "${e.value}"`;
-  return `Clear ${e.field}`;
+  switch (e.op) {
+    case "enable_tool": return `Enable ${e.tool}`;
+    case "disable_tool": return `Disable ${e.tool}`;
+    case "set_field": return `Set ${e.field} = "${e.value}"`;
+    case "unset_field": return `Clear ${e.field}`;
+    case "add_mcp_server": return `Add MCP server ${e.url}`;
+    case "remove_mcp_server": return `Remove MCP server ${e.url}`;
+    case "add_kb": return `Add knowledge base "${e.knowledge_id}" (${e.index_mode || "simple"})`;
+    case "remove_kb": return `Remove knowledge base "${e.knowledge_id}"`;
+    case "add_transfer_topic": return `Add transfer topic "${e.topic_id}"`;
+    case "remove_transfer_topic": return `Remove transfer topic "${e.topic_id}"`;
+  }
 }
 
-// Apply ops to a draft; unknown tools/fields are SKIPPED (the LLM must not
-// invent atoms — a skipped op is surfaced, never silently applied).
+// Apply ops to a draft; unknown tools/fields/entries are SKIPPED (the LLM must
+// not invent atoms — a skipped op is surfaced, never silently applied).
 export function applyEdits(draft: Config, edits: EditOp[]): { next: Config; applied: EditOp[]; skipped: EditOp[] } {
   let next = draft;
   const applied: EditOp[] = [], skipped: EditOp[] = [];
+  const list = (p: string): any[] => (get(next, p) as any[]) ?? [];
   for (const e of edits) {
-    if (e.op === "enable_tool" || e.op === "disable_tool") {
-      if (!next.tools || !(e.tool in next.tools)) { skipped.push(e); continue; }
-      next = setPath(next, `tools.${e.tool}.enabled`, e.op === "enable_tool");
-    } else if (!EDIT_FIELDS.includes(e.field)) { skipped.push(e); continue; }
-    else next = setPath(next, e.field, e.op === "set_field" ? e.value : "");
+    switch (e.op) {
+      case "enable_tool": case "disable_tool":
+        if (!next.tools || !(e.tool in next.tools)) { skipped.push(e); continue; }
+        next = setPath(next, `tools.${e.tool}.enabled`, e.op === "enable_tool");
+        break;
+      case "set_field": case "unset_field":
+        if (!EDIT_FIELDS.includes(e.field)) { skipped.push(e); continue; }
+        next = setPath(next, e.field, e.op === "set_field" ? e.value : "");
+        break;
+      case "add_mcp_server":
+        if (!e.url.trim() || list("mcp_servers").some((m) => m.url === e.url)) { skipped.push(e); continue; }
+        next = setPath(next, "mcp_servers", [...list("mcp_servers"), { url: e.url, ...(e.authorization ? { authorization: e.authorization } : {}) }]);
+        break;
+      case "remove_mcp_server": {
+        const rest = list("mcp_servers").filter((m) => m.url !== e.url);
+        if (rest.length === list("mcp_servers").length) { skipped.push(e); continue; }
+        next = setPath(next, "mcp_servers", rest);
+        break;
+      }
+      case "add_kb":
+        if (!e.knowledge_id.trim() || list("knowledge_base").some((k) => k.knowledge_id === e.knowledge_id)) { skipped.push(e); continue; }
+        next = setPath(next, "knowledge_base", [...list("knowledge_base"), {
+          knowledge_id: e.knowledge_id, index_mode: e.index_mode === "lightrag" ? "lightrag" : "simple",
+          function_tag: e.function_tag || e.knowledge_id, prompt: "",
+        }]);
+        break;
+      case "remove_kb": {
+        const rest = list("knowledge_base").filter((k) => k.knowledge_id !== e.knowledge_id);
+        if (rest.length === list("knowledge_base").length) { skipped.push(e); continue; }
+        next = setPath(next, "knowledge_base", rest);
+        break;
+      }
+      case "add_transfer_topic":
+        if (!e.topic_id.trim() || list("transfer_topics").some((t) => t.topic_id === e.topic_id)) { skipped.push(e); continue; }
+        next = setPath(next, "transfer_topics", [...list("transfer_topics"), {
+          topic_id: e.topic_id, function_tag: e.function_tag || e.topic_id, prompt: e.prompt || "",
+        }]);
+        break;
+      case "remove_transfer_topic": {
+        const rest = list("transfer_topics").filter((t) => t.topic_id !== e.topic_id);
+        if (rest.length === list("transfer_topics").length) { skipped.push(e); continue; }
+        next = setPath(next, "transfer_topics", rest);
+        break;
+      }
+    }
     applied.push(e);
   }
   return { next, applied, skipped };
@@ -100,6 +155,13 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
   const toggleTool = (name: string) => setDraft((d) => setPath(d, `tools.${name}.enabled`, !d.tools?.[name]?.enabled));
   const toolNames = Object.keys(draft.tools ?? {}).sort();
 
+  // ---- complex structures (lists) ----
+  const listOf = (p: string): any[] => (get(draft, p) as any[]) ?? [];
+  const setList = (p: string, arr: any[]) => setDraft((d) => setPath(d, p, arr));
+  const patchAt = (p: string, i: number, k: string, v: string) =>
+    setList(p, listOf(p).map((it, j) => (j === i ? { ...it, [k]: v } : it)));
+  const dropAt = (p: string, i: number) => setList(p, listOf(p).filter((_, j) => j !== i));
+
   // ---- LLM-assisted edits ("change X for me") ----
   const [ask, setAsk] = useState("");
   const [askBusy, setAskBusy] = useState(false);
@@ -117,6 +179,11 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
         tools: toolNames.map((t) => ({ name: t, enabled: draft.tools?.[t]?.enabled === true })),
         fields: EDIT_FIELDS.map((f) => ({ field: f, value: get(draft, f) ?? null, options: enumFor(f)?.options })),
         rules: rules.map(describeRule),
+        structures: {
+          mcp_servers: listOf("mcp_servers").map((m) => String(m.url ?? "")),
+          knowledge_bases: listOf("knowledge_base").map((k) => ({ knowledge_id: String(k.knowledge_id ?? ""), index_mode: String(k.index_mode ?? "simple") })),
+          transfer_topics: listOf("transfer_topics").map((t) => String(t.topic_id ?? "")),
+        },
       });
       if (r.error || !r.edits?.length) { setAskErr(r.error || r.note || "The model proposed no edits."); return; }
       // The gate: evaluate the admin ruleset on the EDITED draft before offering
@@ -258,6 +325,78 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
                 </label>
               );
             })}
+          </div>
+        </div>
+      </div>
+
+      {/* complex structures — each edit re-evaluates the ruleset live (kb index_mode
+          drives kb_mode:* rules; the topic list drives field:transfer_topics) */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>
+            MCP servers ({listOf("mcp_servers").length})
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {listOf("mcp_servers").map((m, i) => (
+              <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input className="area mono" style={{ flex: 2, padding: "4px 8px" }} placeholder="https://…/mcp"
+                  value={m.url ?? ""} onChange={(e) => patchAt("mcp_servers", i, "url", e.target.value)} />
+                <input className="area mono" style={{ flex: 1, padding: "4px 8px" }} placeholder="authorization (optional)"
+                  value={m.authorization ?? ""} onChange={(e) => patchAt("mcp_servers", i, "authorization", e.target.value)} />
+                <button className="btn ghost sm" title="Remove server" onClick={() => dropAt("mcp_servers", i)}>✕</button>
+              </div>
+            ))}
+            <button className="btn ghost sm" style={{ alignSelf: "flex-start" }}
+              onClick={() => setList("mcp_servers", [...listOf("mcp_servers"), { url: "" }])}>+ Add MCP server</button>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>
+            Knowledge bases ({listOf("knowledge_base").length})
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {listOf("knowledge_base").map((k, i) => (
+              <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <input className="area mono" style={{ flex: 1, minWidth: 120, padding: "4px 8px" }} placeholder="knowledge_id"
+                  value={k.knowledge_id ?? ""} onChange={(e) => patchAt("knowledge_base", i, "knowledge_id", e.target.value)} />
+                <select className="area mono" style={{ width: "auto", padding: "4px 8px" }}
+                  value={k.index_mode ?? "simple"} onChange={(e) => patchAt("knowledge_base", i, "index_mode", e.target.value)}>
+                  <option value="simple">simple (OpenSearch)</option>
+                  <option value="lightrag">lightrag (Postgres)</option>
+                </select>
+                <input className="area mono" style={{ flex: 1, minWidth: 100, padding: "4px 8px" }} placeholder="function_tag"
+                  value={k.function_tag ?? ""} onChange={(e) => patchAt("knowledge_base", i, "function_tag", e.target.value)} />
+                <input className="area" style={{ flex: 2, minWidth: 160, padding: "4px 8px" }} placeholder="prompt (when to use it)"
+                  value={k.prompt ?? ""} onChange={(e) => patchAt("knowledge_base", i, "prompt", e.target.value)} />
+                <button className="btn ghost sm" title="Remove knowledge base" onClick={() => dropAt("knowledge_base", i)}>✕</button>
+              </div>
+            ))}
+            <button className="btn ghost sm" style={{ alignSelf: "flex-start" }}
+              onClick={() => setList("knowledge_base", [...listOf("knowledge_base"), { knowledge_id: "", index_mode: "simple", function_tag: "", prompt: "" }])}>
+              + Add knowledge base</button>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>
+            Transfer topics ({listOf("transfer_topics").length})
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {listOf("transfer_topics").map((t, i) => (
+              <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <input className="area mono" style={{ flex: 1, minWidth: 110, padding: "4px 8px" }} placeholder="topic_id"
+                  value={t.topic_id ?? ""} onChange={(e) => patchAt("transfer_topics", i, "topic_id", e.target.value)} />
+                <input className="area mono" style={{ flex: 1, minWidth: 100, padding: "4px 8px" }} placeholder="function_tag"
+                  value={t.function_tag ?? ""} onChange={(e) => patchAt("transfer_topics", i, "function_tag", e.target.value)} />
+                <input className="area" style={{ flex: 2, minWidth: 160, padding: "4px 8px" }} placeholder="prompt (when to transfer here)"
+                  value={t.prompt ?? ""} onChange={(e) => patchAt("transfer_topics", i, "prompt", e.target.value)} />
+                <button className="btn ghost sm" title="Remove topic" onClick={() => dropAt("transfer_topics", i)}>✕</button>
+              </div>
+            ))}
+            <button className="btn ghost sm" style={{ alignSelf: "flex-start" }}
+              onClick={() => setList("transfer_topics", [...listOf("transfer_topics"), { topic_id: "", function_tag: "", prompt: "" }])}>
+              + Add transfer topic</button>
           </div>
         </div>
       </div>
