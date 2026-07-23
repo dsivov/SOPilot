@@ -1,12 +1,15 @@
 // Config viewer (visualisation spike). Renders a real PolarTie config.json as a
 // dependency graph + status + structural validation + MCP-introspection-vs-prompt
 // + logical prompt validation. Read-only. Defaults to the real AENA robot config.
-import { useMemo, useState } from "react";
+// Also the USER stage of config management: enforces the admin's PUBLISHED
+// ruleset (Config admin → Save & publish) against the loaded config.
+import { useEffect, useMemo, useState } from "react";
 import ConfigGraph from "./ConfigGraph";
 import AENA from "../config/aenaConfig.json";
 import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import { MCP_INTROSPECTION } from "../config/mcpIntrospection";
 import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, availableToolNames, type Finding, type Introspection } from "../config/configModel";
+import { ruleFindings, seedRules, type Rule } from "../config/rules";
 import { api } from "../api";
 
 const ICON: Record<Finding["level"], string> = { error: "✖", warn: "⚠", ok: "✔", info: "·" };
@@ -36,6 +39,16 @@ export default function ConfigView() {
   const [introMsg, setIntroMsg] = useState("");
   const [logicalLive, setLogicalLive] = useState<Finding[] | null>(null);
   const [busy2, setBusy2] = useState(false);
+  // Admin-published constraint rules (stage-1 → user-stage handoff). null until
+  // fetched; falls back to the built-in seed when nothing is published yet.
+  const [adminRules, setAdminRules] = useState<Rule[] | null>(null);
+  const [adminVersion, setAdminVersion] = useState<number | null>(null);
+
+  useEffect(() => {
+    api<{ published_version: number | null; published_rules: Rule[] | null }>("GET", "/config/ruleset")
+      .then((r) => { if (r.published_rules) { setAdminRules(r.published_rules); setAdminVersion(r.published_version); } })
+      .catch(() => { /* backend down — seed fallback below */ });
+  }, []);
 
   const load = (v: string) => { try { setCfg(JSON.parse(v)); setErr(""); setLogicalLive(null); } catch (e: any) { setErr(String(e?.message ?? e)); } };
   const preset = (c: any) => { setText(JSON.stringify(c, null, 2)); setCfg(c); setErr(""); setIntro(MCP_INTROSPECTION); setLive(false); setLogicalLive(null); };
@@ -75,11 +88,13 @@ export default function ConfigView() {
   const struct = useMemo(() => validateConfig(cfg), [cfg]);
   const mcp = useMemo(() => promptMcpFindings(cfg, intro), [cfg, intro]);
   const logical = useMemo(() => logicalPromptFindings(cfg), [cfg]);
+  const effectiveRules = adminRules ?? seedRules();
+  const adminFindings = useMemo(() => ruleFindings(cfg, effectiveRules), [cfg, effectiveRules]);
   const tools = enabledTools(cfg);
   const mcpToolCount = (cfg.mcp_servers ?? []).reduce((n: number, s: any) => {
     const info = intro[s.url]; return n + (info && !info.error ? info.tools.filter((t) => !t.startsWith("polartie_")).length : 0);
   }, 0);
-  const problems = [...struct, ...mcp, ...logical].filter((f) => f.level === "error").length;
+  const problems = [...struct, ...mcp, ...logical, ...adminFindings].filter((f) => f.level === "error").length;
 
   const stat = (label: string, value: string) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid var(--line)", fontSize: 13 }}>
@@ -126,6 +141,20 @@ export default function ConfigView() {
         <div className="card">
           <div className="chead"><span>Validation — structural</span></div>
           <div className="cbody"><Findings items={struct} /></div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="chead"><span>Admin constraint rules</span>
+          <span className="sub" style={{ marginLeft: "auto" }}>
+            {adminRules
+              ? `enforcing published ruleset v${adminVersion} · ${effectiveRules.length} rules`
+              : `built-in defaults · ${effectiveRules.length} rules — publish from Config admin to override`}
+          </span></div>
+        <div className="cbody">
+          {adminFindings.length
+            ? <Findings items={adminFindings} />
+            : <div className="lintline" style={{ display: "flex", gap: 9 }}><span style={{ color: "var(--good)", fontWeight: 700 }}>✔</span><span>All {effectiveRules.length} admin rules pass.</span></div>}
         </div>
       </div>
 

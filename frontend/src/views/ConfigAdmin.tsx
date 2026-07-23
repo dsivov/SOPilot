@@ -5,7 +5,7 @@
 // feature-model — enum / requires / conflicts (the design's decided scope) — and
 // evaluated live against a real config so the admin sees each rule fire as they
 // write it. Rule drafting is LLM-assisted; the engine stays formal.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AENA from "../config/aenaConfig.json";
 import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import type { Config } from "../config/configModel";
@@ -78,6 +78,8 @@ function AddRule({ onAdd }: { onAdd: (r: Rule) => void }) {
 
 // ---- main view --------------------------------------------------------------
 
+interface RulesetInfo { exists: boolean; latest_version: number; published_version: number | null; rules: Rule[] | null; published_rules: Rule[] | null }
+
 export default function ConfigAdminView() {
   const [rules, setRules] = useState<Rule[]>(seedRules());
   const [cfg, setCfg] = useState<Config>(AENA as Config);
@@ -86,14 +88,39 @@ export default function ConfigAdminView() {
   const [busy, setBusy] = useState(false);
   const [draftErr, setDraftErr] = useState("");
   const [showJson, setShowJson] = useState(false);
+  // Persistence (SopVersion-style): every save is a new immutable version; the
+  // published version is what the user stage (Config view) enforces.
+  const [version, setVersion] = useState(0);
+  const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveErr, setSaveErr] = useState("");
+
+  useEffect(() => {
+    api<RulesetInfo>("GET", "/config/ruleset").then((r) => {
+      if (r.exists && r.rules) { setRules(r.rules); setDirty(false); }
+      setVersion(r.latest_version); setPublishedVersion(r.published_version);
+    }).catch(() => { /* backend down / pre-migration — stay on the seed */ });
+  }, []);
 
   const pick = (t: "aena" | "sample") => { setTarget(t); setCfg((t === "aena" ? AENA : SAMPLE_CONFIG) as Config); };
   const results = useMemo(() => evaluateRules(cfg, rules), [cfg, rules]);
   const vocab = useMemo(() => ruleVocabulary(cfg), [cfg]);
   const violated = results.filter((r) => r.state === "violated").length;
 
-  const remove = (id: string) => setRules((rs) => rs.filter((r) => r.id !== id));
-  const add = (r: Rule) => setRules((rs) => [...rs, r]);
+  const remove = (id: string) => { setRules((rs) => rs.filter((r) => r.id !== id)); setDirty(true); };
+  const add = (r: Rule) => { setRules((rs) => [...rs, r]); setDirty(true); };
+
+  const save = async (publish: boolean) => {
+    setSaveBusy(true); setSaveErr("");
+    try {
+      const r = await api<{ version: number; published_version: number | null }>("PUT", "/config/ruleset", { rules, publish });
+      setVersion(r.version); setPublishedVersion(r.published_version); setDirty(false);
+    } catch (e: any) {
+      const m = String(e?.message ?? e);
+      setSaveErr(m.includes("Not Found") ? "Ruleset endpoint not found — restart the backend for /config/ruleset." : `Save failed: ${m}`);
+    } finally { setSaveBusy(false); }
+  };
 
   const draftRule = async () => {
     if (!draft.trim()) return;
@@ -133,10 +160,20 @@ export default function ConfigAdminView() {
 
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="chead"><span>Rules ({rules.length})</span>
-          <span style={{ marginLeft: "auto" }}>
+          <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+            {version > 0 && (
+              <span className={"chip " + (publishedVersion === version && !dirty ? "good" : "muted")}>
+                <span className="cd" />
+                v{version}{publishedVersion ? (publishedVersion === version ? " published" : ` · v${publishedVersion} live`) : " draft"}
+              </span>
+            )}
+            {dirty && <span className="chip warn"><span className="cd" />unsaved</span>}
             <button className="btn ghost sm" onClick={() => setShowJson((s) => !s)}>{showJson ? "Hide" : "View"} ruleset JSON</button>
+            <button className="btn ghost sm" onClick={() => save(false)} disabled={saveBusy}>{saveBusy ? "Saving…" : "Save draft"}</button>
+            <button className="btn sm primary" onClick={() => save(true)} disabled={saveBusy}>Save &amp; publish</button>
           </span></div>
         <div className="cbody" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {saveErr && <div className="lintline" style={{ color: "var(--crit)" }}>{saveErr}</div>}
           {results.map((res) => {
             const s = STATE_STYLE[res.state];
             return (

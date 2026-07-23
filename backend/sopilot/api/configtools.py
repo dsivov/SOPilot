@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..db import get_db
+from ..models import ConfigRuleset, ConfigRulesetVersion
 from ..tenancy import Scope, resolve_scope
 
 router = APIRouter(prefix="/config", tags=["config"])
@@ -104,6 +108,106 @@ async def validate_prompt(req: ValidatePromptRequest, scope: Scope = Depends(res
         lvl = f.get("level")
         out.append({"level": lvl if lvl in ("error", "warn", "ok") else "warn", "msg": str(f.get("msg", ""))[:400]})
     return {"findings": out[:25] or [{"level": "ok", "msg": "No logical inconsistencies found."}]}
+
+
+# ---------- Ruleset persistence (stage 1 → stage 2 handoff) ----------
+#
+# The admin's authored ruleset, versioned SopVersion-style: every save is an
+# immutable new version; the ruleset row tracks latest_version and
+# published_version. The PUBLISHED version is what the user stage (Config view)
+# enforces — that's what makes "admin bounds user" real. One ruleset per project
+# ("default") for now.
+
+_RULE_KINDS = ("requires", "conflicts", "enum")
+
+
+def _validate_rules(rules: list) -> str | None:
+    """Shape-check a ruleset (the formal engine's three kinds). Returns an error
+    string or None. Content beyond shape (predicate atoms) is the admin's call."""
+    if not isinstance(rules, list):
+        return "rules must be a list"
+    for i, r in enumerate(rules):
+        if not isinstance(r, dict) or r.get("kind") not in _RULE_KINDS:
+            return f"rule {i}: kind must be one of {_RULE_KINDS}"
+        if r.get("level") not in ("error", "warn"):
+            return f"rule {i}: level must be 'error' or 'warn'"
+        if not str(r.get("id", "")).strip():
+            return f"rule {i}: missing id"
+        need = {"requires": ("when", "needs"), "conflicts": ("a", "b"), "enum": ("field", "options")}[r["kind"]]
+        for k in need:
+            if not r.get(k):
+                return f"rule {i} ({r['kind']}): missing {k}"
+        if r["kind"] == "enum" and not isinstance(r["options"], list):
+            return f"rule {i}: options must be a list"
+    return None
+
+
+async def _get_ruleset(db: AsyncSession, scope: Scope) -> ConfigRuleset | None:
+    return (await db.execute(select(ConfigRuleset).where(
+        ConfigRuleset.tenant_id == scope.tenant_id,
+        ConfigRuleset.project_id == scope.project_id,
+        ConfigRuleset.name == "default"))).scalar_one_or_none()
+
+
+async def _version_rules(db: AsyncSession, ruleset_id: str, version: int) -> list | None:
+    row = (await db.execute(select(ConfigRulesetVersion).where(
+        ConfigRulesetVersion.ruleset_id == ruleset_id,
+        ConfigRulesetVersion.version == version))).scalar_one_or_none()
+    return None if row is None else row.rules
+
+
+@router.get("/ruleset")
+async def get_ruleset(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)) -> dict:
+    """The project's ruleset: latest rules (for the admin editor) and published
+    rules (what the user stage enforces). exists=False → nothing saved yet."""
+    rs = await _get_ruleset(db, scope)
+    if rs is None:
+        return {"exists": False, "latest_version": 0, "published_version": None, "rules": None, "published_rules": None}
+    return {
+        "exists": True,
+        "latest_version": rs.latest_version,
+        "published_version": rs.published_version,
+        "rules": await _version_rules(db, rs.id, rs.latest_version),
+        "published_rules": (await _version_rules(db, rs.id, rs.published_version)) if rs.published_version else None,
+    }
+
+
+class RulesetSaveRequest(BaseModel):
+    rules: list = []
+    publish: bool = False
+
+
+@router.put("/ruleset")
+async def save_ruleset(
+    req: RulesetSaveRequest, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Save the ruleset as a NEW immutable version (SopVersion-style); optionally
+    publish it in the same call. Publishing is what exposes it to the user stage."""
+    err = _validate_rules(req.rules)
+    if err:
+        raise HTTPException(status_code=422, detail=err)
+    rs = await _get_ruleset(db, scope)
+    if rs is None:
+        rs = ConfigRuleset(tenant_id=scope.tenant_id, project_id=scope.project_id, name="default")
+        db.add(rs)
+        await db.flush()
+    rs.latest_version += 1
+    db.add(ConfigRulesetVersion(ruleset_id=rs.id, version=rs.latest_version, rules=req.rules))
+    if req.publish:
+        rs.published_version = rs.latest_version
+    await db.commit()
+    return {"version": rs.latest_version, "published_version": rs.published_version}
+
+
+@router.post("/ruleset/publish")
+async def publish_ruleset(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)) -> dict:
+    """Publish the latest saved version — the moment the admin's bounds go live."""
+    rs = await _get_ruleset(db, scope)
+    if rs is None or rs.latest_version == 0:
+        raise HTTPException(status_code=404, detail="no saved ruleset to publish")
+    rs.published_version = rs.latest_version
+    await db.commit()
+    return {"version": rs.latest_version, "published_version": rs.published_version}
 
 
 class DraftRuleRequest(BaseModel):

@@ -179,6 +179,35 @@ class PromptBlockVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ConfigRuleset(Base):
+    """Config-management stage 1: the admin-authored constraint ruleset (enum /
+    requires / conflicts rules as JSON content). One per project ("default");
+    versioned like SOPs — the published version is what the user stage enforces."""
+
+    __tablename__ = "config_rulesets"
+    __table_args__ = (UniqueConstraint("tenant_id", "project_id", "name"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    project_id: Mapped[str] = mapped_column(String(32), index=True)
+    name: Mapped[str] = mapped_column(String(100), default="default")
+    latest_version: Mapped[int] = mapped_column(Integer, default=0)
+    published_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class ConfigRulesetVersion(Base):
+    __tablename__ = "config_ruleset_versions"
+    __table_args__ = (UniqueConstraint("ruleset_id", "version"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    ruleset_id: Mapped[str] = mapped_column(ForeignKey("config_rulesets.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    rules: Mapped[list] = mapped_column(JSON)  # list[Rule] — the frontend engine's shapes
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class SopVersion(Base):
     __tablename__ = "sop_versions"
     __table_args__ = (UniqueConstraint("sop_id", "version"),)
