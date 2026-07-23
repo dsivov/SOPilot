@@ -102,10 +102,10 @@ function ProjectPicker({ apiKey, onPick }: { apiKey: string; onPick: (slug: stri
 // Topbar project tools: subsystem mode (SOP / background retrieval / both /
 // advisory) and full-config export/import (SOPs + prompt blocks + connectors).
 const SUBSYSTEM_MODES = [
-  { value: "both", label: "SOP + retrieval" },
-  { value: "sop", label: "SOP only" },
-  { value: "retrieval", label: "Retrieval only" },
-  { value: "advisory", label: "Advisory" },
+  { value: "both", label: "SOP + background retrieval" },
+  { value: "sop", label: "SOP only (no bg retrieval)" },
+  { value: "retrieval", label: "Background retrieval only" },
+  { value: "advisory", label: "Advisory (low-latency)" },
 ] as const;
 
 function ProjectTools({ project }: { project: string }) {
