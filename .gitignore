@@ -42,3 +42,6 @@ use_case/screenshots/
 docs/examples/aena-robot-config*.json
 
 frontend/tsconfig.tsbuildinfo
+
+# local export bundles (customer content) — never commit
+*.local.json
