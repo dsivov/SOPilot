@@ -10,6 +10,7 @@ import TracesView from "./views/Traces";
 import ConnectorsView from "./views/Connectors";
 import ConfigView from "./views/Config";
 import ConfigAdminView from "./views/ConfigAdmin";
+import AdminConsole from "./views/AdminConsole";
 
 type ViewId = "sops" | "blocks" | "config" | "configAdmin" | "dashboard" | "playground" | "sessions" | "traces" | "connectors";
 
@@ -100,7 +101,7 @@ function ProjectPicker({ apiKey, onPick }: { apiKey: string; onPick: (slug: stri
   );
 }
 
-function Connect({ onDone }: { onDone: () => void }) {
+function Connect({ onDone, onAdmin }: { onDone: () => void; onAdmin: () => void }) {
   const [key, setKey] = useState(getCreds().key);
   const [project, setProject] = useState(getCreds().project);
   const [error, setError] = useState("");
@@ -161,6 +162,7 @@ function Connect({ onDone }: { onDone: () => void }) {
             <button className="btn primary" disabled={!key || !project || checking} onClick={connect}>
               {checking ? "Checking…" : "Connect"}
             </button>
+            <button className="btn ghost sm" style={{ alignSelf: "center" }} onClick={onAdmin}>Platform admin →</button>
           </div>
         </div>
       </div>
@@ -172,6 +174,7 @@ export default function App() {
   const [view, setView] = useState<ViewId>("sops");
   const [dark, setDark] = useState(document.documentElement.classList.contains("dark"));
   const [connected, setConnected] = useState(Boolean(getCreds().key && getCreds().project));
+  const [adminMode, setAdminMode] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [tenantSlug, setTenantSlug] = useState("");
 
@@ -188,7 +191,8 @@ export default function App() {
     return () => window.removeEventListener("sopilot-auth-failed", onAuthFail);
   }, []);
 
-  if (!connected) return <Connect onDone={() => setConnected(true)} />;
+  if (adminMode) return <AdminConsole onExit={() => setAdminMode(false)} />;
+  if (!connected) return <Connect onDone={() => setConnected(true)} onAdmin={() => setAdminMode(true)} />;
   const { project } = getCreds();
 
   const toggleTheme = () => {
