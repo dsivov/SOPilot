@@ -118,7 +118,7 @@ function Console({ onExit }: { onExit: () => void }) {
   };
 
   return (
-    <div className="sopilot">
+    <div className="sopilot" style={{ overflowY: "auto" }}>{/* .sopilot clips at 100vh — the console must scroll */}
       <div className="main" style={{ maxWidth: 780, margin: "0 auto", padding: "28px 20px", width: "100%" }}>
         <header className="topbar" style={{ marginBottom: 18 }}>
           <div className="eyebrow" style={{ margin: 0 }}>Platform admin · RBAC</div>
