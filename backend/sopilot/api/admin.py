@@ -4,14 +4,28 @@ SOPILOT_ADMIN_TOKEN; project creation is tenant-key-scoped.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pydantic import BaseModel
 
 from ..config import get_settings
 from ..db import get_db
-from ..models import ApiKey, Project, Tenant
+from ..models import (
+    ABTest,
+    ApiKey,
+    Connector,
+    ConversationSession,
+    Corpus,
+    DataFetchAudit,
+    PoolPickAudit,
+    PrecedentTrace,
+    Project,
+    PromptBlock,
+    RoutingEvent,
+    Tenant,
+    utcnow,
+)
 from ..schemas import ProjectCreateRequest, TenantCreateRequest, TenantCreateResponse
 from ..tenancy import VALID_SUBSYSTEMS, generate_api_key, resolve_tenant
 
@@ -94,3 +108,104 @@ async def list_projects(tenant: Tenant = Depends(resolve_tenant), db: AsyncSessi
         {"project_id": p.id, "slug": p.slug, "name": p.name, "subsystems": p.subsystems or "default"}
         for p in rows
     ]
+
+
+# ---------- Platform admin: tenant & API-key management (admin-token guarded) ----------
+#
+# The RBAC management surface for the admin console. Tenants and their sop_ keys
+# are administered here; the raw key is only ever returned at mint time (only its
+# sha256 is stored), so "show it to the tenant owner" happens exactly once.
+
+# Tenant-scoped tables with a plain tenant_id (no FK to tenants): bulk-delete these
+# by tenant_id on tenant deletion. Their children (turns, corpus_docs, block/sop
+# versions) cascade via their own FKs; projects / api_keys / tenant_secrets / sops
+# cascade from the tenant row itself (ondelete=CASCADE).
+_TENANT_SCOPED_PARENTS = [
+    Connector, ABTest, PromptBlock, ConversationSession,
+    RoutingEvent, PrecedentTrace, Corpus, DataFetchAudit, PoolPickAudit,
+]
+
+
+@router.get("/tenants", dependencies=[Depends(require_admin_token)])
+async def list_tenants(db: AsyncSession = Depends(get_db)) -> list[dict]:
+    tenants = (await db.execute(select(Tenant).order_by(Tenant.created_at))).scalars().all()
+    proj_counts = dict((await db.execute(
+        select(Project.tenant_id, func.count()).group_by(Project.tenant_id))).all())
+    key_counts = dict((await db.execute(
+        select(ApiKey.tenant_id, func.count()).where(ApiKey.revoked_at.is_(None)).group_by(ApiKey.tenant_id))).all())
+    return [
+        {
+            "tenant_id": t.id, "slug": t.slug, "name": t.name,
+            "created_at": t.created_at.isoformat(),
+            "projects": proj_counts.get(t.id, 0),
+            "active_keys": key_counts.get(t.id, 0),
+        }
+        for t in tenants
+    ]
+
+
+@router.delete("/tenants/{slug}", dependencies=[Depends(require_admin_token)])
+async def delete_tenant(slug: str, db: AsyncSession = Depends(get_db)) -> dict:
+    tenant = (await db.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=404, detail=f"tenant '{slug}' not found")
+    for model in _TENANT_SCOPED_PARENTS:
+        await db.execute(delete(model).where(model.tenant_id == tenant.id))
+    await db.delete(tenant)  # DB cascades projects / api_keys / tenant_secrets / sops
+    await db.commit()
+    return {"deleted": slug}
+
+
+class KeyCreateRequest(BaseModel):
+    label: str = ""
+    role: str = "runtime"  # runtime | admin
+
+
+@router.get("/tenants/{slug}/keys", dependencies=[Depends(require_admin_token)])
+async def list_keys(slug: str, db: AsyncSession = Depends(get_db)) -> list[dict]:
+    tenant = (await db.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=404, detail=f"tenant '{slug}' not found")
+    keys = (await db.execute(
+        select(ApiKey).where(ApiKey.tenant_id == tenant.id).order_by(ApiKey.created_at))).scalars().all()
+    return [
+        {
+            "id": k.id, "label": k.label or "(unlabeled)", "role": k.role,
+            "hash_prefix": k.key_hash[:10],  # non-secret — lets the owner tell keys apart
+            "created_at": k.created_at.isoformat(),
+            "revoked": k.revoked_at is not None,
+            "revoked_at": k.revoked_at.isoformat() if k.revoked_at else None,
+        }
+        for k in keys
+    ]
+
+
+@router.post("/tenants/{slug}/keys", dependencies=[Depends(require_admin_token)])
+async def issue_key(slug: str, req: KeyCreateRequest, db: AsyncSession = Depends(get_db)) -> dict:
+    """Mint a new sop_ key for a tenant and return it EXACTLY ONCE (only the sha256
+    is stored). Hand the raw key to the tenant owner now — it cannot be shown again."""
+    if req.role not in ("runtime", "admin"):
+        raise HTTPException(status_code=422, detail="role must be 'runtime' or 'admin'")
+    tenant = (await db.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=404, detail=f"tenant '{slug}' not found")
+    raw_key, key_hash = generate_api_key()
+    key = ApiKey(tenant_id=tenant.id, key_hash=key_hash, label=req.label.strip()[:200], role=req.role)
+    db.add(key)
+    await db.commit()
+    return {"key_id": key.id, "label": key.label, "role": key.role, "api_key": raw_key}
+
+
+@router.post("/tenants/{slug}/keys/{key_id}/revoke", dependencies=[Depends(require_admin_token)])
+async def revoke_key(slug: str, key_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    tenant = (await db.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=404, detail=f"tenant '{slug}' not found")
+    key = (await db.execute(
+        select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == tenant.id))).scalar_one_or_none()
+    if key is None:
+        raise HTTPException(status_code=404, detail="key not found")
+    if key.revoked_at is None:
+        key.revoked_at = utcnow()
+        await db.commit()
+    return {"key_id": key.id, "revoked": True}
