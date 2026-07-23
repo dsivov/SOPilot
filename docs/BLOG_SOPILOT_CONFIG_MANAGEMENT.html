@@ -211,7 +211,7 @@ b.hl{color:#8fd9c9}
       <tr><td><b>Tool catalog = <span class="mono">defaults.json</span></b> (39 tools, <span class="mono">enabled</span> + tunable <span class="mono">description</span>); classes hardcoded, no dynamic registry</td>
         <td>Our catalog = <b><span class="mono">defaults.json</span> (built-ins) + MCP <span class="mono">list_tools</span></b> (external tools) — both feed the same picker</td></tr>
       <tr><td><b>An LLM config <i>optimizer</i> already exists</b> (<span class="filepath">ai_config.py</span> · gpt-5.3-codex): rewrites the prompt, tunes tool descriptions at session start</td>
-        <td>We <b>complement, not duplicate</b> — they optimize an authored config; we author, constrain &amp; validate it. Natural handoff (they optimize what we produce)</td></tr>
+        <td>We <b>replace it</b> — the prod team confirmed <span class="mono">ai_config.py</span> was a pilot test of LLM config generation and is slated for removal; SOPilot’s admin-bounded authoring + assisted editing takes over that role outright</td></tr>
       <tr><td><b>Effectively no validation</b>: Pydantic coercion + <span class="mono">extra="ignore"</span>; misconfig (e.g. email tools without <span class="mono">notification_service_url</span>) silently yields a missing tool</td>
         <td><b>Validate-before-publish is the headline value</b> — concrete compatibility rules (email↔notification service, KB↔backend, tool↔required config) we can author</td></tr>
       <tr><td><b>No RBAC / identity</b> anywhere; scheduler ports unauthenticated; <span class="mono">manager_id</span> self-asserted</td>
@@ -232,8 +232,8 @@ b.hl{color:#8fd9c9}
     fields)? <b>(2)</b> Is the full configurable surface the <span class="mono">SessionConfig</span>
     tree (prompt, voice, language, the 39-tool catalog, transfer topics, visual hints, knowledge bases, MCP servers,
     events, <span class="mono">custom_config</span>) — anything outside the repo (billing, phone numbers, REM/media, recording)
-    that also needs configuring? <b>(3)</b> Should we <b>reuse your existing <span class="mono">ai_config.py</span> optimizer</b>
-    as the "polish" step after our authoring, or keep them separate? <b>(4)</b> For validation rules, what are the real
+    that also needs configuring? <b>(3)</b> <s>Should we reuse your existing <span class="mono">ai_config.py</span> optimizer as the "polish" step?</s>
+    <b>Answered by the prod team:</b> no — it was a pilot test of LLM config generation and will be removed; SOPilot <b>replaces</b> it. <b>(4)</b> For validation rules, what are the real
     compatibility constraints we should encode first (the ones that actually bite customers)? <b>(5)</b> Is "dedicated =
     own scheduler + own S3 bucket" the correct mental model, and where should <b>identity/roles</b> eventually anchor —
     the scheduler's manager concept, or a new layer?</div>
