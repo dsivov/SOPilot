@@ -40,3 +40,5 @@ use_case/screenshots/
 
 # real customer robot configs (contain live credentials) — never commit
 docs/examples/aena-robot-config*.json
+
+frontend/tsconfig.tsbuildinfo
