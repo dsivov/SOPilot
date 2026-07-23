@@ -122,7 +122,7 @@ export function validateConfig(cfg: Config): Finding[] {
     else if (mode === "simple" && !hasOpenSearch(cfg)) out.push({ level: "error", msg: `Simple KB "${kb.function_tag}" needs opensearch_endpoint — not configured.` });
     else out.push({ level: "ok", msg: `KB "${kb.function_tag}" (${mode}) — backend configured.` });
   }
-  // KB tools enabled but no KB / backend configured (real in the AENA config)
+  // KB tools enabled but no KB / backend configured (real in the example config)
   if (tools.includes("knowledge_base_query_lightrag") && !hasPostgres(cfg) && !(cfg.knowledge_base ?? []).length)
     out.push({ level: "warn", msg: `knowledge_base_query_lightrag is enabled but no knowledge_base entry / lightrag config exists — the tool won't resolve (knowledge here comes from MCP instead).` });
   if (tools.includes("knowledge_base_query") && !hasOpenSearch(cfg) && !(cfg.knowledge_base ?? []).length)

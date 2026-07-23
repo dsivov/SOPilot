@@ -6,7 +6,7 @@
 // evaluated live against a real config so the admin sees each rule fire as they
 // write it. Rule drafting is LLM-assisted; the engine stays formal.
 import { useEffect, useMemo, useState } from "react";
-import AENA from "../config/aenaConfig.json";
+import EXAMPLE from "../config/exampleConfig.json";
 import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import type { Config } from "../config/configModel";
 import {
@@ -82,8 +82,8 @@ interface RulesetInfo { exists: boolean; latest_version: number; published_versi
 
 export default function ConfigAdminView() {
   const [rules, setRules] = useState<Rule[]>(seedRules());
-  const [cfg, setCfg] = useState<Config>(AENA as Config);
-  const [target, setTarget] = useState<"aena" | "sample">("aena");
+  const [cfg, setCfg] = useState<Config>(EXAMPLE as Config);
+  const [target, setTarget] = useState<"example" | "sample">("example");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [draftErr, setDraftErr] = useState("");
@@ -103,7 +103,7 @@ export default function ConfigAdminView() {
     }).catch(() => { /* backend down / pre-migration — stay on the seed */ });
   }, []);
 
-  const pick = (t: "aena" | "sample") => { setTarget(t); setCfg((t === "aena" ? AENA : SAMPLE_CONFIG) as Config); };
+  const pick = (t: "example" | "sample") => { setTarget(t); setCfg((t === "example" ? EXAMPLE : SAMPLE_CONFIG) as Config); };
   const results = useMemo(() => evaluateRules(cfg, rules), [cfg, rules]);
   const vocab = useMemo(() => ruleVocabulary(cfg), [cfg]);
   const violated = results.filter((r) => r.state === "violated").length;
@@ -145,7 +145,7 @@ export default function ConfigAdminView() {
           <span>Constraint rules</span>
           <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
             <span className="sub">evaluated against</span>
-            <button className={"btn ghost sm" + (target === "aena" ? " primary" : "")} onClick={() => pick("aena")}>AENA (real)</button>
+            <button className={"btn ghost sm" + (target === "example" ? " primary" : "")} onClick={() => pick("example")}>Example (real)</button>
             <button className={"btn ghost sm" + (target === "sample" ? " primary" : "")} onClick={() => pick("sample")}>Sample</button>
             {violated > 0
               ? <span className="chip crit"><span className="cd" />{violated} violated</span>

@@ -22,7 +22,7 @@ Run (reads config from env):
 
 Env:
     SOPILOT_API_KEY   (required) tenant Bearer key
-    SOPILOT_PROJECT   (required) X-Project slug (AENA = "malaga")
+    SOPILOT_PROJECT   (required) X-Project slug
     SOPILOT_BASE_URL  SOPilot HTTP API base (default http://127.0.0.1:8100)
     SOPILOT_SOP_ID    bind a specific SOP; default "" = intake router
     SOPILOT_CHANNEL   session channel (default realtime_voice)

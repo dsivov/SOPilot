@@ -1,11 +1,12 @@
-// Config viewer (visualisation spike). Renders a real PolarTie config.json as a
+// Config viewer (visualisation spike). Renders a robot config.json as a
 // dependency graph + status + structural validation + MCP-introspection-vs-prompt
-// + logical prompt validation. Read-only. Defaults to the real AENA robot config.
+// + logical prompt validation. Read-only. Defaults to a real (sanitized)
+// production config from the first customer deployment — an example, not a binding.
 // Also the USER stage of config management: enforces the admin's PUBLISHED
 // ruleset (Config admin → Save & publish) against the loaded config.
 import { useEffect, useMemo, useState } from "react";
 import ConfigGraph from "./ConfigGraph";
-import AENA from "../config/aenaConfig.json";
+import EXAMPLE from "../config/exampleConfig.json";
 import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import { MCP_INTROSPECTION } from "../config/mcpIntrospection";
 import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, availableToolNames, type Finding, type Introspection } from "../config/configModel";
@@ -30,8 +31,8 @@ function Findings({ items }: { items: Finding[] }) {
 }
 
 export default function ConfigView() {
-  const [text, setText] = useState(JSON.stringify(AENA, null, 2));
-  const [cfg, setCfg] = useState<Record<string, any>>(AENA as Record<string, any>);
+  const [text, setText] = useState(JSON.stringify(EXAMPLE, null, 2));
+  const [cfg, setCfg] = useState<Record<string, any>>(EXAMPLE as Record<string, any>);
   const [err, setErr] = useState("");
   const [intro, setIntro] = useState<Introspection>(MCP_INTROSPECTION);
   const [live, setLive] = useState(false);
@@ -109,7 +110,7 @@ export default function ConfigView() {
         <div className="chead">
           <span>Robot config.json</span>
           <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            <button className="btn ghost sm" onClick={() => preset(AENA)}>AENA (real)</button>
+            <button className="btn ghost sm" onClick={() => preset(EXAMPLE)}>Example (real)</button>
             <button className="btn ghost sm" onClick={() => preset(SAMPLE_CONFIG)}>Sample</button>
             {problems > 0 && <span className="chip crit"><span className="cd" />{problems} problem{problems === 1 ? "" : "s"}</span>}
             <button className="btn sm primary" onClick={() => load(text)}>Load &amp; render</button>

@@ -1,4 +1,4 @@
-// Real list_tools output from the AENA MCP servers (introspected live via our MCP
+// Real list_tools output from the example deployment's MCP servers (introspected live via our MCP
 // client). In production the "Introspect" action fetches this through a backend
 // endpoint; embedded here so the spike shows the real cross-check without a call.
 // Reserved polartie_* session tools are kept — the model-tool filter drops them.
