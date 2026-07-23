@@ -5,7 +5,7 @@
 // A minted key is shown exactly once (only its sha256 is stored) — copy it to the
 // tenant owner right then.
 import { useEffect, useState } from "react";
-import { ApiError } from "../api";
+import { ApiError, apiRaw, getCreds } from "../api";
 import { adminApi, clearAdminToken, getAdminToken, setAdminToken, type AdminKey, type AdminTenant } from "../adminApi";
 
 function CopyField({ value }: { value: string }) {
@@ -208,9 +208,20 @@ function Console({ onExit, onLogin }: { onExit: () => void; onLogin: (key: strin
 
   // One-click login: mint a console-login key server-side (never shown) and
   // enter the Studio as this tenant — straight in if it has exactly one project.
+  // Minting revokes the tenant's previous console-login key (single-active by
+  // design), so first REUSE this browser's still-valid session for the tenant —
+  // a re-click must not kill the session it would be re-creating (a prod
+  // engineer lost an in-flight SOP draft exactly this way).
   const login = async (s: string) => {
     setLoginBusy(s); setErr("");
     try {
+      const cur = getCreds();
+      if (cur.key) {
+        try {
+          const w = await apiRaw<{ tenant_slug: string }>("GET", "/admin/whoami", { key: cur.key });
+          if (w.tenant_slug === s) { onLogin(cur.key, cur.project || ""); return; }
+        } catch { /* stored key dead or different tenant — mint fresh */ }
+      }
       const r = await adminApi<{ api_key: string; projects: string[] }>("POST", `/admin/tenants/${s}/login-key`);
       onLogin(r.api_key, r.projects.length === 1 ? r.projects[0] : "");
     } catch (e: any) { setErr(String(e?.message ?? e)); } finally { setLoginBusy(null); }
@@ -300,7 +311,7 @@ function Console({ onExit, onLogin }: { onExit: () => void; onLogin: (key: strin
                         <div className="sub">{t.projects} project{t.projects === 1 ? "" : "s"} · {t.active_keys} active key{t.active_keys === 1 ? "" : "s"}</div>
                       </div>
                       <button className="btn sm" onClick={() => login(t.slug)} disabled={loginBusy !== null}
-                        title="Enter the Studio as this tenant (mints a hidden console-login key)">
+                        title="Enter the Studio as this tenant (hidden console-login key). Note: from another browser this logs out whoever used the previous console login for this tenant — teammates should each mint a named key (Manage keys) for regular work.">
                         {loginBusy === t.slug ? "Logging in…" : "Log in →"}
                       </button>
                       <button className="btn ghost sm" onClick={() => setExpanded(expanded === t.slug ? null : t.slug)}>{expanded === t.slug ? "Hide keys" : "Manage keys"}</button>
