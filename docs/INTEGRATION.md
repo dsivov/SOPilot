@@ -433,6 +433,46 @@ utterance; advisory mode also switches SOP mid-call on topic change). Turns run
 with `steer_only=true` — SOPilot returns steering text only and never spends
 its own responder call.
 
+### MCP go-live checklist (in-process mount, step by step)
+
+`SOPILOT_MCP_MOUNT=true` alone is NOT enough — the mount is a **single-tenant
+surface** and must know whose sessions it runs.
+
+1. **Mint the key** — admin console → the tenant → *Issue key* (role
+   `runtime`, label e.g. `mcp-surface`). The key must exist in THIS
+   instance's database.
+2. **Set the env** (backend `.env` / service environment) and restart the API:
+
+   ```bash
+   OPENAI_API_KEY=sk-...            # the one LLM credential (no SOPILOT_ prefix);
+                                    #   server-side only — browsers/robots never see it
+   SOPILOT_ADMIN_TOKEN=<generated>  # see the hardening checklist (§1)
+   SOPILOT_MCP_MOUNT=true
+   SOPILOT_MCP_MODE=supervisor      # PolarTie supervisor extension auto-drives it;
+                                    #   "tool" = stage-1 model-driven trial (sop_guidance)
+   SOPILOT_API_KEY=sop_...          # the key minted in step 1
+   SOPILOT_PROJECT=<project-slug>   # which project's SOPs/routing it serves
+   # optional: SOPILOT_SUBSYSTEMS=advisory (default) · SOPILOT_SOP_ID= (default: intake router)
+   ```
+
+3. **Reverse proxy** — MCP Streamable-HTTP holds long-lived streaming
+   responses; the `/mcp` location needs `proxy_buffering off;` and
+   `proxy_http_version 1.1;` or turns will stall. If the UI proxy strips an
+   `/api` prefix, the endpoint is at `https://<host>/api/mcp` — a dedicated
+   `/mcp` location passing straight through is cleaner.
+4. **Verify the mount**: `curl -sk https://<host>/<mcp-path>` — anything but
+   404 (405/406 is fine) means the mount is live; 404 = env not applied or
+   proxy path wrong.
+5. **Robot side** — add to the robot config's `mcp_servers`:
+   `{"url": "https://<host>/<mcp-path>", "authorization": "Bearer <token>"}`
+   (authorization only if you front the endpoint with auth). With
+   `MODE=supervisor` the platform drives the reserved tool automatically —
+   the integration is config-only.
+
+Scaling note: one mount serves ONE tenant/project (the "dedicated first"
+decision). A second robot on a different project = a second API instance on
+another `SOPILOT_PORT`, or the standalone sidecar (shape b) per robot.
+
 ## 9. AENA production configuration (the live customer deployment)
 
 The current state of the first production customer — use it as the reference
