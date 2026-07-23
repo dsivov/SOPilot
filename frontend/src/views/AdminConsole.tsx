@@ -89,7 +89,7 @@ function KeysPanel({ slug, onReveal, onKeysChanged }: { slug: string; onReveal: 
   );
 }
 
-function Console({ onExit }: { onExit: () => void }) {
+function Console({ onExit, onLogin }: { onExit: () => void; onLogin: (key: string, project: string) => void }) {
   const [tenants, setTenants] = useState<AdminTenant[] | null>(null);
   const [err, setErr] = useState("");
   const [reveal, setReveal] = useState<{ title: string; apiKey: string } | null>(null);
@@ -98,6 +98,17 @@ function Console({ onExit }: { onExit: () => void }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [loginBusy, setLoginBusy] = useState<string | null>(null);
+
+  // One-click login: mint a console-login key server-side (never shown) and
+  // enter the Studio as this tenant — straight in if it has exactly one project.
+  const login = async (s: string) => {
+    setLoginBusy(s); setErr("");
+    try {
+      const r = await adminApi<{ api_key: string; projects: string[] }>("POST", `/admin/tenants/${s}/login-key`);
+      onLogin(r.api_key, r.projects.length === 1 ? r.projects[0] : "");
+    } catch (e: any) { setErr(String(e?.message ?? e)); } finally { setLoginBusy(null); }
+  };
 
   const load = () => adminApi<AdminTenant[]>("GET", "/admin/tenants").then(setTenants).catch((e) => setErr(String(e?.message ?? e)));
   useEffect(() => { load(); }, []);
@@ -152,6 +163,10 @@ function Console({ onExit }: { onExit: () => void }) {
                         <div style={{ fontWeight: 600 }}>{t.name || t.slug} <span className="mono sub">· {t.slug}</span></div>
                         <div className="sub">{t.projects} project{t.projects === 1 ? "" : "s"} · {t.active_keys} active key{t.active_keys === 1 ? "" : "s"}</div>
                       </div>
+                      <button className="btn sm" onClick={() => login(t.slug)} disabled={loginBusy !== null}
+                        title="Enter the Studio as this tenant (mints a hidden console-login key)">
+                        {loginBusy === t.slug ? "Logging in…" : "Log in →"}
+                      </button>
                       <button className="btn ghost sm" onClick={() => setExpanded(expanded === t.slug ? null : t.slug)}>{expanded === t.slug ? "Hide keys" : "Manage keys"}</button>
                       {confirmDel === t.slug
                         ? <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -174,7 +189,7 @@ function Console({ onExit }: { onExit: () => void }) {
 }
 
 // Admin-token gate → Console.
-export default function AdminConsole({ onExit }: { onExit: () => void }) {
+export default function AdminConsole({ onExit, onLogin }: { onExit: () => void; onLogin: (key: string, project: string) => void }) {
   const [authed, setAuthed] = useState(false);
   const [token, setToken] = useState(getAdminToken());
   const [checking, setChecking] = useState(Boolean(getAdminToken()));
@@ -198,7 +213,7 @@ export default function AdminConsole({ onExit }: { onExit: () => void }) {
     } finally { setChecking(false); }
   };
 
-  if (authed) return <Console onExit={() => { setAuthed(false); onExit(); }} />;
+  if (authed) return <Console onExit={() => { setAuthed(false); onExit(); }} onLogin={onLogin} />;
 
   return (
     <div className="sopilot">
