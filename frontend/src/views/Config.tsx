@@ -6,7 +6,7 @@ import ConfigGraph from "./ConfigGraph";
 import AENA from "../config/aenaConfig.json";
 import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import { MCP_INTROSPECTION } from "../config/mcpIntrospection";
-import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, type Finding, type Introspection } from "../config/configModel";
+import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, availableToolNames, type Finding, type Introspection } from "../config/configModel";
 import { api } from "../api";
 
 const ICON: Record<Finding["level"], string> = { error: "✖", warn: "⚠", ok: "✔", info: "·" };
@@ -34,9 +34,27 @@ export default function ConfigView() {
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [introMsg, setIntroMsg] = useState("");
+  const [logicalLive, setLogicalLive] = useState<Finding[] | null>(null);
+  const [busy2, setBusy2] = useState(false);
 
-  const load = (v: string) => { try { setCfg(JSON.parse(v)); setErr(""); } catch (e: any) { setErr(String(e?.message ?? e)); } };
-  const preset = (c: any) => { setText(JSON.stringify(c, null, 2)); setCfg(c); setErr(""); setIntro(MCP_INTROSPECTION); setLive(false); };
+  const load = (v: string) => { try { setCfg(JSON.parse(v)); setErr(""); setLogicalLive(null); } catch (e: any) { setErr(String(e?.message ?? e)); } };
+  const preset = (c: any) => { setText(JSON.stringify(c, null, 2)); setCfg(c); setErr(""); setIntro(MCP_INTROSPECTION); setLive(false); setLogicalLive(null); };
+
+  const validate = async () => {
+    setBusy2(true);
+    try {
+      const r = await api<{ findings: Finding[] }>("POST", "/config/validate-prompt", {
+        prompt: cfg.prompt ?? "",
+        available_tools: availableToolNames(cfg, intro),
+        transfer_topics: (cfg.transfer_topics ?? []).map((t: any) => t.function_tag ?? t.topic_id),
+        language: cfg.default_language_iso ?? "",
+      });
+      setLogicalLive(r.findings ?? []);
+    } catch (e: any) {
+      const m = String(e?.message ?? e);
+      setLogicalLive([{ level: "warn", msg: m.includes("Not Found") ? "Validation endpoint not found — restart the backend." : `Prompt validation failed: ${m}` }]);
+    } finally { setBusy2(false); }
+  };
 
   const introspect = async () => {
     const servers = (cfg.mcp_servers ?? []).map((m: any) => ({ url: m.url, authorization: m.authorization }));
@@ -127,8 +145,11 @@ export default function ConfigView() {
 
       <div className="card">
         <div className="chead"><span>Logical prompt validation</span>
-          <span className="sub" style={{ marginLeft: "auto" }}>freeform prompt vs config · heuristic preview (real = LLM)</span></div>
-        <div className="cbody"><Findings items={logical} /></div>
+          <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+            <span className="sub">{logicalLive ? "checked by the LLM against the config" : "freeform prompt vs config · heuristic preview"}</span>
+            <button className="btn sm ghost" onClick={validate} disabled={busy2}>{busy2 ? "Validating…" : "Validate (LLM)"}</button>
+          </span></div>
+        <div className="cbody"><Findings items={logicalLive ?? logical} /></div>
       </div>
     </div>
   );

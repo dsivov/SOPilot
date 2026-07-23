@@ -35,6 +35,18 @@ export function enabledTools(cfg: Config): string[] {
   const t = (cfg.tools ?? {}) as Record<string, any>;
   return Object.keys(t).filter((k) => t[k]?.enabled === true);
 }
+// The agent's full capability list for the LLM prompt check: enabled built-in
+// tools + the MCP tools it sees (mcp_<name>) from introspection.
+export function availableToolNames(cfg: Config, intro: Introspection): string[] {
+  const names = [...enabledTools(cfg)];
+  for (const s of (cfg.mcp_servers ?? []) as any[]) {
+    const info = intro[s.url];
+    if (!info || info.error) continue;
+    for (const t of info.tools) if (!t.startsWith("polartie_")) names.push(`mcp_${t}`);
+  }
+  return names;
+}
+
 const hasNotif = (c: Config) => !!String(c.notification_service_url ?? "").trim();
 const hasPostgres = (c: Config) => !!c.lightrag?.postgres?.host;
 const hasOpenSearch = (c: Config) => !!String(c.opensearch_endpoint ?? "").trim();
