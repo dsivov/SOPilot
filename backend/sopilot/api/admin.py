@@ -197,6 +197,63 @@ async def issue_key(slug: str, req: KeyCreateRequest, db: AsyncSession = Depends
     return {"key_id": key.id, "label": key.label, "role": key.role, "api_key": raw_key}
 
 
+# ---- per-project export/import from the admin console (same engine as the
+# tenant-scoped /project/export|import routes; identity comes from the path) ----
+
+async def _admin_scope(db: AsyncSession, slug: str, project_slug: str, create: bool = False,
+                       project_meta: dict | None = None):
+    """Resolve tenant+project slugs to a Scope. With create=True (import), a
+    missing tenant/project is created on the fly — importing a bundle into a
+    fresh deployment needs no prior setup (mint keys from the console after)."""
+    from ..tenancy import Scope
+    tenant = (await db.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()
+    if tenant is None:
+        if not create:
+            raise HTTPException(status_code=404, detail=f"tenant '{slug}' not found")
+        tenant = Tenant(slug=slug, name=slug)
+        db.add(tenant)
+        await db.flush()
+    project = (await db.execute(select(Project).where(
+        Project.tenant_id == tenant.id, Project.slug == project_slug))).scalar_one_or_none()
+    if project is None:
+        if not create:
+            raise HTTPException(status_code=404, detail=f"project '{project_slug}' not found")
+        meta = project_meta or {}
+        subsystems = meta.get("subsystems")
+        project = Project(
+            tenant_id=tenant.id, slug=project_slug, name=str(meta.get("name") or project_slug),
+            subsystems=subsystems if subsystems in VALID_SUBSYSTEMS else None,
+        )
+        db.add(project)
+        await db.flush()
+    return Scope(tenant_id=tenant.id, project_id=project.id)
+
+
+@router.get("/tenants/{slug}/projects", dependencies=[Depends(require_admin_token)])
+async def admin_list_projects(slug: str, db: AsyncSession = Depends(get_db)) -> list[dict]:
+    tenant = (await db.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=404, detail=f"tenant '{slug}' not found")
+    rows = (await db.execute(select(Project).where(Project.tenant_id == tenant.id).order_by(Project.slug))).scalars().all()
+    return [{"slug": p.slug, "name": p.name, "subsystems": p.subsystems or "default"} for p in rows]
+
+
+@router.get("/tenants/{slug}/projects/{project_slug}/export", dependencies=[Depends(require_admin_token)])
+async def admin_export_project(slug: str, project_slug: str, db: AsyncSession = Depends(get_db)) -> dict:
+    from .project_io import export_scope
+    return await export_scope(db, await _admin_scope(db, slug, project_slug))
+
+
+@router.post("/tenants/{slug}/projects/{project_slug}/import", dependencies=[Depends(require_admin_token)])
+async def admin_import_project(slug: str, project_slug: str, bundle: dict, db: AsyncSession = Depends(get_db)) -> dict:
+    """Import a bundle; the tenant and project are created if they don't exist
+    (project name/subsystems seeded from the bundle's project block)."""
+    from .project_io import ImportBundle, import_scope
+    scope = await _admin_scope(db, slug, project_slug, create=True,
+                               project_meta=bundle.get("project") if isinstance(bundle.get("project"), dict) else None)
+    return await import_scope(db, scope, ImportBundle.model_validate(bundle))
+
+
 @router.post("/tenants/{slug}/login-key", dependencies=[Depends(require_admin_token)])
 async def issue_login_key(slug: str, db: AsyncSession = Depends(get_db)) -> dict:
     """One-click console login: mint a fresh admin-role key for the tenant (raw

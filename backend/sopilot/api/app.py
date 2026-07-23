@@ -13,7 +13,7 @@ from ..fetchers import register_default_fetchers
 from ..pool import SessionPool
 from ..prefetch import PrefetchManager
 from ..supervisor import SupervisorWorker
-from . import abtests, admin, configtools, connectors, corpora, metrics, prompt_blocks, runtime, secrets, sessions, sops, traces, voice
+from . import abtests, admin, configtools, connectors, corpora, metrics, project_io, prompt_blocks, runtime, secrets, sessions, sops, traces, voice
 
 
 def create_app() -> FastAPI:
@@ -77,6 +77,7 @@ def create_app() -> FastAPI:
     app.include_router(connectors.router)
     app.include_router(corpora.router)
     app.include_router(configtools.router)
+    app.include_router(project_io.router)
 
     @app.get("/health")
     async def health() -> dict:
@@ -89,3 +90,18 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+def main() -> None:
+    """Production entrypoint (`sopilot-api`): host/port from the environment —
+    SOPILOT_HOST (default 127.0.0.1; set 0.0.0.0 behind a reverse proxy) and
+    SOPILOT_PORT (default 8100)."""
+    import os
+
+    import uvicorn
+
+    uvicorn.run(
+        "sopilot.api.app:app",
+        host=os.environ.get("SOPILOT_HOST", "127.0.0.1"),
+        port=int(os.environ.get("SOPILOT_PORT", "8100")),
+    )
