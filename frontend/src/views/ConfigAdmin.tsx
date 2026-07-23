@@ -139,7 +139,7 @@ export default function ConfigAdminView() {
 
   return (
     <div className="view">
-      <div className="eyebrow">Config admin · stage 1</div>
+      <div className="eyebrow">Config admin</div>
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="chead">
           <span>Constraint rules</span>

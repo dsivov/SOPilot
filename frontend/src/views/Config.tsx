@@ -11,6 +11,7 @@ import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import { MCP_INTROSPECTION } from "../config/mcpIntrospection";
 import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, availableToolNames, type Finding, type Introspection } from "../config/configModel";
 import { ruleFindings, seedRules, type Rule } from "../config/rules";
+import GuidedEditor from "./ConfigEdit";
 import { api } from "../api";
 
 const ICON: Record<Finding["level"], string> = { error: "✖", warn: "⚠", ok: "✔", info: "·" };
@@ -89,7 +90,7 @@ export default function ConfigView() {
   const struct = useMemo(() => validateConfig(cfg), [cfg]);
   const mcp = useMemo(() => promptMcpFindings(cfg, intro), [cfg, intro]);
   const logical = useMemo(() => logicalPromptFindings(cfg), [cfg]);
-  const effectiveRules = adminRules ?? seedRules();
+  const effectiveRules = useMemo(() => adminRules ?? seedRules(), [adminRules]);
   const adminFindings = useMemo(() => ruleFindings(cfg, effectiveRules), [cfg, effectiveRules]);
   const tools = enabledTools(cfg);
   const mcpToolCount = (cfg.mcp_servers ?? []).reduce((n: number, s: any) => {
@@ -105,7 +106,7 @@ export default function ConfigView() {
 
   return (
     <div className="view">
-      <div className="eyebrow">Config viewer · spike</div>
+      <div className="eyebrow">Config viewer</div>
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="chead">
           <span>Robot config.json</span>
@@ -119,6 +120,16 @@ export default function ConfigView() {
         <div className="cbody">
           <textarea className="area mono" rows={7} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
           {err && <div className="lintline" style={{ color: "var(--crit)", marginTop: 6 }}>JSON error: {err}</div>}
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="chead"><span>Guided edit</span>
+          <span className="sub" style={{ marginLeft: "auto" }}>edit within the admin's bounds — blocking violations can't be applied</span></div>
+        <div className="cbody">
+          <GuidedEditor cfg={cfg} rules={effectiveRules}
+            rulesetLabel={adminRules ? `published ruleset v${adminVersion}` : "the built-in default rules"}
+            onApply={(next) => { setCfg(next); setText(JSON.stringify(next, null, 2)); setLogicalLive(null); }} />
         </div>
       </div>
 
