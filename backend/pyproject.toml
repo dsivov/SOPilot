@@ -24,6 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
+sopilot-api = "sopilot.api.app:main"
 sopilot-supervisor = "sopilot.supervisor:main"
 sopilot-bench = "sopilot.bench.runner:main"
 

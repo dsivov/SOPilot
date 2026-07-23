@@ -13,18 +13,27 @@ const https =
     ? { key: fs.readFileSync(path.join(certDir, "dev.key")), cert: fs.readFileSync(path.join(certDir, "dev.crt")) }
     : undefined;
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    host: "0.0.0.0",
-    port: 5174,
-    https,
-    proxy: {
-      "/api": {
-        target: "http://127.0.0.1:8100",
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/api/, ""),
-      },
+// Prod-configurable bind & API target:
+//   SOPILOT_UI_PORT  UI port (default 5174)
+//   SOPILOT_API_URL  backend the /api proxy forwards to (default http://127.0.0.1:8100)
+const uiPort = Number(process.env.SOPILOT_UI_PORT || 5174);
+const apiTarget = process.env.SOPILOT_API_URL || "http://127.0.0.1:8100";
+
+const serverConfig = {
+  host: "0.0.0.0",
+  port: uiPort,
+  https,
+  proxy: {
+    "/api": {
+      target: apiTarget,
+      changeOrigin: true,
+      rewrite: (p: string) => p.replace(/^\/api/, ""),
     },
   },
+};
+
+export default defineConfig({
+  plugins: [react()],
+  server: serverConfig,
+  preview: serverConfig,
 });

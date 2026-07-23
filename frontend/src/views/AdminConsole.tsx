@@ -89,6 +89,66 @@ function KeysPanel({ slug, onReveal, onKeysChanged }: { slug: string; onReveal: 
   );
 }
 
+// Per-project full-config export/import (SOPs + prompt blocks + connectors),
+// admin-token side — same bundle format as the Studio topbar's Export/Import.
+function ProjectsPanel({ slug }: { slug: string }) {
+  const [projects, setProjects] = useState<Array<{ slug: string; name: string; subsystems: string }> | null>(null);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    adminApi<Array<{ slug: string; name: string; subsystems: string }>>("GET", `/admin/tenants/${slug}/projects`)
+      .then(setProjects).catch((e) => setMsg(String(e?.message ?? e)));
+  }, [slug]);
+
+  const exportProject = async (p: string) => {
+    setBusy(true); setMsg("");
+    try {
+      const bundle = await adminApi<any>("GET", `/admin/tenants/${slug}/projects/${p}/export`);
+      const url = URL.createObjectURL(new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" }));
+      const a = Object.assign(document.createElement("a"), { href: url, download: `sopilot-${slug}-${p}-export.json` });
+      a.click(); URL.revokeObjectURL(url);
+    } catch (e: any) { setMsg(`Export failed: ${e?.message ?? e}`); } finally { setBusy(false); }
+  };
+
+  const importProject = async (p: string, file: File) => {
+    setBusy(true); setMsg("");
+    try {
+      const bundle = JSON.parse(await file.text());
+      const r = await adminApi<{ summary: any; warnings: string[] }>("POST", `/admin/tenants/${slug}/projects/${p}/import`, bundle);
+      const s = r.summary;
+      setMsg(`Imported into ${p}: ` +
+        (["sops", "prompt_blocks", "connectors"] as const)
+          .map((k) => `${k.replace("_", " ")} +${s[k].created}/${s[k].updated}↑/${s[k].published}★`).join(" · ") +
+        (r.warnings.length ? ` — ${r.warnings.length} warning(s): ${r.warnings[0]}` : ""));
+    } catch (e: any) { setMsg(`Import failed: ${e?.message ?? e}`); } finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>
+        Projects — full-config export / import
+      </div>
+      {msg && <div className="lintline" style={{ color: msg.startsWith("Imported") ? "var(--good)" : "var(--crit)", marginBottom: 6, whiteSpace: "normal" }}>{msg}</div>}
+      {projects === null ? <div className="sub">Loading projects…</div> : projects.length === 0 ? <div className="empty" style={{ padding: "6px 0" }}>No projects.</div> : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {projects.map((p) => (
+            <div key={p.slug} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 12.5, padding: "3px 0" }}>
+              <span style={{ flex: 1, minWidth: 0 }}>{p.name || p.slug} <span className="mono sub">· {p.slug}</span></span>
+              <span className="chip muted"><span className="cd" />{p.subsystems}</span>
+              <button className="btn ghost sm" disabled={busy} onClick={() => exportProject(p.slug)}>Export</button>
+              <label className="btn ghost sm" style={{ cursor: "pointer" }}>Import
+                <input type="file" accept="application/json,.json" style={{ display: "none" }}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) importProject(p.slug, f); e.target.value = ""; }} />
+              </label>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Console({ onExit, onLogin }: { onExit: () => void; onLogin: (key: string, project: string) => void }) {
   const [tenants, setTenants] = useState<AdminTenant[] | null>(null);
   const [err, setErr] = useState("");
@@ -99,6 +159,34 @@ function Console({ onExit, onLogin }: { onExit: () => void; onLogin: (key: strin
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [loginBusy, setLoginBusy] = useState<string | null>(null);
+  // Bundle import at console level: target tenant/project are free slugs —
+  // missing ones are created server-side (fresh-deployment restore path).
+  const [pendingImport, setPendingImport] = useState<{ bundle: any; tenant: string; project: string } | null>(null);
+  const [ioMsg, setIoMsg] = useState("");
+
+  const pickBundle = async (file: File) => {
+    setIoMsg("");
+    try {
+      const bundle = JSON.parse(await file.text());
+      if (bundle?.kind !== "sopilot-project-export") { setIoMsg("Not a SOPilot project-export bundle."); return; }
+      setPendingImport({ bundle, tenant: "", project: String(bundle.project?.slug || "main") });
+    } catch (e: any) { setIoMsg(`Cannot read bundle: ${e?.message ?? e}`); }
+  };
+  const runImport = async () => {
+    if (!pendingImport) return;
+    const { bundle, tenant, project } = pendingImport;
+    setBusy(true); setIoMsg("");
+    try {
+      const r = await adminApi<{ summary: any; warnings: string[] }>(
+        "POST", `/admin/tenants/${tenant.trim()}/projects/${project.trim()}/import`, bundle);
+      const s = r.summary;
+      setIoMsg(`Imported into ${tenant}/${project}: ` +
+        (["sops", "prompt_blocks", "connectors"] as const)
+          .map((k) => `${k.replace("_", " ")} +${s[k].created}/${s[k].updated}↑/${s[k].published}★`).join(" · ") +
+        (r.warnings.length ? ` — ${r.warnings.length} warning(s): ${r.warnings[0]}` : ""));
+      setPendingImport(null); await load();
+    } catch (e: any) { setIoMsg(`Import failed: ${e?.message ?? e}`); } finally { setBusy(false); }
+  };
 
   // One-click login: mint a console-login key server-side (never shown) and
   // enter the Studio as this tenant — straight in if it has exactly one project.
@@ -142,11 +230,35 @@ function Console({ onExit, onLogin }: { onExit: () => void; onLogin: (key: strin
         {reveal && <Reveal title={reveal.title} apiKey={reveal.apiKey} onDismiss={() => setReveal(null)} />}
 
         <div className="card" style={{ marginBottom: 16 }}>
-          <div className="chead"><span>Create tenant</span></div>
-          <div className="cbody" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <input className="qinput mono" style={{ flex: 1, minWidth: 140 }} placeholder="slug (e.g. acme)" value={slug} onChange={(e) => setSlug(e.target.value)} />
-            <input className="qinput" style={{ flex: 1, minWidth: 140 }} placeholder="display name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
-            <button className="btn primary" onClick={create} disabled={busy || !slug.trim()}>{busy ? "Creating…" : "Create"}</button>
+          <div className="chead"><span>Create tenant</span>
+            <label className="btn ghost sm" style={{ marginLeft: "auto", cursor: "pointer" }}
+              title="Import a project-config bundle — tenant and project are created if they don't exist">
+              Import bundle…
+              <input type="file" accept="application/json,.json" style={{ display: "none" }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) pickBundle(f); e.target.value = ""; }} />
+            </label></div>
+          <div className="cbody" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <input className="qinput mono" style={{ flex: 1, minWidth: 140 }} placeholder="slug (e.g. acme)" value={slug} onChange={(e) => setSlug(e.target.value)} />
+              <input className="qinput" style={{ flex: 1, minWidth: 140 }} placeholder="display name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
+              <button className="btn primary" onClick={create} disabled={busy || !slug.trim()}>{busy ? "Creating…" : "Create"}</button>
+            </div>
+            {ioMsg && <div className="lintline" style={{ color: ioMsg.startsWith("Imported") ? "var(--good)" : "var(--crit)", whiteSpace: "normal" }}>{ioMsg}</div>}
+            {pendingImport && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", paddingTop: 8, borderTop: "1px solid var(--line)" }}>
+                <span className="sub" style={{ flex: "0 0 auto" }}>Import bundle into</span>
+                <input className="qinput mono" style={{ flex: 1, minWidth: 120 }} placeholder="tenant slug"
+                  value={pendingImport.tenant} onChange={(e) => setPendingImport({ ...pendingImport, tenant: e.target.value })} />
+                <span className="sub">/</span>
+                <input className="qinput mono" style={{ flex: 1, minWidth: 120 }} placeholder="project slug"
+                  value={pendingImport.project} onChange={(e) => setPendingImport({ ...pendingImport, project: e.target.value })} />
+                <button className="btn sm primary" onClick={runImport} disabled={busy || !pendingImport.tenant.trim() || !pendingImport.project.trim()}>
+                  {busy ? "Importing…" : "Import"}
+                </button>
+                <button className="btn ghost sm" onClick={() => setPendingImport(null)}>Cancel</button>
+                <span className="sub" style={{ width: "100%" }}>Missing tenant/project are created automatically.</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -176,7 +288,12 @@ function Console({ onExit, onLogin }: { onExit: () => void; onLogin: (key: strin
                           </span>
                         : <button className="btn ghost sm" onClick={() => setConfirmDel(t.slug)}>Delete</button>}
                     </div>
-                    {expanded === t.slug && <KeysPanel slug={t.slug} onReveal={(title, key) => setReveal({ title, apiKey: key })} onKeysChanged={load} />}
+                    {expanded === t.slug && (
+                      <>
+                        <KeysPanel slug={t.slug} onReveal={(title, key) => setReveal({ title, apiKey: key })} onKeysChanged={load} />
+                        <ProjectsPanel slug={t.slug} />
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

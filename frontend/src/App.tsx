@@ -1,4 +1,4 @@
-import { Blocks, Database, FileText, Gauge, Headphones, MessagesSquare, Moon, Plug, Sun } from "lucide-react";
+import { Blocks, Database, Download, FileText, Gauge, Headphones, MessagesSquare, Moon, Plug, Sun, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, ApiError, apiRaw, clearCreds, getCreds, setCreds } from "./api";
 import SopsView from "./views/Sops";
@@ -96,6 +96,108 @@ function ProjectPicker({ apiKey, onPick }: { apiKey: string; onPick: (slug: stri
         </button>
       ))}
     </div>
+  );
+}
+
+// Topbar project tools: subsystem mode (SOP / background retrieval / both /
+// advisory) and full-config export/import (SOPs + prompt blocks + connectors).
+const SUBSYSTEM_MODES = [
+  { value: "both", label: "SOP + retrieval" },
+  { value: "sop", label: "SOP only" },
+  { value: "retrieval", label: "Retrieval only" },
+  { value: "advisory", label: "Advisory" },
+] as const;
+
+function ProjectTools({ project }: { project: string }) {
+  const [mode, setMode] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [report, setReport] = useState<{ summary: any; warnings: string[] } | null>(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    api<Array<{ slug: string; subsystems: string }>>("GET", "/admin/projects")
+      .then((ps) => {
+        const p = ps.find((x) => x.slug === project);
+        setMode(!p || p.subsystems === "default" || !p.subsystems ? "both" : p.subsystems);
+      })
+      .catch(() => setMode("both"));
+  }, [project]);
+
+  const setSubsystems = async (v: string) => {
+    const prev = mode;
+    setMode(v);
+    try { await api("PATCH", `/admin/projects/${project}`, { subsystems: v }); }
+    catch (e: any) { setMode(prev); setErr(`Mode change failed: ${e?.message ?? e}`); }
+  };
+
+  const exportConfig = async () => {
+    setBusy(true); setErr("");
+    try {
+      const bundle = await api<any>("GET", "/project/export");
+      const url = URL.createObjectURL(new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" }));
+      const a = Object.assign(document.createElement("a"), { href: url, download: `sopilot-${project}-export.json` });
+      a.click(); URL.revokeObjectURL(url);
+    } catch (e: any) { setErr(`Export failed: ${e?.message ?? e}`); } finally { setBusy(false); }
+  };
+
+  const importConfig = async (file: File) => {
+    setBusy(true); setErr("");
+    try {
+      const bundle = JSON.parse(await file.text());
+      const r = await api<{ summary: any; warnings: string[] }>("POST", "/project/import", bundle);
+      setReport(r);
+      window.dispatchEvent(new Event("sopilot-project-imported")); // views can refetch
+    } catch (e: any) { setErr(`Import failed: ${e?.message ?? e}`); } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <select
+        className="qinput" title="Which subsystems run for this project's sessions"
+        style={{ width: "auto", padding: "5px 8px", fontSize: 12.5 }}
+        value={mode ?? "both"} disabled={mode === null}
+        onChange={(e) => setSubsystems(e.target.value)}
+      >
+        {SUBSYSTEM_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+      </select>
+      <button className="btn ghost sm" onClick={exportConfig} disabled={busy} title="Download this project's full config (SOPs, prompt blocks, connectors) as JSON">
+        <Download size={14} style={{ marginRight: 4, verticalAlign: "-2px" }} />Export
+      </button>
+      <label className="btn ghost sm" title="Import a project-config JSON — items are matched by name (new version for existing, created otherwise)" style={{ cursor: "pointer" }}>
+        <Upload size={14} style={{ marginRight: 4, verticalAlign: "-2px" }} />Import
+        <input type="file" accept="application/json,.json" style={{ display: "none" }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) importConfig(f); e.target.value = ""; }} />
+      </label>
+      {err && <span className="chip crit" style={{ maxWidth: 340, whiteSpace: "normal" }}><span className="cd" />{err}</span>}
+      {report && (
+        <div className="modal-overlay" onClick={() => setReport(null)}>
+          <div className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div className="mhead"><h3>Import complete</h3></div>
+            <div className="mbody" style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13 }}>
+              {(["sops", "prompt_blocks", "connectors"] as const).map((k) => (
+                <div key={k} style={{ display: "flex", gap: 10 }}>
+                  <b style={{ flex: "0 0 120px", textTransform: "capitalize" }}>{k.replace("_", " ")}</b>
+                  <span className="sub">
+                    {report.summary[k].created} created · {report.summary[k].updated} updated · {report.summary[k].published} published
+                  </span>
+                </div>
+              ))}
+              {report.warnings.length > 0 && (
+                <div style={{ marginTop: 4 }}>
+                  {report.warnings.map((w, i) => (
+                    <div key={i} className="lintline" style={{ color: "var(--warn)", fontSize: 12.5 }}>⚠ {w}</div>
+                  ))}
+                </div>
+              )}
+              <button className="btn primary sm" style={{ alignSelf: "flex-end", marginTop: 6 }}
+                onClick={() => { setReport(null); window.location.assign(window.location.pathname); }}>
+                Reload Studio
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -281,6 +383,7 @@ export default function App() {
               {tenantSlug ? `${tenantSlug} · ${project}` : project} ▾
             </button>
             <div style={{ flex: 1 }} />
+            <ProjectTools project={project} />
             <button className="iconbtn" title="Toggle theme" onClick={toggleTheme}>
               {dark ? <Sun /> : <Moon />}
             </button>
