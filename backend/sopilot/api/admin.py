@@ -229,6 +229,34 @@ async def _admin_scope(db: AsyncSession, slug: str, project_slug: str, create: b
     return Scope(tenant_id=tenant.id, project_id=project.id)
 
 
+class AdminProjectCreateRequest(BaseModel):
+    slug: str
+    name: str = ""
+    subsystems: str = ""
+
+
+@router.post("/tenants/{slug}/projects", dependencies=[Depends(require_admin_token)])
+async def admin_create_project(slug: str, req: AdminProjectCreateRequest, db: AsyncSession = Depends(get_db)) -> dict:
+    """Create a project from the admin console — a fresh tenant has none, and
+    without one the Studio has nothing to log into."""
+    tenant = (await db.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=404, detail=f"tenant '{slug}' not found")
+    if not req.slug.strip():
+        raise HTTPException(status_code=422, detail="project slug required")
+    if req.subsystems and req.subsystems not in VALID_SUBSYSTEMS:
+        raise HTTPException(status_code=422, detail=f"subsystems must be one of {VALID_SUBSYSTEMS}")
+    existing = (await db.execute(select(Project).where(
+        Project.tenant_id == tenant.id, Project.slug == req.slug))).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(status_code=409, detail=f"project '{req.slug}' already exists")
+    project = Project(tenant_id=tenant.id, slug=req.slug.strip(), name=req.name or req.slug,
+                      subsystems=req.subsystems or None)
+    db.add(project)
+    await db.commit()
+    return {"slug": project.slug, "name": project.name, "subsystems": project.subsystems or "default"}
+
+
 @router.get("/tenants/{slug}/projects", dependencies=[Depends(require_admin_token)])
 async def admin_list_projects(slug: str, db: AsyncSession = Depends(get_db)) -> list[dict]:
     tenant = (await db.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()

@@ -95,11 +95,22 @@ function ProjectsPanel({ slug }: { slug: string }) {
   const [projects, setProjects] = useState<Array<{ slug: string; name: string; subsystems: string }> | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [newSlug, setNewSlug] = useState("");
 
-  useEffect(() => {
+  const load = () =>
     adminApi<Array<{ slug: string; name: string; subsystems: string }>>("GET", `/admin/tenants/${slug}/projects`)
       .then(setProjects).catch((e) => setMsg(String(e?.message ?? e)));
-  }, [slug]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [slug]);
+
+  // A fresh tenant has no projects — without one there is nothing to log into.
+  const createProject = async () => {
+    if (!newSlug.trim()) return;
+    setBusy(true); setMsg("");
+    try {
+      await adminApi("POST", `/admin/tenants/${slug}/projects`, { slug: newSlug.trim() });
+      setNewSlug(""); await load();
+    } catch (e: any) { setMsg(`Create failed: ${e?.message ?? e}`); } finally { setBusy(false); }
+  };
 
   const exportProject = async (p: string) => {
     setBusy(true); setMsg("");
@@ -130,7 +141,7 @@ function ProjectsPanel({ slug }: { slug: string }) {
         Projects — full-config export / import
       </div>
       {msg && <div className="lintline" style={{ color: msg.startsWith("Imported") ? "var(--good)" : "var(--crit)", marginBottom: 6, whiteSpace: "normal" }}>{msg}</div>}
-      {projects === null ? <div className="sub">Loading projects…</div> : projects.length === 0 ? <div className="empty" style={{ padding: "6px 0" }}>No projects.</div> : (
+      {projects === null ? <div className="sub">Loading projects…</div> : projects.length === 0 ? <div className="empty" style={{ padding: "6px 0" }}>No projects yet — create one below (a tenant needs a project before anyone can log into its Studio).</div> : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {projects.map((p) => (
             <div key={p.slug} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 12.5, padding: "3px 0" }}>
@@ -145,6 +156,12 @@ function ProjectsPanel({ slug }: { slug: string }) {
           ))}
         </div>
       )}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+        <input className="qinput mono" style={{ flex: 1, minWidth: 120 }} placeholder="new project slug (e.g. main)"
+          value={newSlug} onChange={(e) => setNewSlug(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && !busy && createProject()} />
+        <button className="btn sm" onClick={createProject} disabled={busy || !newSlug.trim()}>Create project</button>
+      </div>
     </div>
   );
 }
