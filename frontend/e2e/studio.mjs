@@ -61,6 +61,16 @@ await applyBtn.click();
 await page.waitForTimeout(300);
 ok("apply lands (editor back to clean)", await applyBtn.isDisabled());
 
+// ---- 4. LLM-assisted edit (real model call; compliant request) ----
+await card.locator("input[placeholder*='ask for a change']").fill("switch the voice to echo");
+await page.getByRole("button", { name: "Propose" }).click();
+await page.getByRole("button", { name: /Apply to draft|Discard/ }).first().waitFor({ timeout: 30000 });
+ok("assistant proposes a formal edit", (await card.getByText(/Set voice = "echo"/).count()) > 0);
+ok("proposal evaluated within bounds", (await card.locator(".chip.good", { hasText: "within bounds" }).count()) > 0);
+await page.getByRole("button", { name: "Apply to draft" }).click();
+await page.waitForTimeout(300);
+ok("proposal applied → draft dirty, Apply enabled", await applyBtn.isEnabled());
+
 await browser.close();
 console.log(failures === 0 ? "ALL PASS" : `${failures} FAILURES`);
 process.exit(failures ? 1 : 0);

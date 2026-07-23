@@ -210,6 +210,77 @@ async def publish_ruleset(scope: Scope = Depends(resolve_scope), db: AsyncSessio
     return {"version": rs.latest_version, "published_version": rs.published_version}
 
 
+class DraftEditRequest(BaseModel):
+    instruction: str = ""              # the user's plain-English change request
+    tools: list[dict] = []             # [{name, enabled}] — current tool states
+    fields: list[dict] = []            # [{field, value, options?}] — editable scalars (+ enum options)
+    rules: list[str] = []              # the admin ruleset, described (bounds shown to the LLM)
+
+
+_DRAFT_EDIT_SYS = (
+    "You are the user-stage assistant of a configuration manager. Convert ONE plain-English change request into "
+    "formal edit operations the guided editor can apply. The edit vocabulary is exactly:\n"
+    "  {\"op\":\"enable_tool\",\"tool\":<name>}\n"
+    "  {\"op\":\"disable_tool\",\"tool\":<name>}\n"
+    "  {\"op\":\"set_field\",\"field\":<dot.path>,\"value\":<string>}\n"
+    "  {\"op\":\"unset_field\",\"field\":<dot.path>}\n"
+    "Only reference tools and fields from the provided lists — never invent names. The ADMIN RULES bound what a "
+    "valid config may look like: your proposal must keep the config within them (use only allowed enum options; "
+    "if enabling a tool requires a field per a rule, include a set_field for it — ask for a placeholder value "
+    "only when none can be inferred). Propose the MINIMAL set of edits for the request. Return ONLY JSON: "
+    "{\"edits\":[...], \"note\":\"<one sentence: what the edits do and any caveat>\"}. If the request cannot be "
+    "done within the vocabulary or would necessarily violate a rule, return {\"edits\":[], \"note\":\"<why>\"}."
+)
+
+
+@router.post("/draft-edit")
+async def draft_edit(req: DraftEditRequest, scope: Scope = Depends(resolve_scope)) -> dict:
+    """LLM-assisted guided editing (user stage): plain English → formal edit ops.
+    The LLM only PROPOSES — the client re-evaluates the admin ruleset on the
+    edited draft and blocks proposals that violate it. Two-stage thesis intact:
+    LLM assists, the formal engine decides."""
+    import json as _json
+
+    from ..bench.llm import client
+    from ..config import get_settings
+    if not req.instruction.strip():
+        return {"error": "empty instruction"}
+    user = (
+        "TOOLS (name · enabled):\n"
+        + "\n".join(f"  {t.get('name')} · {'on' if t.get('enabled') else 'off'}" for t in req.tools[:80])
+        + "\n\nEDITABLE FIELDS (field · current value · allowed options if enum-bound):\n"
+        + "\n".join(
+            f"  {f.get('field')} · {_json.dumps(f.get('value'))[:80]}"
+            + (f" · one of {f['options']}" if f.get("options") else "")
+            for f in req.fields[:40])
+        + "\n\nADMIN RULES (the config must satisfy these):\n"
+        + "\n".join(f"  - {r}" for r in req.rules[:40])
+        + "\n\nCHANGE REQUEST:\n" + req.instruction[:1000]
+    )
+    try:
+        res = await client().chat.completions.create(
+            model=get_settings().builder_model,
+            messages=[{"role": "system", "content": _DRAFT_EDIT_SYS}, {"role": "user", "content": user}],
+            temperature=0.1, max_tokens=500, response_format={"type": "json_object"},
+        )
+        data = _json.loads(res.choices[0].message.content or "{}")
+    except Exception as e:  # LLM/key issue — surface, don't 500
+        return {"error": f"edit drafting unavailable ({type(e).__name__})"}
+    edits_in = data.get("edits") if isinstance(data, dict) else None
+    edits: list[dict] = []
+    for e in edits_in or []:
+        if not isinstance(e, dict):
+            continue
+        op = e.get("op")
+        if op in ("enable_tool", "disable_tool") and e.get("tool"):
+            edits.append({"op": op, "tool": str(e["tool"])})
+        elif op == "set_field" and e.get("field"):
+            edits.append({"op": op, "field": str(e["field"]), "value": str(e.get("value", ""))})
+        elif op == "unset_field" and e.get("field"):
+            edits.append({"op": op, "field": str(e["field"])})
+    return {"edits": edits[:20], "note": str(data.get("note", ""))[:400]}
+
+
 class DraftRuleRequest(BaseModel):
     instruction: str = ""              # the admin's plain-English constraint
     tools: list[str] = []              # config tool names, for grounding the predicates

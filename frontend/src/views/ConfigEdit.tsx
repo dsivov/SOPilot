@@ -8,7 +8,8 @@
 // formal — guidance comes from the rules, not from heuristics.
 import { useEffect, useMemo, useState } from "react";
 import type { Config } from "../config/configModel";
-import { describePredicate, evaluateRules, type Rule, type RuleResult } from "../config/rules";
+import { describeRule, evaluateRules, type Rule, type RuleResult } from "../config/rules";
+import { api } from "../api";
 
 // Scalar dot-path fields offered for editing (the rule vocabulary's editable
 // subset — complex structures stay in the JSON textarea for now).
@@ -34,6 +35,37 @@ function setPath(cfg: any, path: string, value: any): any {
 const toolsOf = (pred: string): string[] | null =>
   pred.startsWith("tool:") ? pred.slice(5).split("|").map((s) => s.trim()) : null;
 const fieldOf = (pred: string): string | null => (pred.startsWith("field:") ? pred.slice(6) : null);
+
+// ---- LLM-assisted edits: the model PROPOSES formal ops; the engine decides --
+
+export type EditOp =
+  | { op: "enable_tool"; tool: string }
+  | { op: "disable_tool"; tool: string }
+  | { op: "set_field"; field: string; value: string }
+  | { op: "unset_field"; field: string };
+
+export function describeOp(e: EditOp): string {
+  if (e.op === "enable_tool") return `Enable ${e.tool}`;
+  if (e.op === "disable_tool") return `Disable ${e.tool}`;
+  if (e.op === "set_field") return `Set ${e.field} = "${e.value}"`;
+  return `Clear ${e.field}`;
+}
+
+// Apply ops to a draft; unknown tools/fields are SKIPPED (the LLM must not
+// invent atoms — a skipped op is surfaced, never silently applied).
+export function applyEdits(draft: Config, edits: EditOp[]): { next: Config; applied: EditOp[]; skipped: EditOp[] } {
+  let next = draft;
+  const applied: EditOp[] = [], skipped: EditOp[] = [];
+  for (const e of edits) {
+    if (e.op === "enable_tool" || e.op === "disable_tool") {
+      if (!next.tools || !(e.tool in next.tools)) { skipped.push(e); continue; }
+      next = setPath(next, `tools.${e.tool}.enabled`, e.op === "enable_tool");
+    } else if (!EDIT_FIELDS.includes(e.field)) { skipped.push(e); continue; }
+    else next = setPath(next, e.field, e.op === "set_field" ? e.value : "");
+    applied.push(e);
+  }
+  return { next, applied, skipped };
+}
 
 // One-click fixes derived from a violated rule — the "guided" part.
 interface Fix { label: string; apply: (draft: Config) => Config }
@@ -67,6 +99,42 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
 
   const toggleTool = (name: string) => setDraft((d) => setPath(d, `tools.${name}.enabled`, !d.tools?.[name]?.enabled));
   const toolNames = Object.keys(draft.tools ?? {}).sort();
+
+  // ---- LLM-assisted edits ("change X for me") ----
+  const [ask, setAsk] = useState("");
+  const [askBusy, setAskBusy] = useState(false);
+  const [askErr, setAskErr] = useState("");
+  const [proposal, setProposal] = useState<{
+    note: string; applied: EditOp[]; skipped: EditOp[]; next: Config; blocking: RuleResult[]; warns: RuleResult[];
+  } | null>(null);
+
+  const propose = async () => {
+    if (!ask.trim()) return;
+    setAskBusy(true); setAskErr(""); setProposal(null);
+    try {
+      const r = await api<{ edits?: EditOp[]; note?: string; error?: string }>("POST", "/config/draft-edit", {
+        instruction: ask,
+        tools: toolNames.map((t) => ({ name: t, enabled: draft.tools?.[t]?.enabled === true })),
+        fields: EDIT_FIELDS.map((f) => ({ field: f, value: get(draft, f) ?? null, options: enumFor(f)?.options })),
+        rules: rules.map(describeRule),
+      });
+      if (r.error || !r.edits?.length) { setAskErr(r.error || r.note || "The model proposed no edits."); return; }
+      // The gate: evaluate the admin ruleset on the EDITED draft before offering
+      // it — judged on the violations the proposal INTRODUCES (pre-existing
+      // draft violations are the editor's business, not the proposal's).
+      const { next, applied, skipped } = applyEdits(draft, r.edits);
+      const before = new Set(evaluateRules(draft, rules).filter((res) => res.state === "violated").map((res) => res.rule.id));
+      const evald = evaluateRules(next, rules).filter((res) => res.state === "violated" && !before.has(res.rule.id));
+      setProposal({
+        note: r.note || "", applied, skipped, next,
+        blocking: evald.filter((v) => v.rule.level === "error"),
+        warns: evald.filter((v) => v.rule.level !== "error"),
+      });
+    } catch (e: any) {
+      const m = String(e?.message ?? e);
+      setAskErr(m.includes("Not Found") ? "Assistant endpoint not found — restart the backend for /config/draft-edit." : `Assistant failed: ${m}`);
+    } finally { setAskBusy(false); }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -102,6 +170,46 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
           ))}
         </div>
       )}
+
+      {/* assistant: plain English → formal ops, gated by the same ruleset */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input className="area" style={{ flex: 1 }} placeholder='ask for a change — e.g. "let the agent send verification SMS" or "switch the voice to something calmer"'
+            value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !askBusy && propose()} />
+          <button className="btn sm primary" onClick={propose} disabled={askBusy || !ask.trim()}>{askBusy ? "Thinking…" : "Propose"}</button>
+        </div>
+        {askErr && <div className="lintline" style={{ color: "var(--crit)" }}>{askErr}</div>}
+        {proposal && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 10px", background: "var(--panel2, rgba(127,127,127,.06))", borderRadius: 8 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {proposal.blocking.length > 0
+                ? <span className="chip crit"><span className="cd" />violates admin rules</span>
+                : proposal.warns.length > 0
+                  ? <span className="chip warn"><span className="cd" />{proposal.warns.length} warning{proposal.warns.length === 1 ? "" : "s"}</span>
+                  : <span className="chip good"><span className="cd" />within bounds</span>}
+              {proposal.note && <span className="sub" style={{ flex: 1 }}>{proposal.note}</span>}
+            </div>
+            {proposal.applied.map((e, i) => (
+              <div key={i} className="lintline mono" style={{ fontSize: 12, color: "var(--text2)" }}>→ {describeOp(e)}</div>
+            ))}
+            {proposal.skipped.map((e, i) => (
+              <div key={"s" + i} className="lintline" style={{ fontSize: 12, color: "var(--muted)" }}>✕ skipped (unknown atom): {describeOp(e)}</div>
+            ))}
+            {proposal.blocking.map((v) => (
+              <div key={v.rule.id} className="lintline" style={{ fontSize: 12, color: "var(--crit)" }}>✖ {v.rule.msg}</div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+              {proposal.blocking.length === 0 && (
+                <button className="btn sm primary" onClick={() => { setDraft(proposal.next); setProposal(null); setAsk(""); }}>
+                  Apply to draft
+                </button>
+              )}
+              <button className="btn ghost sm" onClick={() => setProposal(null)}>Discard</button>
+              {proposal.blocking.length > 0 && <span className="sub">The admin's ruleset forbids this change — it cannot be applied.</span>}
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="grid2">
         <div>
