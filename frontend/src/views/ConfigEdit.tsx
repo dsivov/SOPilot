@@ -162,6 +162,39 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
     setList(p, listOf(p).map((it, j) => (j === i ? { ...it, [k]: v } : it)));
   const dropAt = (p: string, i: number) => setList(p, listOf(p).filter((_, j) => j !== i));
 
+  // ---- connector registry reuse: define a connection once (D-10), use it in
+  // SOP data bindings AND here in the agent config. Rows added from a connector
+  // keep a {connector} reference + "secret:<name>" auth — the write-back
+  // (/config/render-robot) resolves them; raw credentials never enter the editor.
+  const [connectors, setConnectors] = useState<Array<{ name: string; kind: string; enabled: boolean; config: any }>>([]);
+  const loadConnectors = () => api<any[]>("GET", "/connectors").then(setConnectors).catch(() => { /* offline — picker hidden */ });
+  useEffect(() => { loadConnectors(); }, []);
+  const mcpConnectors = connectors.filter((c) => c.kind === "mcp");
+
+  const addFromConnector = (name: string) => {
+    const c = mcpConnectors.find((x) => x.name === name);
+    if (!c || listOf("mcp_servers").some((m) => m.connector === name)) return;
+    setList("mcp_servers", [...listOf("mcp_servers"), {
+      url: c.config?.server ?? "", connector: c.name,
+      ...(c.config?.auth_secret ? { authorization: `secret:${c.config.auth_secret}` } : {}),
+    }]);
+  };
+
+  // Promote an ad-hoc URL row to a named registry connector (so SOPs can bind it too).
+  const promote = async (i: number) => {
+    const m = listOf("mcp_servers")[i];
+    if (!m?.url?.trim()) return;
+    let name = "mcp";
+    try { name = new URL(m.url).hostname.split(".")[0] || "mcp"; } catch { /* keep fallback */ }
+    try {
+      await api("PUT", `/connectors/${name}`, {
+        kind: "mcp", description: "registered from the config editor", config: { server: m.url },
+      });
+      patchAt("mcp_servers", i, "connector", name);
+      await loadConnectors();
+    } catch { /* surfaced by the registry views; row stays ad-hoc */ }
+  };
+
   // ---- LLM-assisted edits ("change X for me") ----
   const [ask, setAsk] = useState("");
   const [askBusy, setAskBusy] = useState(false);
@@ -338,16 +371,34 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             {listOf("mcp_servers").map((m, i) => (
-              <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <input className="area mono" style={{ flex: 2, padding: "4px 8px" }} placeholder="https://…/mcp"
+              <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                {m.connector && <span className="chip accent" title="Bound to the connector registry — the write-back resolves url/auth from it"><span className="cd" />{m.connector}</span>}
+                <input className="area mono" style={{ flex: 2, minWidth: 180, padding: "4px 8px" }} placeholder="https://…/mcp"
                   value={m.url ?? ""} onChange={(e) => patchAt("mcp_servers", i, "url", e.target.value)} />
-                <input className="area mono" style={{ flex: 1, padding: "4px 8px" }} placeholder="authorization (optional)"
+                <input className="area mono" style={{ flex: 1, minWidth: 120, padding: "4px 8px" }}
+                  placeholder="authorization or secret:<name>" title='Use "secret:<name>" to reference a tenant secret — resolved at write-back, never shown here'
                   value={m.authorization ?? ""} onChange={(e) => patchAt("mcp_servers", i, "authorization", e.target.value)} />
+                {!m.connector && (m.url ?? "").trim() && (
+                  <button className="btn ghost sm" title="Register in the connector registry so SOPs can bind it by name" onClick={() => promote(i)}>Save as connector</button>
+                )}
                 <button className="btn ghost sm" title="Remove server" onClick={() => dropAt("mcp_servers", i)}>✕</button>
               </div>
             ))}
-            <button className="btn ghost sm" style={{ alignSelf: "flex-start" }}
-              onClick={() => setList("mcp_servers", [...listOf("mcp_servers"), { url: "" }])}>+ Add MCP server</button>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <button className="btn ghost sm" onClick={() => setList("mcp_servers", [...listOf("mcp_servers"), { url: "" }])}>+ Add MCP server</button>
+              {mcpConnectors.length > 0 && (
+                <select className="area mono" style={{ width: "auto", padding: "4px 8px" }} value=""
+                  title="Reuse a connection defined once in the connector registry"
+                  onChange={(e) => { if (e.target.value) addFromConnector(e.target.value); e.target.value = ""; }}>
+                  <option value="">+ from connector…</option>
+                  {mcpConnectors.map((c) => (
+                    <option key={c.name} value={c.name} disabled={listOf("mcp_servers").some((m) => m.connector === c.name)}>
+                      {c.name} — {c.config?.server ?? "?"}{c.enabled ? "" : " (disabled)"}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
         </div>
 

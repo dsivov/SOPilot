@@ -45,6 +45,21 @@ export default function ConfigView() {
   // fetched; falls back to the built-in seed when nothing is published yet.
   const [adminRules, setAdminRules] = useState<Rule[] | null>(null);
   const [adminVersion, setAdminVersion] = useState<number | null>(null);
+  const [renderNotes, setRenderNotes] = useState<string[] | null>(null);
+  const [renderBusy, setRenderBusy] = useState(false);
+
+  // Write-back: resolve connector/secret references server-side into the
+  // deploy-ready config.json the robot consumes, and download it.
+  const downloadRobot = async () => {
+    setRenderBusy(true); setRenderNotes(null);
+    try {
+      const r = await api<{ config: any; notes: string[] }>("POST", "/config/render-robot", { config: cfg });
+      const url = URL.createObjectURL(new Blob([JSON.stringify(r.config, null, 2)], { type: "application/json" }));
+      const a = Object.assign(document.createElement("a"), { href: url, download: `${(cfg.display_name || "robot").toLowerCase().replace(/\s+/g, "-")}-config.json` });
+      a.click(); URL.revokeObjectURL(url);
+      setRenderNotes(r.notes);
+    } catch (e: any) { setRenderNotes([`Render failed: ${e?.message ?? e}`]); } finally { setRenderBusy(false); }
+  };
 
   useEffect(() => {
     api<{ published_version: number | null; published_rules: Rule[] | null }>("GET", "/config/ruleset")
@@ -114,12 +129,21 @@ export default function ConfigView() {
             <button className="btn ghost sm" onClick={() => preset(EXAMPLE)}>Example (real)</button>
             <button className="btn ghost sm" onClick={() => preset(SAMPLE_CONFIG)}>Sample</button>
             {problems > 0 && <span className="chip crit"><span className="cd" />{problems} problem{problems === 1 ? "" : "s"}</span>}
+            <button className="btn sm ghost" onClick={downloadRobot} disabled={renderBusy || problems > 0}
+              title={problems > 0 ? "Fix the errors first — a config with problems can't be deployed" : "Resolve connector/secret references server-side and download the deploy-ready config.json"}>
+              {renderBusy ? "Rendering…" : "Download robot config"}
+            </button>
             <button className="btn sm primary" onClick={() => load(text)}>Load &amp; render</button>
           </span>
         </div>
         <div className="cbody">
           <textarea className="area mono" rows={7} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
           {err && <div className="lintline" style={{ color: "var(--crit)", marginTop: 6 }}>JSON error: {err}</div>}
+          {renderNotes && renderNotes.length > 0 && (
+            <div style={{ marginTop: 6 }}>
+              {renderNotes.map((n, i) => <div key={i} className="lintline" style={{ color: "var(--warn)", fontSize: 12.5 }}>⚠ {n}</div>)}
+            </div>
+          )}
         </div>
       </div>
 

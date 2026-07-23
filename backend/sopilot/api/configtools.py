@@ -313,6 +313,65 @@ async def draft_edit(req: DraftEditRequest, scope: Scope = Depends(resolve_scope
     return {"edits": edits[:20], "note": str(data.get("note", ""))[:400]}
 
 
+# ---------- Write-back: render a deploy-ready robot config ----------
+#
+# The editor keeps connections as REFERENCES — an mcp_servers entry may carry
+# {"connector": "<registry name>"} and/or authorization "secret:<name>". This
+# endpoint resolves them server-side (connector registry URL + Fernet-decrypted
+# tenant secret as a Bearer token) into the concrete config.json the robot
+# deployment consumes. Secrets appear only in the rendered artifact the
+# operator downloads — never in the editor state or the stored config.
+
+class RenderRobotRequest(BaseModel):
+    config: dict = {}
+
+
+@router.post("/render-robot")
+async def render_robot(
+    req: RenderRobotRequest, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
+) -> dict:
+    import copy
+
+    from ..models import Connector
+    from ..secrets import get_secret
+
+    cfg = copy.deepcopy(req.config)
+    notes: list[str] = []
+    resolved_servers: list[dict] = []
+    for entry in cfg.get("mcp_servers") or []:
+        if not isinstance(entry, dict):
+            continue
+        m = dict(entry)
+        cname = m.pop("connector", None)
+        if cname:
+            conn = (await db.execute(select(Connector).where(
+                Connector.tenant_id == scope.tenant_id, Connector.project_id == scope.project_id,
+                Connector.name == cname))).scalar_one_or_none()
+            if conn is None or conn.kind != "mcp":
+                notes.append(f"connector '{cname}' not found (or not mcp) — entry kept as typed")
+            else:
+                if not conn.enabled:
+                    notes.append(f"connector '{cname}' is disabled in the registry")
+                m["url"] = (conn.config or {}).get("server") or m.get("url", "")
+                if (conn.config or {}).get("auth_secret") and not m.get("authorization"):
+                    m["authorization"] = f"secret:{conn.config['auth_secret']}"
+        auth = m.get("authorization")
+        if isinstance(auth, str) and auth.startswith("secret:"):
+            secret_name = auth[len("secret:"):]
+            value = await get_secret(db, scope.tenant_id, secret_name)
+            if value is None:
+                notes.append(f"secret '{secret_name}' not found — authorization left as the reference")
+            else:
+                m["authorization"] = value if value.startswith("Bearer ") else f"Bearer {value}"
+        if not str(m.get("url", "")).strip():
+            notes.append("dropped an mcp_servers entry without a url")
+            continue
+        resolved_servers.append(m)
+    if "mcp_servers" in cfg or resolved_servers:
+        cfg["mcp_servers"] = resolved_servers
+    return {"config": cfg, "notes": notes}
+
+
 class DraftRuleRequest(BaseModel):
     instruction: str = ""              # the admin's plain-English constraint
     tools: list[str] = []              # config tool names, for grounding the predicates
