@@ -90,6 +90,26 @@ UI env (read by `frontend/vite.config.ts`, dev + preview):
 | `SOPILOT_UI_PORT` | `5174` | Studio port |
 | `SOPILOT_API_URL` | `http://127.0.0.1:8100` | backend the `/api` proxy forwards to |
 
+### Production hardening checklist (do these before exposing an instance)
+
+1. **`SOPILOT_ADMIN_TOKEN`** — generate per deployment (`openssl rand -hex 24`)
+   and record where it lives (the backend's `.env` / service environment on
+   that host). Never reuse a dev token; placeholders log a startup warning.
+   The admin console login takes exactly this value.
+2. **`SOPILOT_SECRET_KEY`** — set BEFORE storing any tenant connector secrets
+   (empty = dev fallback key; rotating later invalidates stored secrets).
+3. **Verify the token path the UI uses** — the Studio calls the backend via
+   its `/api/*` proxy; the static UI answers 200 (SPA fallback) on ANY path,
+   so test through `/api`:
+   `curl -H "X-Admin-Token: $T" https://<host>/api/admin/tenants` →
+   200 + JSON = correct token · 403 = wrong token · HTML = you hit the SPA,
+   fix the proxy.
+4. **TLS + bind** — keep `SOPILOT_HOST=127.0.0.1` and terminate TLS at the
+   reverse proxy; only the proxy should be internet-facing.
+5. **Rotation is cheap** — a lost admin token is replaced by editing the env
+   and restarting the API; nothing else changes. Tenant keys rotate from the
+   admin console (mint + revoke).
+
 ## 2. Auth model
 
 - **Admin plane:** header `X-Admin-Token: <SOPILOT_ADMIN_TOKEN>` — the
