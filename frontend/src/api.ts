@@ -45,6 +45,7 @@ export async function apiRaw<T = any>(
   method: string,
   path: string,
   creds: { key: string; project?: string },
+  body?: unknown,
 ): Promise<T> {
   const res = await fetch("/api" + path, {
     method,
@@ -53,6 +54,7 @@ export async function apiRaw<T = any>(
       Authorization: `Bearer ${creds.key}`,
       ...(creds.project ? { "X-Project": creds.project } : {}),
     },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
   const data = text ? JSON.parse(text) : {};

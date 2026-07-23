@@ -29,6 +29,20 @@ function ProjectPicker({ apiKey, onPick }: { apiKey: string; onPick: (slug: stri
   const [rows, setRows] = useState<Array<{ slug: string; name: string; subsystems: string; sops: string[] }> | null>(null);
   const [tenant, setTenant] = useState("");
   const [err, setErr] = useState("");
+  const [newSlug, setNewSlug] = useState("main");
+  const [creating, setCreating] = useState(false);
+
+  // A fresh tenant has no projects — without this, the login dead-ends here.
+  const createProject = async () => {
+    if (!newSlug.trim()) return;
+    setCreating(true); setErr("");
+    try {
+      await apiRaw("POST", "/admin/projects", { key: apiKey }, { slug: newSlug.trim() });
+      onPick(newSlug.trim());
+    } catch (e: any) {
+      setErr(`Could not create project: ${e?.message ?? e}`);
+    } finally { setCreating(false); }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -60,9 +74,24 @@ function ProjectPicker({ apiKey, onPick }: { apiKey: string; onPick: (slug: stri
     };
   }, [apiKey]);
 
-  if (err) return <span className="chip crit" style={{ whiteSpace: "normal" }}><span className="cd" />{err}</span>;
+  if (err && !rows) return <span className="chip crit" style={{ whiteSpace: "normal" }}><span className="cd" />{err}</span>;
   if (!rows) return <div className="spin" />;
-  if (rows.length === 0) return <div className="empty">This tenant has no projects yet.</div>;
+  if (rows.length === 0) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="empty" style={{ padding: "4px 0" }}>This tenant has no projects yet — create the first one:</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input className="qinput mono" style={{ flex: 1 }} placeholder="project slug (e.g. main)"
+            value={newSlug} onChange={(e) => setNewSlug(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && !creating && createProject()} />
+          <button className="btn sm primary" onClick={createProject} disabled={creating || !newSlug.trim()}>
+            {creating ? "Creating…" : "Create & enter"}
+          </button>
+        </div>
+        {err && <span className="chip crit" style={{ whiteSpace: "normal" }}><span className="cd" />{err}</span>}
+      </div>
+    );
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {tenant && (
