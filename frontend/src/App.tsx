@@ -1,4 +1,4 @@
-import { Blocks, Database, FileText, Gauge, Headphones, MessagesSquare, Moon, Network, Plug, Sun } from "lucide-react";
+import { Blocks, Database, FileText, Gauge, Headphones, MessagesSquare, Moon, Network, Plug, ShieldCheck, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, ApiError, apiRaw, clearCreds, getCreds, setCreds } from "./api";
 import SopsView from "./views/Sops";
@@ -9,8 +9,9 @@ import DashboardView from "./views/Dashboard";
 import TracesView from "./views/Traces";
 import ConnectorsView from "./views/Connectors";
 import ConfigView from "./views/Config";
+import ConfigAdminView from "./views/ConfigAdmin";
 
-type ViewId = "sops" | "blocks" | "config" | "dashboard" | "playground" | "sessions" | "traces" | "connectors";
+type ViewId = "sops" | "blocks" | "config" | "configAdmin" | "dashboard" | "playground" | "sessions" | "traces" | "connectors";
 
 function BrandMark() {
   // four token-colored dots joined by line2 edges (per the design guide §11)
@@ -204,6 +205,7 @@ export default function App() {
         { id: "sops", label: "SOPs", icon: <FileText /> },
         { id: "blocks", label: "Prompt blocks", icon: <Blocks /> },
         { id: "connectors", label: "Connectors", icon: <Plug /> },
+        { id: "configAdmin", label: "Config admin", icon: <ShieldCheck /> },
         { id: "config", label: "Config viewer", icon: <Network /> },
       ],
     },
@@ -300,6 +302,7 @@ export default function App() {
             {view === "sessions" && <SessionsView />}
             {view === "traces" && <TracesView />}
             {view === "connectors" && <ConnectorsView />}
+            {view === "configAdmin" && <ConfigAdminView />}
             {view === "config" && <ConfigView />}
           </div>
         </div>
