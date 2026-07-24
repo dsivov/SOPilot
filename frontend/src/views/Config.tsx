@@ -12,7 +12,17 @@ import { MCP_INTROSPECTION } from "../config/mcpIntrospection";
 import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, availableToolNames, type Finding, type Introspection } from "../config/configModel";
 import { ruleFindings, seedRules, type Rule } from "../config/rules";
 import GuidedEditor from "./ConfigEdit";
-import { api } from "../api";
+import { api, getCreds } from "../api";
+
+// The working config is persisted per project in this browser, so edits survive
+// navigating away and reloads (previously it reset to the example on every mount
+// — edits looked "saved" on the graph but were lost on tab switch). Export /
+// "Download robot config" is the durable, cross-device artifact; this is the
+// local working copy.
+const cfgStoreKey = () => `sopilot-config:${getCreds().project || "default"}`;
+function loadStoredConfig(): Record<string, any> | null {
+  try { const s = localStorage.getItem(cfgStoreKey()); return s ? JSON.parse(s) : null; } catch { return null; }
+}
 
 const ICON: Record<Finding["level"], string> = { error: "✖", warn: "⚠", ok: "✔", info: "·" };
 const COLOR: Record<Finding["level"], string> = { error: "var(--crit)", warn: "var(--warn)", ok: "var(--good)", info: "var(--muted)" };
@@ -32,8 +42,9 @@ function Findings({ items }: { items: Finding[] }) {
 }
 
 export default function ConfigView() {
-  const [text, setText] = useState(JSON.stringify(EXAMPLE, null, 2));
-  const [cfg, setCfg] = useState<Record<string, any>>(EXAMPLE as Record<string, any>);
+  const initial = loadStoredConfig() ?? (EXAMPLE as Record<string, any>);
+  const [text, setText] = useState(JSON.stringify(initial, null, 2));
+  const [cfg, setCfg] = useState<Record<string, any>>(initial);
   const [err, setErr] = useState("");
   const [intro, setIntro] = useState<Introspection>(MCP_INTROSPECTION);
   const [live, setLive] = useState(false);
@@ -67,8 +78,14 @@ export default function ConfigView() {
       .catch(() => { /* backend down — seed fallback below */ });
   }, []);
 
+  // Persist the working config per project so edits survive navigation & reload.
+  useEffect(() => {
+    try { localStorage.setItem(cfgStoreKey(), JSON.stringify(cfg)); } catch { /* quota/serialization — non-fatal */ }
+  }, [cfg]);
+
   const load = (v: string) => { try { setCfg(JSON.parse(v)); setErr(""); setLogicalLive(null); } catch (e: any) { setErr(String(e?.message ?? e)); } };
   const preset = (c: any) => { setText(JSON.stringify(c, null, 2)); setCfg(c); setErr(""); setIntro(MCP_INTROSPECTION); setLive(false); setLogicalLive(null); };
+  const resetToExample = () => { try { localStorage.removeItem(cfgStoreKey()); } catch { /* ignore */ } preset(EXAMPLE); };
 
   const validate = async () => {
     setBusy2(true);
@@ -125,8 +142,9 @@ export default function ConfigView() {
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="chead">
           <span>Robot config.json</span>
+          <span className="sub" style={{ fontSize: 11 }}>· saved in this browser</span>
           <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            <button className="btn ghost sm" onClick={() => preset(EXAMPLE)}>Example (real)</button>
+            <button className="btn ghost sm" onClick={resetToExample} title="Discard the locally-saved working config and reload the example">Reset to example</button>
             <button className="btn ghost sm" onClick={() => preset(SAMPLE_CONFIG)}>Sample</button>
             {problems > 0 && <span className="chip crit"><span className="cd" />{problems} problem{problems === 1 ? "" : "s"}</span>}
             <button className="btn sm ghost" onClick={downloadRobot} disabled={renderBusy || problems > 0}
