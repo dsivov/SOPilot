@@ -82,6 +82,15 @@ await card.locator("button[title='Remove knowledge base']").last().click();
 await page.waitForTimeout(300);
 ok("removing the KB clears the violation", (await page.locator(".chip.crit", { hasText: "blocking" }).count()) === 0);
 
+// ---- 6. Derived field vocabulary: fields come from the config, advanced hidden by default ----
+ok("fields derived from config (voice shown)", (await card.locator("span.mono", { hasText: /^voice$/ }).count()) > 0);
+const advToggle = card.getByRole("button", { name: /Show advanced/ });
+ok("advanced fields hidden behind a toggle", (await advToggle.count()) > 0);
+ok("plumbing hidden by default (rem_ws_host absent)", (await card.locator("span.mono", { hasText: "rem_ws_host" }).count()) === 0);
+await advToggle.click();
+await page.waitForTimeout(200);
+ok("toggle reveals advanced plumbing (rem_ws_host)", (await card.locator("span.mono", { hasText: "rem_ws_host" }).count()) > 0);
+
 await browser.close();
 console.log(failures === 0 ? "ALL PASS" : `${failures} FAILURES`);
 process.exit(failures ? 1 : 0);

@@ -9,14 +9,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Config } from "../config/configModel";
 import { describeRule, evaluateRules, type Rule, type RuleResult } from "../config/rules";
+import { deriveFields, type DerivedField } from "../config/configVocab";
 import { api } from "../api";
-
-// Scalar dot-path fields offered for editing (the rule vocabulary's editable
-// subset — complex structures stay in the JSON textarea for now).
-const EDIT_FIELDS = [
-  "voice", "default_language_iso", "notification_service_url",
-  "opensearch_endpoint", "lightrag.postgres.host", "custom_config.gpt_model",
-];
 
 function get(cfg: any, path: string): any {
   return path.split(".").reduce<any>((o, k) => (o == null ? undefined : o[k]), cfg);
@@ -67,7 +61,7 @@ export function describeOp(e: EditOp): string {
 
 // Apply ops to a draft; unknown tools/fields/entries are SKIPPED (the LLM must
 // not invent atoms — a skipped op is surfaced, never silently applied).
-export function applyEdits(draft: Config, edits: EditOp[]): { next: Config; applied: EditOp[]; skipped: EditOp[] } {
+export function applyEdits(draft: Config, edits: EditOp[], allowedFields: Set<string>): { next: Config; applied: EditOp[]; skipped: EditOp[] } {
   let next = draft;
   const applied: EditOp[] = [], skipped: EditOp[] = [];
   const list = (p: string): any[] => (get(next, p) as any[]) ?? [];
@@ -78,7 +72,7 @@ export function applyEdits(draft: Config, edits: EditOp[]): { next: Config; appl
         next = setPath(next, `tools.${e.tool}.enabled`, e.op === "enable_tool");
         break;
       case "set_field": case "unset_field":
-        if (!EDIT_FIELDS.includes(e.field)) { skipped.push(e); continue; }
+        if (!allowedFields.has(e.field)) { skipped.push(e); continue; }
         next = setPath(next, e.field, e.op === "set_field" ? e.value : "");
         break;
       case "add_mcp_server":
@@ -140,12 +134,29 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
   cfg: Config; rules: Rule[]; rulesetLabel: string; onApply: (next: Config) => void;
 }) {
   const [draft, setDraft] = useState<Config>(() => structuredClone(cfg));
+  const [showAdvanced, setShowAdvanced] = useState(false);
   useEffect(() => { setDraft(structuredClone(cfg)); }, [cfg]);
 
   const results = useMemo(() => evaluateRules(draft, rules), [draft, rules]);
   const violated = results.filter((r) => r.state === "violated");
   const errors = violated.filter((r) => r.rule.level === "error");
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(cfg), [draft, cfg]);
+
+  // Fields DERIVED from the loaded config (not hardcoded). A field a rule
+  // references but the config lacks is still surfaced (deriveFields adds the
+  // common requirable ones); the allow-set also includes any rule-referenced
+  // field so the assistant may set one the walk didn't reach.
+  const fields = useMemo(() => deriveFields(draft), [draft]);
+  const allowedFields = useMemo(() => {
+    const s = new Set(fields.map((f) => f.path));
+    for (const r of rules) {
+      if (r.kind === "enum") s.add(r.field);
+      if (r.kind === "requires") { const f = fieldOf(r.needs); if (f) s.add(f); }
+    }
+    return s;
+  }, [fields, rules]);
+  const visibleFields = fields.filter((f) => showAdvanced || !f.advanced);
+  const advancedCount = fields.filter((f) => f.advanced).length;
 
   // Enum rules drive their field's widget: the admin's options ARE the choices.
   const enumFor = (field: string) => rules.find((r): r is Extract<Rule, { kind: "enum" }> => r.kind === "enum" && r.field === field);
@@ -210,7 +221,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
       const r = await api<{ edits?: EditOp[]; note?: string; error?: string }>("POST", "/config/draft-edit", {
         instruction: ask,
         tools: toolNames.map((t) => ({ name: t, enabled: draft.tools?.[t]?.enabled === true })),
-        fields: EDIT_FIELDS.map((f) => ({ field: f, value: get(draft, f) ?? null, options: enumFor(f)?.options })),
+        fields: [...allowedFields].map((f) => ({ field: f, value: get(draft, f) ?? null, options: enumFor(f)?.options })),
         rules: rules.map(describeRule),
         structures: {
           mcp_servers: listOf("mcp_servers").map((m) => String(m.url ?? "")),
@@ -222,7 +233,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
       // The gate: evaluate the admin ruleset on the EDITED draft before offering
       // it — judged on the violations the proposal INTRODUCES (pre-existing
       // draft violations are the editor's business, not the proposal's).
-      const { next, applied, skipped } = applyEdits(draft, r.edits);
+      const { next, applied, skipped } = applyEdits(draft, r.edits, allowedFields);
       const before = new Set(evaluateRules(draft, rules).filter((res) => res.state === "violated").map((res) => res.rule.id));
       const evald = evaluateRules(next, rules).filter((res) => res.state === "violated" && !before.has(res.rule.id));
       setProposal({
@@ -329,31 +340,47 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>
-            Fields
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)" }}>
+              Fields ({visibleFields.length}) <span className="sub" style={{ textTransform: "none", fontWeight: 400 }}>· from the loaded config</span>
+            </span>
+            {advancedCount > 0 && (
+              <button className="btn ghost sm" style={{ marginLeft: "auto" }} onClick={() => setShowAdvanced((s) => !s)}>
+                {showAdvanced ? "Hide" : "Show"} advanced ({advancedCount})
+              </button>
+            )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {EDIT_FIELDS.map((f) => {
+            {visibleFields.map((fld: DerivedField) => {
+              const f = fld.path;
               const en = enumFor(f);
               const v = get(draft, f);
               const needed = neededFields.has(f);
+              const setVal = (raw: string) =>
+                setDraft(setPath(draft, f, fld.type === "number" ? (raw === "" ? "" : Number(raw)) : raw));
               return (
                 <label key={f} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-                  <span className="mono" style={{ flex: "0 0 190px", color: needed ? "var(--crit)" : "var(--muted)" }}>
+                  <span className="mono" style={{ flex: "0 0 200px", color: needed ? "var(--crit)" : "var(--muted)" }}
+                    title={`${fld.type}${fld.advanced ? " · advanced" : ""}`}>
                     {f}{needed ? " ←" : ""}
                   </span>
                   {en ? (
                     // the admin's enum rule bounds the widget itself
                     <select className="area mono" style={{ flex: 1, padding: "4px 8px" }} value={String(v ?? "")}
-                      onChange={(e) => setDraft(setPath(draft, f, e.target.value))}>
+                      onChange={(e) => setVal(e.target.value)}>
                       {!en.options.includes(String(v ?? "")) && <option value={String(v ?? "")}>{String(v ?? "(unset)")} — not allowed</option>}
                       {en.options.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
+                  ) : fld.type === "boolean" ? (
+                    <select className="area mono" style={{ width: "auto", padding: "4px 8px" }} value={v === true ? "true" : "false"}
+                      onChange={(e) => setDraft(setPath(draft, f, e.target.value === "true"))}>
+                      <option value="true">true</option><option value="false">false</option>
+                    </select>
                   ) : (
-                    <input className="area mono" style={{ flex: 1, padding: "4px 8px", borderColor: needed ? "var(--crit)" : undefined }}
-                      value={typeof v === "string" ? v : v == null ? "" : JSON.stringify(v)}
-                      placeholder="(unset)"
-                      onChange={(e) => setDraft(setPath(draft, f, e.target.value))} />
+                    <input className="area mono" type={fld.type === "number" ? "number" : "text"}
+                      style={{ flex: 1, padding: "4px 8px", borderColor: needed ? "var(--crit)" : undefined }}
+                      value={v == null ? "" : String(v)} placeholder="(unset)"
+                      onChange={(e) => setVal(e.target.value)} />
                   )}
                 </label>
               );

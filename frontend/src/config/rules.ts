@@ -6,6 +6,7 @@
 // evaluated by the same collect-findings→gate pattern. The user stage (Config.tsx)
 // then enforces whatever the admin authored here, against the real config.
 import { enabledTools, type Config, type Finding } from "./configModel";
+import { deriveFields, kbModesOf } from "./configVocab";
 
 export type Level = "error" | "warn";
 
@@ -132,13 +133,13 @@ export function seedRules(): Rule[] {
 }
 
 // Vocabulary offered to the admin (and to the LLM drafter) so predicates
-// reference real atoms of the config rather than invented ones.
+// reference real atoms of the config rather than invented ones. Fields are
+// DERIVED from the loaded config (see configVocab), not hardcoded — plus the
+// structural atoms (arrays with their own editors) a rule may reference.
 export function ruleVocabulary(cfg: Config): { tools: string[]; fields: string[]; kbModes: string[] } {
   const tools = Object.keys((cfg.tools ?? {}) as Record<string, any>).sort();
-  const fields = [
-    "notification_service_url", "opensearch_endpoint", "lightrag.postgres.host",
-    "transfer_topics", "knowledge_base", "mcp_servers", "voice", "default_language_iso",
-    "custom_config.gpt_model",
-  ];
-  return { tools, fields, kbModes: [...kbModes(cfg)] };
+  const derived = deriveFields(cfg).map((f) => f.path);
+  const structural = ["transfer_topics", "knowledge_base", "mcp_servers"];
+  const fields = [...derived, ...structural.filter((s) => !derived.includes(s))];
+  return { tools, fields, kbModes: kbModesOf(cfg) };
 }
