@@ -20,12 +20,13 @@ from .config import get_settings
 from .scheduler import critical_path
 from .schemas import TaskDefinition
 
-# Cheap Spanish/English detector for the language rule below. Not a full language
-# ID — the deployed languages are ES/EN, and this only needs to name the caller's
-# language so a small responder model can be TOLD it (measured: naming the
-# language flips a bilingual-context reply from 0/6 to 6/6 correct on gpt-4o-mini;
-# a neutral "reply in the caller's language" does not survive the Spanish-heavy
-# SOP/fact context). Extend to a real detector when a third language ships.
+# Cheap language detector for the language rule below. Not a full language ID —
+# it only needs to NAME the caller's language so a small responder model can be
+# TOLD it (measured: naming the language flips a bilingual-context reply from
+# 0/6 to 6/6 correct on gpt-4o-mini; a neutral "reply in the caller's language"
+# does not survive the Spanish-heavy SOP/fact context). Russian is detected by
+# script (Cyrillic is unambiguous vs the Latin ES/EN); add more as they ship.
+_CYRILLIC = re.compile(r"[а-яА-ЯёЁ]")
 _ES_MARKERS = re.compile(
     r"[¿¡áéíóúñ]|\b(el|la|los|las|un|una|dónde|cómo|qué|está|estan|están|puede|puedo|"
     r"gracias|hola|equipaje|vuelo|aeropuerto|centro|ciudad|maleta|perdí|necesito|quiero|"
@@ -39,17 +40,22 @@ _EN_MARKERS = re.compile(
     re.I,
 )
 
+_ISO_TO_NAME = {"es": "Spanish", "ru": "Russian", "en": "English"}
+
 
 def detect_language(text: str, default_iso: str = "") -> str:
-    """Return the caller's language NAME ('Spanish' | 'English') for the language
-    rule. Ties / no signal fall back to the config's default_language_iso, else
-    English."""
+    """Return the caller's language NAME ('Russian' | 'Spanish' | 'English') for
+    the language rule. Cyrillic → Russian (script is unambiguous); otherwise the
+    ES/EN marker counts decide; ties / no signal fall back to the config's
+    default_language_iso, else English."""
+    if _CYRILLIC.search(text):
+        return "Russian"
     es, en = len(_ES_MARKERS.findall(text)), len(_EN_MARKERS.findall(text))
     if es > en:
         return "Spanish"
     if en > es:
         return "English"
-    return "Spanish" if (default_iso or "").lower().startswith("es") else "English"
+    return _ISO_TO_NAME.get((default_iso or "").lower()[:2], "English")
 
 _client: AsyncOpenAI | None = None
 
