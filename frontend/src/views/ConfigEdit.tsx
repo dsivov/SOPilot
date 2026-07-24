@@ -252,6 +252,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <span className="sub">Every edit is checked against <b style={{ color: "var(--text2)" }}>{rulesetLabel}</b> before it can be applied.</span>
         <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          {dirty && <span className="chip warn"><span className="cd" />unsaved edits</span>}
           {errors.length > 0
             ? <span className="chip crit"><span className="cd" />{errors.length} blocking</span>
             : violated.length > 0
@@ -264,6 +265,23 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
           </button>
         </span>
       </div>
+
+      {/* Staged-vs-committed is the #1 confusion: edits live in this draft until
+          "Apply changes" writes them to the config (which updates the graph/JSON
+          above). Make that explicit whenever the draft diverges. */}
+      {dirty && (
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "8px 12px",
+          background: "var(--panel2, rgba(127,127,127,.08))", border: "1px solid var(--warn)", borderRadius: 8 }}>
+          <span style={{ color: "var(--warn)", fontWeight: 700 }}>●</span>
+          <span style={{ flex: 1, minWidth: 220, fontSize: 12.5 }}>
+            You have unsaved edits staged here. {errors.length > 0
+              ? <b style={{ color: "var(--crit)" }}>Fix the blocking violation to enable Apply.</b>
+              : <>Click <b>Apply changes</b> to write them to the config (updating the graph &amp; JSON), or <b>Reset</b> to discard.</>}
+          </span>
+          <button className="btn ghost sm" onClick={() => setDraft(structuredClone(cfg))}>Reset</button>
+          <button className="btn sm primary" onClick={() => onApply(draft)} disabled={errors.length > 0}>Apply changes</button>
+        </div>
+      )}
 
       {/* the violations panel IS the guidance: each violated rule explains itself and offers derived fixes */}
       {violated.length > 0 && (
@@ -309,13 +327,15 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
             {proposal.blocking.map((v) => (
               <div key={v.rule.id} className="lintline" style={{ fontSize: 12, color: "var(--crit)" }}>✖ {v.rule.msg}</div>
             ))}
-            <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 2, alignItems: "center" }}>
               {proposal.blocking.length === 0 && (
-                <button className="btn sm primary" onClick={() => { setDraft(proposal.next); setProposal(null); setAsk(""); }}>
-                  Apply to draft
+                <button className="btn sm primary" onClick={() => { setDraft(proposal.next); setProposal(null); setAsk(""); }}
+                  title="Stage these edits in the editor below — then Apply changes to write them to the config">
+                  Add to edits
                 </button>
               )}
               <button className="btn ghost sm" onClick={() => setProposal(null)}>Discard</button>
+              {proposal.blocking.length === 0 && <span className="sub">stages the edits — review, then Apply changes</span>}
               {proposal.blocking.length > 0 && <span className="sub">The admin's ruleset forbids this change — it cannot be applied.</span>}
             </div>
           </div>

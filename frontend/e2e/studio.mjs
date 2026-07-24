@@ -1,23 +1,42 @@
-// Headless Studio click-through: admin console → one-click tenant login →
-// guided config editing (stage-2 gate: violations block Apply, fixes restore).
+// Headless Studio click-through: verify the admin console, then drive the
+// guided config editor (stage-2 gate: violations block Apply, fixes restore).
+//
+// IMPORTANT: this harness authenticates with a DEDICATED named key (minted via
+// the admin API and injected into localStorage), NOT the one-click "Log in →"
+// flow — that mints a single-active console-login key and would revoke the
+// session of anyone using the Studio for this tenant. Minting a named key
+// revokes nothing, so tests never disturb a live user.
 //
 // Needs the full stack running (backend :8100 + vite :5174, see README) and a
-// tenant with the display name below. Run from frontend/:
-//   node e2e/studio.mjs
-// Env: SOPILOT_STUDIO_URL, SOPILOT_ADMIN_TOKEN, SOPILOT_E2E_TENANT (display name)
+// tenant with the slug/display name below. Run from frontend/:  node e2e/studio.mjs
+// Env: SOPILOT_STUDIO_URL, SOPILOT_ADMIN_TOKEN, SOPILOT_E2E_TENANT (display), SOPILOT_E2E_SLUG
 import { chromium } from "playwright";
 
 const BASE = process.env.SOPILOT_STUDIO_URL || "https://localhost:5174";
+const API = process.env.SOPILOT_API_URL || "http://127.0.0.1:8100";
 const ADMIN_TOKEN = process.env.SOPILOT_ADMIN_TOKEN || "dev-admin-token-p0";
 const TENANT_NAME = process.env.SOPILOT_E2E_TENANT || "AENA — Malaga Airport";
+const TENANT_SLUG = process.env.SOPILOT_E2E_SLUG || "aena";
 let failures = 0;
 const ok = (name, cond) => { console.log((cond ? "  ✔ " : "  ✖ ") + name); if (!cond) failures++; };
+
+// Node fetch against the API (self-signed ok via NODE_TLS_REJECT_UNAUTHORIZED for https targets).
+if (API.startsWith("https")) process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+const adminReq = (method, path, body) => fetch(API + path, {
+  method, headers: { "X-Admin-Token": ADMIN_TOKEN, "Content-Type": "application/json" },
+  body: body ? JSON.stringify(body) : undefined,
+}).then((r) => r.json());
+
+// Mint a dedicated named key + resolve the tenant's first project.
+const keyResp = await adminReq("POST", `/admin/tenants/${TENANT_SLUG}/keys`, { label: "e2e-harness", role: "admin" });
+const projects = await adminReq("GET", `/admin/tenants/${TENANT_SLUG}/projects`);
+const E2E_KEY = keyResp.api_key, E2E_PROJECT = projects[0]?.slug;
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 } });
 page.on("pageerror", (e) => console.log("  [pageerror]", String(e).slice(0, 120)));
 
-// ---- 1. Admin console ----
+// ---- 1. Admin console renders (no click on Log in → — that would clobber real sessions) ----
 await page.goto(BASE);
 await page.evaluate(() => localStorage.clear());
 await page.goto(BASE);
@@ -29,16 +48,18 @@ ok("admin console opens with token", true);
 await page.getByText(TENANT_NAME).scrollIntoViewIfNeeded();
 ok("target tenant visible (console scrolls)", await page.getByText(TENANT_NAME).isVisible());
 
-// ---- 2. One-click login ----
-await page.locator("div", { has: page.getByText(TENANT_NAME) }).locator("button", { hasText: "Log in →" }).last().click();
-await page.getByText("Config viewer").waitFor({ timeout: 8000 }); // Studio nav renders → logged in
-ok("one-click login lands in Studio", true);
+// ---- 2. Enter the Studio with the named key (localStorage), not one-click login ----
+await page.evaluate(([k, p]) => { localStorage.setItem("sopilot-api-key", k); localStorage.setItem("sopilot-project", p); },
+  [E2E_KEY, E2E_PROJECT]);
+await page.goto(BASE);
+await page.getByText("Config viewer").waitFor({ timeout: 8000 });
+ok("named-key session lands in Studio", true);
 
 // ---- 3. Guided edit (user stage) ----
 await page.getByText("Config viewer").click();
 await page.getByText("Guided edit").waitFor({ timeout: 5000 });
 const card = page.locator(".card", { hasText: "Guided edit" });
-const applyBtn = page.getByRole("button", { name: "Apply changes" });
+const applyBtn = page.getByRole("button", { name: "Apply changes" }).first(); // header button (a 2nd appears in the dirty banner)
 ok("Apply disabled when clean (no edits)", await applyBtn.isDisabled());
 
 // Enable send_email — compliant while notification_service_url is set in the example config.
@@ -64,12 +85,13 @@ ok("apply lands (editor back to clean)", await applyBtn.isDisabled());
 // ---- 4. LLM-assisted edit (real model call; compliant request) ----
 await card.locator("input[placeholder*='ask for a change']").fill("switch the voice to echo");
 await page.getByRole("button", { name: "Propose" }).click();
-await page.getByRole("button", { name: /Apply to draft|Discard/ }).first().waitFor({ timeout: 30000 });
+await page.getByRole("button", { name: /Add to edits|Discard/ }).first().waitFor({ timeout: 30000 });
 ok("assistant proposes a formal edit", (await card.getByText(/Set voice = "echo"/).count()) > 0);
 ok("proposal evaluated within bounds", (await card.locator(".chip.good", { hasText: "within bounds" }).count()) > 0);
-await page.getByRole("button", { name: "Apply to draft" }).click();
+await page.getByRole("button", { name: "Add to edits" }).click();
 await page.waitForTimeout(300);
-ok("proposal applied → draft dirty, Apply enabled", await applyBtn.isEnabled());
+ok("staged edit → draft dirty, Apply enabled", await applyBtn.isEnabled());
+ok("unsaved-edits banner explains the two-step apply", (await card.getByText(/unsaved edits staged/).count()) > 0);
 
 // ---- 5. Complex structures: adding a KB without its backend must block ----
 // (example config has neither opensearch_endpoint nor lightrag.postgres —
@@ -92,5 +114,14 @@ await page.waitForTimeout(200);
 ok("toggle reveals advanced plumbing (rem_ws_host)", (await card.locator("span.mono", { hasText: "rem_ws_host" }).count()) > 0);
 
 await browser.close();
+
+// Revoke the harness key so it doesn't accumulate (best-effort).
+try {
+  const keys = await adminReq("GET", `/admin/tenants/${TENANT_SLUG}/keys`);
+  for (const k of keys.filter((k) => k.label === "e2e-harness" && !k.revoked)) {
+    await adminReq("POST", `/admin/tenants/${TENANT_SLUG}/keys/${k.id}/revoke`);
+  }
+} catch { /* cleanup is best-effort */ }
+
 console.log(failures === 0 ? "ALL PASS" : `${failures} FAILURES`);
 process.exit(failures ? 1 : 0);
