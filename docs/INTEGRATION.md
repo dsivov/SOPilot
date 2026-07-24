@@ -427,11 +427,21 @@ SOPILOT_API_KEY=sop_... SOPILOT_PROJECT=<project> python -m sopilot.mcp_server
 | `supervisor` | `polartie_ai_agent_supervisor` (reserved name) | the PLATFORM auto-drives it per turn (client-driven turns); the model never sees a tool to call (Stage 2 — needs the platform's supervisor extension) |
 | `both` (default) | both | mixed/dev |
 
-Session mapping: one SOPilot session per MCP connection; the first call opens
+Session mapping: one SOPilot session per **conversation**; the first call opens
 the session (no `sop_id` → intake router picks the SOP from the first
 utterance; advisory mode also switches SOP mid-call on topic change). Turns run
 with `steer_only=true` — SOPilot returns steering text only and never spends
 its own responder call.
+
+> **Pass `conversation_id` every turn** (both `sop_guidance` and
+> `polartie_ai_agent_supervisor` accept it): a stable id — your agent's session
+> id — reused for all turns of one call, so SOPilot keeps turn continuity
+> (routing, mid-call SOP switching, progress tracking all need the turns to
+> share one session). If you DON'T pass it, SOPilot falls back to the MCP
+> transport session id, which only works when your agent keeps a single MCP
+> connection open for the whole call — a fresh connection per tool call makes
+> every turn look like turn 0 and the supervisor stays stuck greeting. Passing
+> `conversation_id` is the robust contract regardless of connection behavior.
 
 ### MCP go-live checklist (in-process mount, step by step)
 

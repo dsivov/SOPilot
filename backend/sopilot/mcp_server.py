@@ -62,12 +62,38 @@ def _headers() -> "dict[str, str]":
     }
 
 
-def _conn_key(ctx: "Context | None") -> str:
-    """Stable per-connection key; falls back to a single shared session."""
-    for attr in ("session_id", "client_id", "request_id"):
-        val = getattr(ctx, attr, None)
-        if val:
-            return str(val)
+def _conn_key(ctx: "Context | None", conversation_id: str = "") -> str:
+    """Stable per-CONVERSATION key so one SOPilot session spans the whole call
+    (routing, tracking, switching all need turn continuity). Order:
+      1. an explicit conversation id the caller passes (most robust — PolarTie
+         attaches its agent session id to supervisor calls);
+      2. the MCP transport session id (stable while the client keeps one
+         connection);
+      3. a conversation/session id found in the request metadata;
+      4. a single shared fallback.
+    NEVER key on request_id — it is unique PER REQUEST, so it minted a new
+    SOPilot session every turn and the supervisor was stuck greeting forever
+    (found on the AENA/PolarTie integration)."""
+    if conversation_id and conversation_id.strip():
+        return f"conv:{conversation_id.strip()}"
+    if ctx is None:
+        return "default"
+    try:
+        sid = ctx.session_id
+        if sid:
+            return f"mcp:{sid}"
+    except Exception:  # property may raise when no MCP session is active
+        pass
+    # PolarTie-style: a conversation id carried in the tool-call request metadata.
+    try:
+        meta = ctx.request_context.meta if getattr(ctx, "request_context", None) else None
+        if meta is not None:
+            for k in ("conversation_id", "session_id", "agent_session_id", "call_id", "callId"):
+                v = getattr(meta, k, None) or (meta.get(k) if isinstance(meta, dict) else None)
+                if v:
+                    return f"meta:{v}"
+    except Exception:
+        pass
     return "default"
 
 
@@ -147,15 +173,16 @@ async def _guidance_inproc(user_message: str, key: str) -> dict:
             sid, ConverseRequest(user_message=user_message, steer_only=True), req, scope, db)
 
 
-async def _guidance(user_message: str, ctx: "Context | None", prev_assistant_message: str = "") -> str:
-    """Shared core: route/track the SOPilot session for this connection and return
+async def _guidance(user_message: str, ctx: "Context | None", prev_assistant_message: str = "",
+                    conversation_id: str = "") -> str:
+    """Shared core: route/track the SOPilot session for this conversation and return
     the per-turn stage steering. Used by both the model-driven tool (sop_guidance)
     and the auto-driven supervisor extension tool (polartie_ai_agent_supervisor).
     prev_assistant_message is accepted for forward-compat (voice-turn steering)."""
     if not API_KEY or not PROJECT:
         raise RuntimeError("SOPilot MCP server misconfigured: set SOPILOT_API_KEY and SOPILOT_PROJECT")
 
-    key = _conn_key(ctx)
+    key = _conn_key(ctx, conversation_id)
     try:
         if _INPROC:
             data = await _guidance_inproc(user_message, key)
@@ -190,19 +217,23 @@ async def _guidance(user_message: str, ctx: "Context | None", prev_assistant_mes
     return guidance or "No specific guidance for this turn; respond naturally and helpfully."
 
 
-async def sop_guidance(user_message: str, ctx: Context = None) -> str:
+async def sop_guidance(user_message: str, conversation_id: str = "", ctx: Context = None) -> str:
     """Get SOPilot's guidance for the current turn of a customer-service call.
 
     Call this every turn with the caller's latest message. Returns the standard
     operating procedure's stage guidance for how to handle this turn — the step
     to take, what to say, and any must-say / must-not-say constraints. Follow the
     returned guidance in your own words; do not read it out verbatim.
+
+    Pass a stable conversation_id (the same value every turn of one call) so the
+    guidance follows the conversation; omit it only if this MCP connection is
+    already one-per-call.
     """
-    return await _guidance(user_message, ctx)
+    return await _guidance(user_message, ctx, conversation_id=conversation_id)
 
 
 async def polartie_ai_agent_supervisor(
-    user_message: str, prev_assistant_message: str = "", ctx: Context = None
+    user_message: str, prev_assistant_message: str = "", conversation_id: str = "", ctx: Context = None
 ) -> str:
     """[PolarTie supervisor extension — reserved tool] Per-turn SOP steering.
 
@@ -212,8 +243,12 @@ async def polartie_ai_agent_supervisor(
     then applies the returned text as session.update instructions before letting
     the model respond. Returns the SOP stage steering for this turn (SOP chosen
     by SOPilot's intake router). The agent should follow it in its own voice.
+
+    Pass a stable conversation_id (your agent session id — the SAME value every
+    turn of one call) so SOPilot keeps turn continuity: routing, mid-call SOP
+    switching, and progress tracking all depend on the turns sharing one session.
     """
-    return await _guidance(user_message, ctx, prev_assistant_message)
+    return await _guidance(user_message, ctx, prev_assistant_message, conversation_id=conversation_id)
 
 
 # Register tools per mode (see MODE above).
