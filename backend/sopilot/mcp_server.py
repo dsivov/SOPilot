@@ -63,36 +63,40 @@ def _headers() -> "dict[str, str]":
 
 
 def _conn_key(ctx: "Context | None", conversation_id: str = "") -> str:
-    """Stable per-CONVERSATION key so one SOPilot session spans the whole call
-    (routing, tracking, switching all need turn continuity). Order:
-      1. an explicit conversation id the caller passes (most robust — PolarTie
-         attaches its agent session id to supervisor calls);
-      2. the MCP transport session id (stable while the client keeps one
-         connection);
-      3. a conversation/session id found in the request metadata;
+    """Stable per-CONVERSATION key so one SOPilot session spans a whole call
+    (routing, tracking, SOP switching all need turn continuity). Order matters:
+      1. an explicit conversation_id argument (if the caller passes one);
+      2. a conversation id in the tool-call REQUEST METADATA — this is what the
+         PolarTie voice agent already sends: `meta={"session_id": <call id>}`,
+         a fresh id PER CALL. It must beat (3) because PolarTie keeps ONE MCP
+         connection across many calls, so the transport session is too coarse
+         (it would fuse separate calls into one SOPilot session);
+      3. the MCP transport session id (per-connection — last resort);
       4. a single shared fallback.
     NEVER key on request_id — it is unique PER REQUEST, so it minted a new
     SOPilot session every turn and the supervisor was stuck greeting forever
-    (found on the AENA/PolarTie integration)."""
+    (the AENA/PolarTie symptom)."""
     if conversation_id and conversation_id.strip():
         return f"conv:{conversation_id.strip()}"
     if ctx is None:
         return "default"
+    # (2) client-supplied per-call id in request metadata (PolarTie's session_id).
+    try:
+        meta = ctx.request_context.meta if getattr(ctx, "request_context", None) else None
+        if meta is not None:
+            extra = getattr(meta, "model_extra", None) or {}
+            for k in ("conversation_id", "session_id", "agent_session_id", "call_id", "callId"):
+                v = getattr(meta, k, None) or extra.get(k) or (meta.get(k) if isinstance(meta, dict) else None)
+                if v:
+                    return f"meta:{v}"
+    except Exception:
+        pass
+    # (3) MCP transport session (per-connection).
     try:
         sid = ctx.session_id
         if sid:
             return f"mcp:{sid}"
     except Exception:  # property may raise when no MCP session is active
-        pass
-    # PolarTie-style: a conversation id carried in the tool-call request metadata.
-    try:
-        meta = ctx.request_context.meta if getattr(ctx, "request_context", None) else None
-        if meta is not None:
-            for k in ("conversation_id", "session_id", "agent_session_id", "call_id", "callId"):
-                v = getattr(meta, k, None) or (meta.get(k) if isinstance(meta, dict) else None)
-                if v:
-                    return f"meta:{v}"
-    except Exception:
         pass
     return "default"
 

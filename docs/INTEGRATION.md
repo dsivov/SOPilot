@@ -433,15 +433,16 @@ utterance; advisory mode also switches SOP mid-call on topic change). Turns run
 with `steer_only=true` — SOPilot returns steering text only and never spends
 its own responder call.
 
-> **Pass `conversation_id` every turn** (both `sop_guidance` and
-> `polartie_ai_agent_supervisor` accept it): a stable id — your agent's session
-> id — reused for all turns of one call, so SOPilot keeps turn continuity
-> (routing, mid-call SOP switching, progress tracking all need the turns to
-> share one session). If you DON'T pass it, SOPilot falls back to the MCP
-> transport session id, which only works when your agent keeps a single MCP
-> connection open for the whole call — a fresh connection per tool call makes
-> every turn look like turn 0 and the supervisor stays stuck greeting. Passing
-> `conversation_id` is the robust contract regardless of connection behavior.
+> **Conversation continuity.** SOPilot keys one session per conversation so
+> routing, mid-call SOP switching, and progress tracking span the turns. It
+> resolves the conversation id in this order: (1) an explicit `conversation_id`
+> tool argument, if you pass one; (2) a `session_id` (or `conversation_id`) in
+> the tool-call **request metadata** — the PolarTie voice agent already sends
+> `meta={"session_id": <per-call id>}`, so **this works with no change**; (3)
+> the MCP transport session id (per-connection — a last resort). It never keys
+> on `request_id`. If your client sends neither a `conversation_id` arg nor a
+> metadata id AND opens a fresh connection per tool call, every turn looks like
+> turn 0 and the supervisor stays stuck greeting — send one of the two.
 
 ### MCP go-live checklist (in-process mount, step by step)
 
