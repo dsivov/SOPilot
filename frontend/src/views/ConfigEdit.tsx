@@ -218,7 +218,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
     if (!ask.trim()) return;
     setAskBusy(true); setAskErr(""); setProposal(null);
     try {
-      const r = await api<{ edits?: EditOp[]; note?: string; error?: string }>("POST", "/config/draft-edit", {
+      const r = await api<{ edits?: EditOp[]; reply?: string; note?: string; error?: string }>("POST", "/config/draft-edit", {
         instruction: ask,
         tools: toolNames.map((t) => ({ name: t, enabled: draft.tools?.[t]?.enabled === true })),
         fields: [...allowedFields].map((f) => ({ field: f, value: get(draft, f) ?? null, options: enumFor(f)?.options })),
@@ -229,7 +229,14 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
           transfer_topics: listOf("transfer_topics").map((t) => String(t.topic_id ?? "")),
         },
       });
-      if (r.error || !r.edits?.length) { setAskErr(r.error || r.note || "The model proposed no edits."); return; }
+      if (r.error) { setAskErr(r.error); return; }
+      const reply = r.reply || r.note || "";
+      // Answer-only (a question, or a request that needs something outside the
+      // editor's vocabulary): show the reply conversationally, no edits to stage.
+      if (!r.edits?.length) {
+        setProposal({ note: reply, applied: [], skipped: [], next: draft, blocking: [], warns: [] });
+        return;
+      }
       // The gate: evaluate the admin ruleset on the EDITED draft before offering
       // it — judged on the violations the proposal INTRODUCES (pre-existing
       // draft violations are the editor's business, not the proposal's).
@@ -237,7 +244,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
       const before = new Set(evaluateRules(draft, rules).filter((res) => res.state === "violated").map((res) => res.rule.id));
       const evald = evaluateRules(next, rules).filter((res) => res.state === "violated" && !before.has(res.rule.id));
       setProposal({
-        note: r.note || "", applied, skipped, next,
+        note: reply, applied, skipped, next,
         blocking: evald.filter((v) => v.rule.level === "error"),
         warns: evald.filter((v) => v.rule.level !== "error"),
       });
@@ -303,20 +310,24 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
       {/* assistant: plain English → formal ops, gated by the same ruleset */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 8 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input className="area" style={{ flex: 1 }} placeholder='ask for a change — e.g. "let the agent send verification SMS" or "switch the voice to something calmer"'
+          <input className="area" style={{ flex: 1 }} placeholder='ask or change — e.g. "how do I add weather data?" or "let the agent send verification SMS"'
             value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !askBusy && propose()} />
           <button className="btn sm primary" onClick={propose} disabled={askBusy || !ask.trim()}>{askBusy ? "Thinking…" : "Propose"}</button>
         </div>
         {askErr && <div className="lintline" style={{ color: "var(--crit)" }}>{askErr}</div>}
-        {proposal && (
+        {proposal && (() => {
+          const answerOnly = proposal.applied.length === 0 && proposal.skipped.length === 0 && proposal.blocking.length === 0;
+          return (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 10px", background: "var(--panel2, rgba(127,127,127,.06))", borderRadius: 8 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {proposal.blocking.length > 0
-                ? <span className="chip crit"><span className="cd" />violates admin rules</span>
-                : proposal.warns.length > 0
-                  ? <span className="chip warn"><span className="cd" />{proposal.warns.length} warning{proposal.warns.length === 1 ? "" : "s"}</span>
-                  : <span className="chip good"><span className="cd" />within bounds</span>}
-              {proposal.note && <span className="sub" style={{ flex: 1 }}>{proposal.note}</span>}
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              {answerOnly
+                ? <span className="chip muted" style={{ flex: "0 0 auto" }}><span className="cd" />answer</span>
+                : proposal.blocking.length > 0
+                  ? <span className="chip crit" style={{ flex: "0 0 auto" }}><span className="cd" />violates admin rules</span>
+                  : proposal.warns.length > 0
+                    ? <span className="chip warn" style={{ flex: "0 0 auto" }}><span className="cd" />{proposal.warns.length} warning{proposal.warns.length === 1 ? "" : "s"}</span>
+                    : <span className="chip good" style={{ flex: "0 0 auto" }}><span className="cd" />within bounds</span>}
+              {proposal.note && <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.45 }}>{proposal.note}</span>}
             </div>
             {proposal.applied.map((e, i) => (
               <div key={i} className="lintline mono" style={{ fontSize: 12, color: "var(--text2)" }}>→ {describeOp(e)}</div>
@@ -328,18 +339,19 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
               <div key={v.rule.id} className="lintline" style={{ fontSize: 12, color: "var(--crit)" }}>✖ {v.rule.msg}</div>
             ))}
             <div style={{ display: "flex", gap: 8, marginTop: 2, alignItems: "center" }}>
-              {proposal.blocking.length === 0 && (
+              {proposal.applied.length > 0 && proposal.blocking.length === 0 && (
                 <button className="btn sm primary" onClick={() => { setDraft(proposal.next); setProposal(null); setAsk(""); }}
                   title="Stage these edits in the editor below — then Apply changes to write them to the config">
                   Add to edits
                 </button>
               )}
-              <button className="btn ghost sm" onClick={() => setProposal(null)}>Discard</button>
-              {proposal.blocking.length === 0 && <span className="sub">stages the edits — review, then Apply changes</span>}
+              <button className="btn ghost sm" onClick={() => setProposal(null)}>{answerOnly ? "Dismiss" : "Discard"}</button>
+              {proposal.applied.length > 0 && proposal.blocking.length === 0 && <span className="sub">stages the edits — review, then Apply changes</span>}
               {proposal.blocking.length > 0 && <span className="sub">The admin's ruleset forbids this change — it cannot be applied.</span>}
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
 
       <div className="grid2">

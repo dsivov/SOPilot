@@ -219,8 +219,10 @@ class DraftEditRequest(BaseModel):
 
 
 _DRAFT_EDIT_SYS = (
-    "You are the user-stage assistant of a configuration manager. Convert ONE plain-English change request into "
-    "formal edit operations the guided editor can apply. The edit vocabulary is exactly:\n"
+    "You are the user-stage assistant of a voice-agent configuration manager — you both ANSWER questions about the "
+    "config and PROPOSE changes. Be helpful and conversational, never a terse rejector.\n\n"
+    "When a request maps to a concrete change, propose the MINIMAL formal edit operations. The edit vocabulary is "
+    "exactly:\n"
     "  {\"op\":\"enable_tool\",\"tool\":<name>}\n"
     "  {\"op\":\"disable_tool\",\"tool\":<name>}\n"
     "  {\"op\":\"set_field\",\"field\":<dot.path>,\"value\":<string>}\n"
@@ -231,14 +233,22 @@ _DRAFT_EDIT_SYS = (
     "  {\"op\":\"remove_kb\",\"knowledge_id\":<existing id>}\n"
     "  {\"op\":\"add_transfer_topic\",\"topic_id\":<id>,\"function_tag\":<optional>,\"prompt\":<when to transfer here>}\n"
     "  {\"op\":\"remove_transfer_topic\",\"topic_id\":<existing id>}\n"
-    "Only reference tools and fields from the provided lists, and remove only listed structure entries — never "
-    "invent names. The ADMIN RULES bound what a valid config may look like: your proposal must keep the config "
-    "within them (use only allowed enum options; if enabling a tool or adding a structure requires a field per a "
-    "rule, include a set_field for it — ask for a placeholder value only when none can be inferred; e.g. a "
-    "lightrag knowledge base typically requires the lightrag.postgres.host field). Propose the MINIMAL set of "
-    "edits for the request. Return ONLY JSON: {\"edits\":[...], \"note\":\"<one sentence: what the edits do and "
-    "any caveat>\"}. If the request cannot be done within the vocabulary or would necessarily violate a rule, "
-    "return {\"edits\":[], \"note\":\"<why>\"}."
+    "Only reference tools/fields from the provided lists, and remove only listed structure entries — never invent "
+    "names. Stay within the ADMIN RULES (allowed enum options only; if enabling a tool or adding a structure "
+    "requires a field per a rule, include the set_field — placeholder value only when none can be inferred).\n\n"
+    "HOW THIS CONFIG WORKS (use to answer 'how do I…' questions):\n"
+    "- Built-in TOOLS are capabilities toggled on/off (send_email, transfer, show_table, …).\n"
+    "- EXTERNAL DATA/KNOWLEDGE (weather, flight status, prices, any live or document data the agent should draw on) "
+    "comes through a CONNECTOR — an MCP server, a RAG/HTTP endpoint, or a managed corpus — registered in the "
+    "Connectors view. To add such data you: (1) register/point at the source, e.g. add an mcp_servers entry for a "
+    "weather MCP; (2) optionally add a knowledge_base entry; (3) the prompt/SOP then references it. You can add the "
+    "mcp_servers entry here if the user gives a URL; registering a named connector or editing the prompt happens in "
+    "their own views.\n"
+    "- TRANSFER TOPICS are handoff targets; KNOWLEDGE BASES are retrieval sources; scalar FIELDS are settings.\n\n"
+    "Return ONLY JSON: {\"reply\": \"<a short, helpful answer to the user — always present; if you couldn't make an "
+    "edit, explain concretely HOW to achieve what they asked and what you'd need from them, e.g. a URL>\", "
+    "\"edits\": [<0 or more ops>]}. Always include a reply. Include edits only when you are proposing a concrete, "
+    "in-vocabulary change; otherwise return an empty edits list and guide them in the reply."
 )
 
 
@@ -310,7 +320,8 @@ async def draft_edit(req: DraftEditRequest, scope: Scope = Depends(resolve_scope
                     if e.get(k):
                         out_e[k] = str(e[k])
             edits.append(out_e)
-    return {"edits": edits[:20], "note": str(data.get("note", ""))[:400]}
+    reply = str(data.get("reply") or data.get("note") or "").strip()[:1200]
+    return {"edits": edits[:20], "reply": reply, "note": reply}  # note kept for back-compat
 
 
 # ---------- Write-back: render a deploy-ready robot config ----------
