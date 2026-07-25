@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>System Analysis Report → Stage-1 Schema — Design</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --surface: #ffffff; --text: #1c2128; --text2: #3a424e;
+    --muted: #6a7480; --line: #e3e7ec; --accent: #3b6ef5; --accent-soft: #eaf0ff;
+    --good: #1a9d5a; --warn: #b6791f; --crit: #d13438; --code-bg: #f2f4f7;
+    --chip: #eef1f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --surface: #161b22; --text: #e6edf3; --text2: #c2ccd6;
+      --muted: #8b949e; --line: #262c34; --accent: #6ea0ff; --accent-soft: #17233f;
+      --good: #3fb950; --warn: #d29922; --crit: #f85149; --code-bg: #0c1017; --chip: #1e252e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1116; --surface: #161b22; --text: #e6edf3; --text2: #c2ccd6;
+    --muted: #8b949e; --line: #262c34; --accent: #6ea0ff; --accent-soft: #17233f;
+    --good: #3fb950; --warn: #d29922; --crit: #f85149; --code-bg: #0c1017; --chip: #1e252e;
+  }
+  :root[data-theme="light"] {
+    --bg: #f7f8fa; --surface: #ffffff; --text: #1c2128; --text2: #3a424e;
+    --muted: #6a7480; --line: #e3e7ec; --accent: #3b6ef5; --accent-soft: #eaf0ff;
+    --good: #1a9d5a; --warn: #b6791f; --crit: #d13438; --code-bg: #f2f4f7; --chip: #eef1f5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15.5px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: 12px; font-weight: 700; color: var(--accent); }
+  h1 { font-size: 30px; line-height: 1.2; margin: 8px 0 6px; letter-spacing: -.01em; }
+  .status { color: var(--muted); font-size: 13.5px; margin-bottom: 8px; }
+  .status b { color: var(--warn); }
+  h2 { font-size: 20px; margin: 40px 0 10px; padding-top: 16px; border-top: 1px solid var(--line); letter-spacing: -.01em; }
+  h3 { font-size: 15.5px; margin: 22px 0 6px; color: var(--text2); }
+  p { margin: 10px 0; color: var(--text2); }
+  a { color: var(--accent); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em;
+    background: var(--code-bg); padding: 1px 5px; border-radius: 5px; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; font-size: 12.8px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .cmt { color: var(--muted); }
+  .k { color: var(--accent); }
+  ul, ol { color: var(--text2); padding-left: 22px; }
+  li { margin: 5px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--line); padding: 8px 11px; text-align: left; vertical-align: top; }
+  th { background: var(--chip); font-weight: 600; }
+  .chip { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+    background: var(--chip); color: var(--text2); }
+  .chip.known { color: var(--good); } .chip.need { color: var(--warn); } .chip.crit { color: var(--crit); }
+  .note { background: var(--accent-soft); border-left: 3px solid var(--accent); border-radius: 8px;
+    padding: 10px 14px; margin: 16px 0; color: var(--text2); font-size: 14px; }
+  /* pipeline diagram */
+  .pipe { display: flex; flex-direction: column; gap: 8px; margin: 18px 0; }
+  .stage { display: flex; align-items: flex-start; gap: 12px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .stage .tag { flex: 0 0 92px; font-weight: 700; font-size: 12.5px; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; padding-top: 1px; }
+  .stage .body { flex: 1; font-size: 14px; color: var(--text2); }
+  .stage .body b { color: var(--text); }
+  .arrow { text-align: center; color: var(--muted); font-size: 15px; line-height: 1; }
+  /* architecture mini-diagram */
+  .arch { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+  .box { border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; background: var(--surface); font-size: 13px; min-width: 150px; }
+  .box .n { font-weight: 700; color: var(--text); }
+  .box .d { color: var(--muted); font-size: 12px; }
+  .box.ext { border-style: dashed; }
+  .theme-toggle { position: fixed; top: 14px; right: 16px; background: var(--surface); border: 1px solid var(--line);
+    color: var(--text2); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; cursor: pointer; }
+  .foot { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="(function(){var r=document.documentElement;var d=(r.getAttribute('data-theme')|| (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'))==='dark';r.setAttribute('data-theme',d?'light':'dark');})()">◐ theme</button>
+<div class="wrap">
+
+  <div class="eyebrow">SOPilot · Config Management · Design</div>
+  <h1>System Analysis Report → Stage-1 Schema</h1>
+  <div class="status"><b>Status: proposal</b> (not built) · companion to the Config-Schema (DSL) design · source: NEW_FEATURES.md “Enhanced System Analysis”</div>
+
+  <p>An automated <b>Stage-0 analysis</b> produces a structured JSON report of a target
+  system — its components, every possible configuration item, integration points, and
+  dependencies, including <em>what is still unknown</em>. That report becomes the
+  authoritative seed for the <b>Stage-1 schema</b> the admin curates. This document
+  defines the report’s shape and how it flows through the configurator.</p>
+
+  <h2>1 · Where this sits</h2>
+  <div class="pipe">
+    <div class="stage"><div class="tag">Stage 0</div><div class="body"><b>Analysis</b> → a structured JSON report of the system (components, all config items, integrations, dependencies, and the unknowns). Produced offline by experts + Claude; input may be a sample config, a DB schema, or source code.</div></div>
+    <div class="arrow">▼</div>
+    <div class="stage"><div class="tag">Stage 1</div><div class="body"><b>Schema</b> — the admin curates a <code>ConfigSchema</code> (the DSL) seeded from the report; declares rules (bounds).</div></div>
+    <div class="arrow">▼</div>
+    <div class="stage"><div class="tag">Stage 2</div><div class="body"><b>Config</b> — the user authors a config within schema + rules, then <b>write-back</b> renders a validated deploy artifact.</div></div>
+  </div>
+  <p>Today Stage 1 is seeded from a <b>sample config</b>, which only reveals fields present
+  in one example. The Analysis report replaces that weak seed with an authoritative one:
+  it names <em>all</em> config items with types, enums, defaults, requiredness,
+  dependencies — and the items that are <span class="chip need">needs_input</span> and
+  await Engineering.</p>
+  <div class="note">The configurator <b>only ever consumes the report</b>, never the raw
+  system. The report is the normalized output of analysis whose input may be a sample
+  config, a database schema, or code — a clean boundary that keeps the configurator
+  source-agnostic (handles “the DB schema itself is the data source”).</div>
+
+  <h2>2 · The report JSON (the keystone)</h2>
+  <pre><code>{
+  <span class="k">"kind"</span>: "sopilot-system-analysis",
+  <span class="k">"report_version"</span>: 1,
+  <span class="k">"system"</span>: {
+    "name": "polartie-voice-robot",
+    "description": "...",
+    "analyzed_at": "2026-07-25T…",           <span class="cmt">// stamped by the analysis run</span>
+    "sources": ["sample_config", "db_schema"] <span class="cmt">// what analysis drew on</span>
+  },
+
+  <span class="cmt">// Architecture — renders as a dependency diagram (reuses ConfigGraph).</span>
+  <span class="k">"components"</span>: [
+    { "id": "voice_agent", "name": "Voice Agent", "kind": "service",
+      "description": "...", "depends_on": ["knowledge_mcp", "schedule_mcp"] },
+    { "id": "knowledge_mcp", "name": "Airport Knowledge MCP", "kind": "external",
+      "description": "Context Graph", "depends_on": [] }
+  ],
+
+  <span class="cmt">// The config surface → becomes ConfigSchema fields / tools / structures.</span>
+  <span class="k">"config_items"</span>: [
+    { "path": "voice", "item": "field", "type": "enum",
+      "options": ["alloy","echo","coral"], "required": false,
+      "description": "TTS voice", "component": "voice_agent",
+      "status": "known", "source": "sample_config" },
+
+    { "path": "weather_provider", "item": "field", "type": "enum",
+      "options": [], "required": true, "description": "live weather source",
+      "component": "voice_agent",
+      "status": "needs_input", "source": "code" },          <span class="cmt">// options unknown</span>
+
+    { "path": "send_email", "item": "tool", "description": "send an email",
+      "status": "known", "source": "code" },
+
+    { "path": "mcp_servers", "item": "structure", "description": "MCP endpoints",
+      "status": "known", "source": "sample_config" }
+  ],
+
+  <span class="cmt">// Retrieval / external systems → connectors + structure entries.</span>
+  <span class="k">"integration_points"</span>: [
+    { "name": "airport-facts", "kind": "rag",
+      "source_ref": "postgres:aena.documents",   <span class="cmt">// db-as-source example</span>
+      "auth": "secret-ref", "description": "...", "component": "knowledge_mcp" }
+  ],
+
+  <span class="cmt">// The feedback loop: what analysis could NOT resolve → to Engineering.</span>
+  <span class="k">"open_questions"</span>: [
+    { "about": "weather_provider", "question": "what are the allowed providers?",
+      "needs_from": "engineering" }
+  ]
+}</code></pre>
+
+  <h3>Field notes</h3>
+  <ul>
+    <li><b>status</b> <span class="chip known">known</span> <span class="chip need">needs_input</span> <span class="chip">inferred</span> — the known-vs-unknown notion. <code>needs_input</code> items appear in the schema but are flagged (Stage 2 can’t finalize them; write-back warns) until Engineering supplies the missing facts.</li>
+    <li><b>source</b> per item records provenance (sample config / db schema / code / manual) — audit + merge decisions.</li>
+    <li><b>item</b> (<code>field | tool | structure</code>) maps 1:1 to the three parts of <code>ConfigSchema</code>.</li>
+    <li><b>depends_on</b> on components (and optionally items) drives the diagram and later cross-field rules.</li>
+  </ul>
+
+  <h2>3 · Importer: report → schema</h2>
+  <p>A new importer beside the existing <code>schemaFromConfig</code>:</p>
+  <pre><code><span class="k">schemaFromAnalysisReport</span>(report): ConfigSchema
+  fields:     config_items where item==="field"     (type, options, required, description, advanced)
+  tools:      config_items where item==="tool"      (name=path, description)
+  structures: config_items where item==="structure" (key=path)</code></pre>
+  <p><code>needs_input</code> items carry through as a field flag so the admin sees “declared
+  but awaiting Engineering.” Everything the admin then edits layers on top — the same
+  curate-then-publish flow that exists now.</p>
+
+  <h2>4 · Re-analysis: versioned, DB-stored, merge-not-clobber</h2>
+  <p>All configs are DB-stored and versioned, and the report is one of those artifacts.
+  Analysis runs after each major system update or at onboarding, so each run is a
+  <b>new immutable version</b>:</p>
+  <ul>
+    <li><code>ConfigAnalysisReport</code> / <code>ConfigAnalysisReportVersion</code>
+      (SopVersion-style: immutable versions, a <code>published_version</code> pointer,
+      per tenant/project), mirroring <code>ConfigRuleset</code>. <code>GET/PUT /config/analysis</code> + history.</li>
+    <li><b>Sync-to-schema is explicit and merges</b> — re-import must not wipe curation. Merge rule (by <code>path</code>):
+      <ul>
+        <li>the report is authoritative for <b>existence, type, dependencies, source, status</b> (structural facts);</li>
+        <li>the admin is authoritative for <b>label, description overrides, required, advanced, curated enum options</b> once a field is touched;</li>
+        <li><b>added</b> items appear flagged “new”; <b>removed</b> items are flagged <span class="chip crit">gone in vN</span> (never silently dropped).</li>
+      </ul>
+      Provenance (<code>source</code> + an “admin-touched” bit) is what keeps the merge honest.</li>
+  </ul>
+  <p>Full artifact set per project, all versioned in the DB:</p>
+  <div class="pipe">
+    <div class="stage"><div class="tag">describes</div><div class="body"><b>Analysis report</b> (Stage 0)</div></div>
+    <div class="arrow">▼</div>
+    <div class="stage"><div class="tag">types</div><div class="body"><b>Schema</b> (Stage 1) · <b>Ruleset</b> (bounds)</div></div>
+    <div class="arrow">▼</div>
+    <div class="stage"><div class="tag">is</div><div class="body"><b>Config document</b> → rendered robot config</div></div>
+  </div>
+  <p>The DB-versioning stage should stand all of these up on the one proven
+  <code>ConfigRuleset</code> pattern.</p>
+
+  <h2>5 · Diagram view</h2>
+  <p><code>components</code> + <code>depends_on</code> + <code>integration_points</code> render
+  with the existing <code>ConfigGraph</code> machinery — the “better in diagram form” ask, at low cost. For example:</p>
+  <div class="arch">
+    <div class="box"><div class="n">Voice Agent</div><div class="d">service · depends on ↓</div></div>
+    <div class="box ext"><div class="n">Airport Knowledge MCP</div><div class="d">external · Context Graph</div></div>
+    <div class="box ext"><div class="n">Schedule MCP</div><div class="d">external · flight status</div></div>
+  </div>
+  <p>Read-only; the analysis itself needs no authoring UI (offline expert + Claude process producing the JSON).</p>
+
+  <h2>6 · The feedback loop to Engineering</h2>
+  <ul>
+    <li><b>Analysis → Admin:</b> unresolved items arrive flagged <span class="chip need">needs_input</span>; the admin can’t finalize them.</li>
+    <li><b>Admin → Engineering:</b> when the admin needs an option the schema lacks (already surfaced when the guided-edit assistant hits an out-of-vocab request), that becomes an <code>open_question</code> exported for the next analysis round.</li>
+  </ul>
+
+  <h2>7 · Open decisions</h2>
+  <table>
+    <tr><th>#</th><th>Decision</th><th>Lean</th></tr>
+    <tr><td>1</td><td>Report JSON is the contract — lock §2 first (producer + importer both bind to it)</td><td>Lock before any code</td></tr>
+    <tr><td>2</td><td>Scope of a report — per project, or per <em>system</em> shared across projects?</td><td>Per system/tenant, referenced by projects (one AENA analysis, many configs)</td></tr>
+    <tr><td>3</td><td>Merge policy (§4) — the hard part</td><td>Design the “admin-touched” provenance bit in from the start</td></tr>
+    <tr><td>4</td><td>DB-as-source ingestion</td><td>Out of scope for the configurator; producer’s <code>source_ref</code> convention, opaque to us</td></tr>
+    <tr><td>5</td><td>Sequencing</td><td>Rides on the DB-versioning stage — do that first</td></tr>
+  </table>
+
+  <h2>8 · Phasing</h2>
+  <table>
+    <tr><th>Phase</th><th>Scope</th></tr>
+    <tr><td><b>A</b></td><td>Lock the report JSON (§2); <code>schemaFromAnalysisReport</code> importer + “Import analysis report” in Config admin (file upload first); <code>needs_input</code> surfaced in schema + Stage 2.</td></tr>
+    <tr><td><b>B</b></td><td>DB-versioned <code>ConfigAnalysisReport</code>; sync-to-schema <b>merge</b> with provenance; history view.</td></tr>
+    <tr><td><b>C</b></td><td>Diagram view; <code>open_questions</code> export (Admin→Engineering loop); in-UI help sourced from item descriptions.</td></tr>
+  </table>
+
+  <div class="foot">SOPilot config-management · design proposal for review · see also
+  <code>docs/DESIGN_CONFIG_SCHEMA_DSL.md</code> and the Markdown source
+  <code>docs/DESIGN_SYSTEM_ANALYSIS_REPORT.md</code>.</div>
+</div>
+</body>
+</html>
