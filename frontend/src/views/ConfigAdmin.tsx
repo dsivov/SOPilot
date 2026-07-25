@@ -88,6 +88,36 @@ function SchemaEditor({ schema, cfg, onChange }: { schema: ConfigSchema | null; 
   const fields = schema?.fields ?? [];
   const setFields = (fs: SchemaFieldDef[]) => onChange({ ...(schema ?? { fields: [] }), fields: fs });
   const patch = (i: number, k: keyof SchemaFieldDef, v: any) => setFields(fields.map((f, j) => (j === i ? { ...f, [k]: v } : f)));
+  // LLM-assisted field authoring: plain English → one SchemaFieldDef.
+  const [ask, setAsk] = useState("");
+  const [askBusy, setAskBusy] = useState(false);
+  const [askErr, setAskErr] = useState("");
+  const draftField = async () => {
+    if (!ask.trim()) return;
+    setAskBusy(true); setAskErr("");
+    try {
+      const r = await api<{ field?: SchemaFieldDef; error?: string }>("POST", "/config/draft-field", {
+        instruction: ask,
+        existing_fields: fields.map((f) => f.path),
+        known_paths: Object.keys(cfg).concat(Object.keys(cfg.custom_config ?? {}).map((k) => `custom_config.${k}`)),
+      });
+      if (r.field?.path) { setFields([...fields, r.field]); setAsk(""); }
+      else setAskErr(r.error || "The model did not return a valid field.");
+    } catch (e: any) {
+      const m = String(e?.message ?? e);
+      setAskErr(m.includes("Not Found") ? "Draft endpoint not found — restart the backend for /config/draft-field." : `Drafting failed: ${m}`);
+    } finally { setAskBusy(false); }
+  };
+  const drafter = (
+    <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--line)" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input className="area" style={{ flex: 1 }} placeholder='describe a field — e.g. "a weather provider, enum of openweather / tomorrow.io, required"'
+          value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !askBusy && draftField()} />
+        <button className="btn sm primary" onClick={draftField} disabled={askBusy || !ask.trim()}>{askBusy ? "Drafting…" : "Draft field"}</button>
+      </div>
+      {askErr && <div className="lintline" style={{ color: "var(--crit)", marginTop: 6 }}>{askErr}</div>}
+    </div>
+  );
 
   if (schema === null) {
     return (
@@ -98,9 +128,10 @@ function SchemaEditor({ schema, cfg, onChange }: { schema: ConfigSchema | null; 
         </div>
         <div>
           <button className="btn sm primary" onClick={() => onChange(schemaFromConfig(cfg))}>
-            Bootstrap from {cfg.display_name || "config"}
+            Bootstrap from the loaded config
           </button>
         </div>
+        {drafter}
       </div>
     );
   }
@@ -136,6 +167,7 @@ function SchemaEditor({ schema, cfg, onChange }: { schema: ConfigSchema | null; 
         <span className="sub" style={{ flex: 1, textAlign: "right" }}>{fields.length} field{fields.length === 1 ? "" : "s"} declared</span>
         <button className="btn ghost sm" onClick={() => onChange(null)} title="Drop the schema — user stage reverts to config-derived fields">Clear schema</button>
       </div>
+      {drafter}
     </div>
   );
 }

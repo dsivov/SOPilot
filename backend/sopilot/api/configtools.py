@@ -251,6 +251,63 @@ async def publish_ruleset(scope: Scope = Depends(resolve_scope), db: AsyncSessio
     return {"version": rs.latest_version, "published_version": rs.published_version}
 
 
+class DraftFieldRequest(BaseModel):
+    instruction: str = ""              # admin's plain-English field description
+    existing_fields: list[str] = []    # field paths already declared (avoid dupes)
+    known_paths: list[str] = []        # dot-paths seen in real configs (grounding)
+
+
+_DRAFT_FIELD_SYS = (
+    "You are the admin-stage schema assistant of a voice-agent configuration manager. Turn ONE plain-English "
+    "description of a configuration option into ONE structured schema field definition (the config DSL). Return "
+    "ONLY JSON: {\"field\": {\"path\": <dot.path>, \"type\": \"string\"|\"number\"|\"boolean\"|\"enum\"|"
+    "\"secret-ref\"|\"connector-ref\", \"options\": [<enum values, only when type is enum>], \"required\": "
+    "true|false, \"description\": <one-sentence help shown to the user>, \"advanced\": true|false}} or, if the "
+    "request is not a single declarable field, {\"error\": \"<why>\"}. Prefer a dot-path consistent with the "
+    "KNOWN PATHS style; reuse an existing path only if the admin is redefining it. Use type enum with options "
+    "only when the value is a fixed small set; secret-ref for credentials, connector-ref for a named connector. "
+    "Keep description short and concrete."
+)
+
+
+@router.post("/draft-field")
+async def draft_field(req: DraftFieldRequest, scope: Scope = Depends(resolve_scope)) -> dict:
+    """LLM-assisted schema authoring (admin stage): plain English → one schema
+    FieldDef. 'Chat to define the DSL' — the field the admin reviews and adds."""
+    import json as _json
+
+    from ..bench.llm import client
+    from ..config import get_settings
+    if not req.instruction.strip():
+        return {"error": "empty instruction"}
+    user = (
+        "EXISTING FIELD PATHS (already declared):\n" + (", ".join(req.existing_fields[:80]) or "(none)")
+        + "\n\nKNOWN PATHS seen in real configs (style reference):\n" + (", ".join(req.known_paths[:80]) or "(none)")
+        + "\n\nDESCRIBE THE FIELD:\n" + req.instruction[:600]
+    )
+    try:
+        res = await client().chat.completions.create(
+            model=get_settings().builder_model,
+            messages=[{"role": "system", "content": _DRAFT_FIELD_SYS}, {"role": "user", "content": user}],
+            temperature=0.1, max_tokens=300, response_format={"type": "json_object"},
+        )
+        data = _json.loads(res.choices[0].message.content or "{}")
+    except Exception as e:  # noqa: BLE001 — LLM/key issue, surface not 500
+        return {"error": f"field drafting unavailable ({type(e).__name__})"}
+    f = data.get("field") if isinstance(data, dict) else None
+    if not isinstance(f, dict) or not str(f.get("path", "")).strip():
+        return {"error": str(data.get("error") or "the model did not return a valid field")}
+    ftype = f.get("type") if f.get("type") in _FIELD_TYPES else "string"
+    out = {"path": str(f["path"]).strip(), "type": ftype,
+           "description": str(f.get("description", ""))[:300],
+           "required": bool(f.get("required")), "advanced": bool(f.get("advanced"))}
+    if ftype == "enum":
+        out["options"] = [str(o) for o in (f.get("options") or []) if isinstance(o, (str, int, float))]
+        if not out["options"]:
+            return {"error": "enum field needs options — rephrase with the allowed values"}
+    return {"field": out}
+
+
 class DraftEditRequest(BaseModel):
     instruction: str = ""              # the user's plain-English change request
     tools: list[dict] = []             # [{name, enabled}] — current tool states
@@ -421,7 +478,46 @@ async def render_robot(
         resolved_servers.append(m)
     if "mcp_servers" in cfg or resolved_servers:
         cfg["mcp_servers"] = resolved_servers
+    notes += await _schema_notes(db, scope, cfg)
     return {"config": cfg, "notes": notes}
+
+
+async def _schema_notes(db: AsyncSession, scope: Scope, cfg: dict) -> list[str]:
+    """Validate the config against the project's PUBLISHED schema (types, enum
+    membership, required present). Advisory notes — write-back never blocks (the
+    Studio already gates on rule errors); these catch schema drift at deploy."""
+    rs = await _get_ruleset(db, scope)
+    if rs is None or not rs.published_version:
+        return []
+    row = await _version_row(db, rs.id, rs.published_version)
+    schema = row.config_schema if row else None
+    if not schema or not isinstance(schema.get("fields"), list):
+        return []
+
+    def get_path(o, path):
+        for k in path.split("."):
+            o = o.get(k) if isinstance(o, dict) else None
+            if o is None:
+                return None
+        return o
+
+    out: list[str] = []
+    for f in schema["fields"]:
+        if not isinstance(f, dict):
+            continue
+        path, ftype = f.get("path", ""), f.get("type")
+        v = get_path(cfg, path)
+        if v is None or (isinstance(v, str) and not v.strip()):
+            if f.get("required"):
+                out.append(f"schema: required field '{path}' is not set")
+            continue
+        if ftype == "number" and not isinstance(v, (int, float)):
+            out.append(f"schema: field '{path}' should be a number (got {type(v).__name__})")
+        elif ftype == "boolean" and not isinstance(v, bool):
+            out.append(f"schema: field '{path}' should be a boolean (got {type(v).__name__})")
+        elif ftype == "enum" and f.get("options") and str(v) not in [str(o) for o in f["options"]]:
+            out.append(f"schema: field '{path}' = '{v}' is not one of {f['options']}")
+    return out
 
 
 class DraftRuleRequest(BaseModel):
