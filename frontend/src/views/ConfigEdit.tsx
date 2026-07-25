@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Config } from "../config/configModel";
 import { describeRule, evaluateRules, type Rule, type RuleResult } from "../config/rules";
 import { deriveFields, type DerivedField } from "../config/configVocab";
+import { editorFields, type ConfigSchema } from "../config/schema";
 import { api } from "../api";
 
 function get(cfg: any, path: string): any {
@@ -130,8 +131,8 @@ function fixesFor(res: RuleResult, draft: Config): Fix[] {
   return r.options.length ? [{ label: `Set ${r.field} = "${r.options[0]}"`, apply: (d) => setPath(d, r.field, r.options[0]) }] : [];
 }
 
-export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
-  cfg: Config; rules: Rule[]; rulesetLabel: string; onApply: (next: Config) => void;
+export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply }: {
+  cfg: Config; rules: Rule[]; rulesetLabel: string; schema?: ConfigSchema | null; onApply: (next: Config) => void;
 }) {
   const [draft, setDraft] = useState<Config>(() => structuredClone(cfg));
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -142,11 +143,10 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
   const errors = violated.filter((r) => r.rule.level === "error");
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(cfg), [draft, cfg]);
 
-  // Fields DERIVED from the loaded config (not hardcoded). A field a rule
-  // references but the config lacks is still surfaced (deriveFields adds the
-  // common requirable ones); the allow-set also includes any rule-referenced
-  // field so the assistant may set one the walk didn't reach.
-  const fields = useMemo(() => deriveFields(draft), [draft]);
+  // Fields from the admin's PUBLISHED schema (the DSL) when present, else derived
+  // from the loaded config (fallback). A field a rule references but neither
+  // declares is still surfaced via the allow-set below so the assistant may set it.
+  const fields = useMemo(() => editorFields(draft, schema), [draft, schema]);
   const allowedFields = useMemo(() => {
     const s = new Set(fields.map((f) => f.path));
     for (const r of rules) {
@@ -374,7 +374,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
         <div>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
             <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)" }}>
-              Fields ({visibleFields.length}) <span className="sub" style={{ textTransform: "none", fontWeight: 400 }}>· from the loaded config</span>
+              Fields ({visibleFields.length}) <span className="sub" style={{ textTransform: "none", fontWeight: 400 }}>· {schema?.fields?.length ? "from the admin schema" : "from the loaded config"}</span>
             </span>
             {advancedCount > 0 && (
               <button className="btn ghost sm" style={{ marginLeft: "auto" }} onClick={() => setShowAdvanced((s) => !s)}>
@@ -385,23 +385,25 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, onApply }: {
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {visibleFields.map((fld: DerivedField) => {
               const f = fld.path;
-              const en = enumFor(f);
+              // enum options come from the schema field first (the DSL), else an enum rule.
+              const opts = fld.options ?? enumFor(f)?.options;
               const v = get(draft, f);
-              const needed = neededFields.has(f);
+              const requiredUnset = fld.required && !(typeof v === "string" ? v.trim() : v != null);
+              const needed = neededFields.has(f) || requiredUnset;
               const setVal = (raw: string) =>
                 setDraft(setPath(draft, f, fld.type === "number" ? (raw === "" ? "" : Number(raw)) : raw));
               return (
                 <label key={f} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
                   <span className="mono" style={{ flex: "0 0 200px", color: needed ? "var(--crit)" : "var(--muted)" }}
-                    title={`${fld.type}${fld.advanced ? " · advanced" : ""}`}>
-                    {f}{needed ? " ←" : ""}
+                    title={[fld.type, fld.required ? "required" : "", fld.advanced ? "advanced" : "", fld.description || ""].filter(Boolean).join(" · ")}>
+                    {f}{fld.required ? " *" : ""}{needed ? " ←" : ""}
                   </span>
-                  {en ? (
-                    // the admin's enum rule bounds the widget itself
+                  {opts ? (
+                    // enum: the schema (or admin's enum rule) bounds the widget itself
                     <select className="area mono" style={{ flex: 1, padding: "4px 8px" }} value={String(v ?? "")}
                       onChange={(e) => setVal(e.target.value)}>
-                      {!en.options.includes(String(v ?? "")) && <option value={String(v ?? "")}>{String(v ?? "(unset)")} — not allowed</option>}
-                      {en.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                      {!opts.includes(String(v ?? "")) && <option value={String(v ?? "")}>{String(v ?? "(unset)")} — not allowed</option>}
+                      {opts.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   ) : fld.type === "boolean" ? (
                     <select className="area mono" style={{ width: "auto", padding: "4px 8px" }} value={v === true ? "true" : "false"}

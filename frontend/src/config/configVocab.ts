@@ -4,13 +4,16 @@
 // automatically; nothing is AENA-shaped here.
 import type { Config } from "./configModel";
 
-export type FieldType = "string" | "number" | "boolean" | "enum";
+export type FieldType = "string" | "number" | "boolean" | "enum" | "secret-ref" | "connector-ref";
 
 export interface DerivedField {
   path: string;        // dot-path, e.g. "custom_config.gpt_model"
   type: FieldType;
   value: any;          // current value (undefined if unset)
   advanced: boolean;   // plumbing the admin usually shouldn't rule on — hidden by default
+  options?: string[];  // enum values (populated when the field comes from a schema)
+  description?: string;// help text (from a schema)
+  required?: boolean;  // must be set (from a schema)
 }
 
 // Keys that are transport/infra plumbing rather than agent behaviour: still

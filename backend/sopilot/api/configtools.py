@@ -149,31 +149,70 @@ async def _get_ruleset(db: AsyncSession, scope: Scope) -> ConfigRuleset | None:
         ConfigRuleset.name == "default"))).scalar_one_or_none()
 
 
-async def _version_rules(db: AsyncSession, ruleset_id: str, version: int) -> list | None:
-    row = (await db.execute(select(ConfigRulesetVersion).where(
+async def _version_row(db: AsyncSession, ruleset_id: str, version: int) -> ConfigRulesetVersion | None:
+    return (await db.execute(select(ConfigRulesetVersion).where(
         ConfigRulesetVersion.ruleset_id == ruleset_id,
         ConfigRulesetVersion.version == version))).scalar_one_or_none()
-    return None if row is None else row.rules
+
+
+_FIELD_TYPES = ("string", "number", "boolean", "enum", "secret-ref", "connector-ref")
+
+
+def _validate_schema(schema) -> str | None:
+    """Shape-check a config schema (the DSL). Returns an error string or None.
+    Minimal by design — the schema DESCRIBES options; content curation is the
+    admin's. Only `fields` is enforced in Phase 1 (tools/structures optional)."""
+    if schema is None:
+        return None
+    if not isinstance(schema, dict):
+        return "schema must be an object"
+    fields = schema.get("fields")
+    if fields is None:
+        return "schema.fields is required"
+    if not isinstance(fields, list):
+        return "schema.fields must be a list"
+    seen = set()
+    for i, f in enumerate(fields):
+        if not isinstance(f, dict):
+            return f"field {i}: must be an object"
+        path = str(f.get("path", "")).strip()
+        if not path:
+            return f"field {i}: missing path"
+        if path in seen:
+            return f"field {i}: duplicate path '{path}'"
+        seen.add(path)
+        if f.get("type") not in _FIELD_TYPES:
+            return f"field '{path}': type must be one of {_FIELD_TYPES}"
+        if f.get("type") == "enum" and not (isinstance(f.get("options"), list) and f["options"]):
+            return f"field '{path}': enum requires a non-empty options list"
+    return None
 
 
 @router.get("/ruleset")
 async def get_ruleset(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)) -> dict:
-    """The project's ruleset: latest rules (for the admin editor) and published
-    rules (what the user stage enforces). exists=False → nothing saved yet."""
+    """The project's config profile: latest rules + schema (for the admin editor)
+    and the published ones (what the user stage enforces / is bounded by).
+    exists=False → nothing saved yet."""
     rs = await _get_ruleset(db, scope)
     if rs is None:
-        return {"exists": False, "latest_version": 0, "published_version": None, "rules": None, "published_rules": None}
+        return {"exists": False, "latest_version": 0, "published_version": None,
+                "rules": None, "published_rules": None, "schema": None, "published_schema": None}
+    latest = await _version_row(db, rs.id, rs.latest_version)
+    published = await _version_row(db, rs.id, rs.published_version) if rs.published_version else None
     return {
         "exists": True,
         "latest_version": rs.latest_version,
         "published_version": rs.published_version,
-        "rules": await _version_rules(db, rs.id, rs.latest_version),
-        "published_rules": (await _version_rules(db, rs.id, rs.published_version)) if rs.published_version else None,
+        "rules": latest.rules if latest else None,
+        "published_rules": published.rules if published else None,
+        "schema": latest.config_schema if latest else None,
+        "published_schema": published.config_schema if published else None,
     }
 
 
 class RulesetSaveRequest(BaseModel):
     rules: list = []
+    schema: dict | None = None   # the config DSL; null = leave unschematized (deriveFields fallback)
     publish: bool = False
 
 
@@ -181,9 +220,10 @@ class RulesetSaveRequest(BaseModel):
 async def save_ruleset(
     req: RulesetSaveRequest, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
 ) -> dict:
-    """Save the ruleset as a NEW immutable version (SopVersion-style); optionally
-    publish it in the same call. Publishing is what exposes it to the user stage."""
-    err = _validate_rules(req.rules)
+    """Save the config profile (rules + optional schema) as a NEW immutable
+    version (SopVersion-style); optionally publish it. Publishing is what exposes
+    it to the user stage."""
+    err = _validate_rules(req.rules) or _validate_schema(req.schema)
     if err:
         raise HTTPException(status_code=422, detail=err)
     rs = await _get_ruleset(db, scope)
@@ -192,7 +232,8 @@ async def save_ruleset(
         db.add(rs)
         await db.flush()
     rs.latest_version += 1
-    db.add(ConfigRulesetVersion(ruleset_id=rs.id, version=rs.latest_version, rules=req.rules))
+    db.add(ConfigRulesetVersion(ruleset_id=rs.id, version=rs.latest_version,
+                                rules=req.rules, config_schema=req.schema))
     if req.publish:
         rs.published_version = rs.latest_version
     await db.commit()

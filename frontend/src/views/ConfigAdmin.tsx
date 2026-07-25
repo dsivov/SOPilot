@@ -13,6 +13,8 @@ import {
   describeRule, evaluateRules, ruleVocabulary, seedRules,
   type Level, type Rule, type RuleResult,
 } from "../config/rules";
+import { schemaFromConfig, type ConfigSchema, type SchemaFieldDef } from "../config/schema";
+import type { FieldType } from "../config/configVocab";
 import { api } from "../api";
 
 const KIND_LABEL: Record<Rule["kind"], string> = { requires: "requires", conflicts: "conflicts", enum: "enum" };
@@ -76,9 +78,71 @@ function AddRule({ onAdd }: { onAdd: (r: Rule) => void }) {
   );
 }
 
+// ---- schema (DSL) authoring -------------------------------------------------
+
+const FIELD_TYPES: FieldType[] = ["string", "number", "boolean", "enum", "secret-ref", "connector-ref"];
+
+// Declares WHICH config options exist and their type-level shape (the DSL). The
+// user stage draws its fields/widgets from this when published; rules layer on top.
+function SchemaEditor({ schema, cfg, onChange }: { schema: ConfigSchema | null; cfg: Config; onChange: (s: ConfigSchema | null) => void }) {
+  const fields = schema?.fields ?? [];
+  const setFields = (fs: SchemaFieldDef[]) => onChange({ ...(schema ?? { fields: [] }), fields: fs });
+  const patch = (i: number, k: keyof SchemaFieldDef, v: any) => setFields(fields.map((f, j) => (j === i ? { ...f, [k]: v } : f)));
+
+  if (schema === null) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="sub" style={{ fontSize: 12.5 }}>
+          No schema yet — the user stage falls back to walking the loaded config. Declare a schema to make the
+          available options authoritative (types, enums, required, descriptions), independent of any example.
+        </div>
+        <div>
+          <button className="btn sm primary" onClick={() => onChange(schemaFromConfig(cfg))}>
+            Bootstrap from {cfg.display_name || "config"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {fields.length === 0 && <div className="empty" style={{ padding: "4px 0" }}>No fields — add one, or bootstrap from a config.</div>}
+      {fields.map((f, i) => (
+        <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", borderBottom: "1px solid var(--line)", padding: "4px 0" }}>
+          <input className="area mono" style={{ flex: "1 1 180px", padding: "3px 7px", fontSize: 12 }} placeholder="dot.path"
+            value={f.path} onChange={(e) => patch(i, "path", e.target.value)} />
+          <select className="area mono" style={{ width: "auto", padding: "3px 7px", fontSize: 12 }} value={f.type}
+            onChange={(e) => patch(i, "type", e.target.value)}>
+            {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          {f.type === "enum" && (
+            <input className="area mono" style={{ flex: "1 1 140px", padding: "3px 7px", fontSize: 12 }} placeholder="options (comma-sep)"
+              value={(f.options ?? []).join(", ")} onChange={(e) => patch(i, "options", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))} />
+          )}
+          <input className="area" style={{ flex: "2 1 200px", padding: "3px 7px", fontSize: 12 }} placeholder="description (help shown to the user)"
+            value={f.description ?? ""} onChange={(e) => patch(i, "description", e.target.value)} />
+          <label className="sub" style={{ fontSize: 11.5, display: "flex", gap: 3, alignItems: "center" }} title="Must be set">
+            <input type="checkbox" checked={!!f.required} onChange={(e) => patch(i, "required", e.target.checked)} />req
+          </label>
+          <label className="sub" style={{ fontSize: 11.5, display: "flex", gap: 3, alignItems: "center" }} title="Hidden behind the advanced toggle">
+            <input type="checkbox" checked={!!f.advanced} onChange={(e) => patch(i, "advanced", e.target.checked)} />adv
+          </label>
+          <button className="btn ghost sm" title="Remove field" onClick={() => setFields(fields.filter((_, j) => j !== i))}>✕</button>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
+        <button className="btn ghost sm" onClick={() => setFields([...fields, { path: "", type: "string" }])}>+ Add field</button>
+        <button className="btn ghost sm" onClick={() => onChange(schemaFromConfig(cfg))} title="Re-seed from the loaded config (merges nothing — replaces)">Re-bootstrap</button>
+        <span className="sub" style={{ flex: 1, textAlign: "right" }}>{fields.length} field{fields.length === 1 ? "" : "s"} declared</span>
+        <button className="btn ghost sm" onClick={() => onChange(null)} title="Drop the schema — user stage reverts to config-derived fields">Clear schema</button>
+      </div>
+    </div>
+  );
+}
+
 // ---- main view --------------------------------------------------------------
 
-interface RulesetInfo { exists: boolean; latest_version: number; published_version: number | null; rules: Rule[] | null; published_rules: Rule[] | null }
+interface RulesetInfo { exists: boolean; latest_version: number; published_version: number | null; rules: Rule[] | null; published_rules: Rule[] | null; schema: ConfigSchema | null }
 
 export default function ConfigAdminView() {
   const [rules, setRules] = useState<Rule[]>(seedRules());
@@ -88,6 +152,9 @@ export default function ConfigAdminView() {
   const [busy, setBusy] = useState(false);
   const [draftErr, setDraftErr] = useState("");
   const [showJson, setShowJson] = useState(false);
+  // The Stage-1 SCHEMA (DSL): null until authored. When set, it (not the loaded
+  // config) is the field vocabulary the user stage and rule authoring use.
+  const [schema, setSchema] = useState<ConfigSchema | null>(null);
   // Persistence (SopVersion-style): every save is a new immutable version; the
   // published version is what the user stage (Config view) enforces.
   const [version, setVersion] = useState(0);
@@ -99,13 +166,19 @@ export default function ConfigAdminView() {
   useEffect(() => {
     api<RulesetInfo>("GET", "/config/ruleset").then((r) => {
       if (r.exists && r.rules) { setRules(r.rules); setDirty(false); }
+      if (r.schema) setSchema(r.schema);
       setVersion(r.latest_version); setPublishedVersion(r.published_version);
     }).catch(() => { /* backend down / pre-migration — stay on the seed */ });
   }, []);
 
   const pick = (t: "example" | "sample") => { setTarget(t); setCfg((t === "example" ? EXAMPLE : SAMPLE_CONFIG) as Config); };
   const results = useMemo(() => evaluateRules(cfg, rules), [cfg, rules]);
-  const vocab = useMemo(() => ruleVocabulary(cfg), [cfg]);
+  // Rule authoring references the SCHEMA's field paths when a schema exists,
+  // else the config-derived vocabulary.
+  const vocab = useMemo(() => {
+    const base = ruleVocabulary(cfg);
+    return schema?.fields?.length ? { ...base, fields: schema.fields.map((f) => f.path) } : base;
+  }, [cfg, schema]);
   const violated = results.filter((r) => r.state === "violated").length;
 
   const remove = (id: string) => { setRules((rs) => rs.filter((r) => r.id !== id)); setDirty(true); };
@@ -114,7 +187,7 @@ export default function ConfigAdminView() {
   const save = async (publish: boolean) => {
     setSaveBusy(true); setSaveErr("");
     try {
-      const r = await api<{ version: number; published_version: number | null }>("PUT", "/config/ruleset", { rules, publish });
+      const r = await api<{ version: number; published_version: number | null }>("PUT", "/config/ruleset", { rules, schema, publish });
       setVersion(r.version); setPublishedVersion(r.published_version); setDirty(false);
     } catch (e: any) {
       const m = String(e?.message ?? e);
@@ -195,6 +268,16 @@ export default function ConfigAdminView() {
             <textarea className="area mono" rows={10} readOnly value={JSON.stringify(rules, null, 2)}
               style={{ marginTop: 8 }} onFocus={(e) => e.currentTarget.select()} />
           )}
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="chead"><span>Available options — schema (DSL)</span>
+          <span className="sub" style={{ marginLeft: "auto" }}>
+            {schema?.fields?.length ? `${schema.fields.length} fields declared — the user stage uses these` : "not declared — user stage derives fields from the config"}
+          </span></div>
+        <div className="cbody">
+          <SchemaEditor schema={schema} cfg={cfg} onChange={(s) => { setSchema(s); setDirty(true); }} />
         </div>
       </div>
 

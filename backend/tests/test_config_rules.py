@@ -43,3 +43,32 @@ def test_enum_options_must_be_list():
     assert "options" in _validate_rules(
         [{"id": "e", "kind": "enum", "field": "voice", "options": "alloy", "level": "warn", "msg": "m"}]
     )
+
+
+# ---- schema (DSL) shape validation ----
+from sopilot.api.configtools import _validate_schema
+
+
+def test_schema_none_ok():
+    assert _validate_schema(None) is None
+
+
+def test_valid_schema():
+    s = {"name": "x", "fields": [
+        {"path": "voice", "type": "enum", "options": ["alloy", "echo"]},
+        {"path": "notification_service_url", "type": "string", "required": True},
+        {"path": "custom_config.temperature", "type": "number"},
+    ]}
+    assert _validate_schema(s) is None
+
+
+def test_schema_requires_fields_list():
+    assert "fields" in _validate_schema({})
+    assert "list" in _validate_schema({"fields": {}})
+
+
+def test_schema_field_shape():
+    assert "path" in _validate_schema({"fields": [{"type": "string"}]})
+    assert "type" in _validate_schema({"fields": [{"path": "x", "type": "date"}]})
+    assert "duplicate" in _validate_schema({"fields": [{"path": "x", "type": "string"}, {"path": "x", "type": "number"}]})
+    assert "enum" in _validate_schema({"fields": [{"path": "voice", "type": "enum"}]})

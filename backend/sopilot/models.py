@@ -205,6 +205,10 @@ class ConfigRulesetVersion(Base):
     ruleset_id: Mapped[str] = mapped_column(ForeignKey("config_rulesets.id", ondelete="CASCADE"), index=True)
     version: Mapped[int] = mapped_column(Integer)
     rules: Mapped[list] = mapped_column(JSON)  # list[Rule] — the frontend engine's shapes
+    # Stage-1 config SCHEMA (the "available options" DSL): fields/tools/structures
+    # the admin declares. Nullable — versions predating the schema, and
+    # rules-only saves, leave it null and Stage 2 falls back to deriveFields.
+    config_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

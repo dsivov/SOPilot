@@ -11,6 +11,7 @@ import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import { MCP_INTROSPECTION } from "../config/mcpIntrospection";
 import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, availableToolNames, type Finding, type Introspection } from "../config/configModel";
 import { ruleFindings, seedRules, type Rule } from "../config/rules";
+import type { ConfigSchema } from "../config/schema";
 import GuidedEditor from "./ConfigEdit";
 import { api, getCreds } from "../api";
 
@@ -56,6 +57,7 @@ export default function ConfigView() {
   // fetched; falls back to the built-in seed when nothing is published yet.
   const [adminRules, setAdminRules] = useState<Rule[] | null>(null);
   const [adminVersion, setAdminVersion] = useState<number | null>(null);
+  const [adminSchema, setAdminSchema] = useState<ConfigSchema | null>(null);
   const [renderNotes, setRenderNotes] = useState<string[] | null>(null);
   const [renderBusy, setRenderBusy] = useState(false);
 
@@ -73,8 +75,11 @@ export default function ConfigView() {
   };
 
   useEffect(() => {
-    api<{ published_version: number | null; published_rules: Rule[] | null }>("GET", "/config/ruleset")
-      .then((r) => { if (r.published_rules) { setAdminRules(r.published_rules); setAdminVersion(r.published_version); } })
+    api<{ published_version: number | null; published_rules: Rule[] | null; published_schema: ConfigSchema | null }>("GET", "/config/ruleset")
+      .then((r) => {
+        if (r.published_rules) { setAdminRules(r.published_rules); setAdminVersion(r.published_version); }
+        if (r.published_schema) setAdminSchema(r.published_schema);
+      })
       .catch(() => { /* backend down — seed fallback below */ });
   }, []);
 
@@ -169,7 +174,7 @@ export default function ConfigView() {
         <div className="chead"><span>Guided edit</span>
           <span className="sub" style={{ marginLeft: "auto" }}>edit within the admin's bounds — blocking violations can't be applied</span></div>
         <div className="cbody">
-          <GuidedEditor cfg={cfg} rules={effectiveRules}
+          <GuidedEditor cfg={cfg} rules={effectiveRules} schema={adminSchema}
             rulesetLabel={adminRules ? `published ruleset v${adminVersion}` : "the built-in default rules"}
             onApply={(next) => { setCfg(next); setText(JSON.stringify(next, null, 2)); setLogicalLive(null); }} />
         </div>
