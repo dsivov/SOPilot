@@ -193,7 +193,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
     const c = mcpConnectors.find((x) => x.name === name);
     if (!c || listOf("mcp_servers").some((m) => m.connector === name)) return;
     setList("mcp_servers", [...listOf("mcp_servers"), {
-      url: c.config?.server ?? "", connector: c.name,
+      url: c.config?.server ?? c.config?.url ?? "", connector: c.name,
       ...(c.config?.auth_secret ? { authorization: `secret:${c.config.auth_secret}` } : {}),
     }]);
   };
@@ -454,20 +454,27 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
                 <button className="btn ghost sm" title="Remove server" onClick={() => dropAt("mcp_servers", i)}>✕</button>
               </div>
             ))}
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
               <button className="btn ghost sm" onClick={() => setList("mcp_servers", [...listOf("mcp_servers"), { url: "" }])}>+ Add MCP server</button>
-              {mcpConnectors.length > 0 && (
-                <select className="area mono" style={{ width: "auto", padding: "4px 8px" }} value=""
-                  title="Reuse a connection defined once in the connector registry"
-                  onChange={(e) => { if (e.target.value) addFromConnector(e.target.value); e.target.value = ""; }}>
-                  <option value="">+ from connector…</option>
-                  {mcpConnectors.map((c) => (
-                    <option key={c.name} value={c.name} disabled={listOf("mcp_servers").some((m) => m.connector === c.name)}>
-                      {c.name} — {c.config?.server ?? "?"}{c.enabled ? "" : " (disabled)"}
+              {/* Reuse a registry connector. Only mcp-kind connectors are MCP
+                  servers; other kinds are shown but disabled (with the reason)
+                  so the whole registry is visible, not silently filtered. */}
+              <select className="area mono" style={{ width: "auto", maxWidth: 320, padding: "4px 8px" }} value=""
+                title="Reuse a connection defined once in the connector registry"
+                onChange={(e) => { if (e.target.value) addFromConnector(e.target.value); e.target.value = ""; }}>
+                <option value="">+ from connector…</option>
+                {connectors.length === 0 && <option value="" disabled>no connectors registered — add them in Connectors</option>}
+                {connectors.map((c) => {
+                  const already = listOf("mcp_servers").some((m) => m.connector === c.name);
+                  const endpoint = c.config?.server ?? c.config?.url ?? "?";
+                  return (
+                    <option key={c.name} value={c.name} disabled={c.kind !== "mcp" || already}>
+                      {c.name} · {c.kind}{c.kind !== "mcp" ? " (not an MCP server)" : ` — ${endpoint}`}
+                      {c.kind === "mcp" && !c.enabled ? " (disabled)" : ""}{already ? " ✓ added" : ""}
                     </option>
-                  ))}
-                </select>
-              )}
+                  );
+                })}
+              </select>
             </div>
           </div>
         </div>}
