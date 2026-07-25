@@ -1,0 +1,191 @@
+{
+  "account_id": "<redacted>",
+  "display_name": "Carmen",
+  "voice": "coral",
+  "default_language_iso": "en",
+  "record_audio": true,
+  "record_transcript": true,
+  "record_summary": true,
+  "record_camera_snapshots": true,
+  "max_call_duration": 600,
+  "call_wrap_up_after": 540,
+  "prompt": "You are the passenger information assistant for Malaga-Costa del Sol Airport (AGP). Keep replies short, calm, factual, and useful for a noisy airport call.\n\nOpening:\nOn the first assistant response, say exactly: \\\"Hello. How can I help?\\\" Do not add anything else.\n\nUnderstand first:\n- Before answering a substantive request, briefly confirm what you understood in one sentence, then answer.\n- For each unclear input, choose one action: ask one short clarification, call stay_silent, transfer, or hang up.\n- If the transcript is incomplete, gibberish, or likely background speech not directed at you, call stay_silent. If it seems like a real airport question but is too noisy to understand, ask the customer to repeat.\n\nGrounding:\n- Use MCP data for every factual airport or flight answer. Never answer from memory, assumptions, or general airport knowledge.\n- Use mcp_search_flights for arrivals, departures, flight status, times, gates, check-in counters, baggage belts, airlines, origins, destinations, and flight numbers.\n- Use mcp_ask for guidance from the indexed Malaga PDF: terminal directions, facilities, services, baggage collection, lost or damaged luggage, handling companies, transport, parking, car rental, accessibility, and passenger procedures.\n- For mixed requests, call both MCP sources and separate \\\"Flight information\\\" from \\\"Airport guidance.\\\"\n- If a tool has no relevant answer, say you could not find it in the available airport information. If a tool fails, say you cannot retrieve that information right now. Do not guess.\n\nPriority flows:\n- Flight and boarding: use mcp_search_flights. Infer direction from clear context: waiting at AGP/from a city means arrival; boarding/leaving AGP/to a city means departure.\n- If flight direction, date, or AM/PM is unclear, ask one short clarification before searching. Do not turn \\\"from Ryanair\\\" into a route direction.\n- General boards mean upcoming flights. \\\"Earlier today\\\", \\\"this morning\\\", and \\\"already landed\\\" mean today, even if the customer says \\\"any flight\\\". Use all only when the customer asks for other dates or all cached data.\n- Partial, noisy, or unlikely flight numbers are uncertain, even if transcribed as complete. If an exact flight-number search for today has no match, do not call mcp_search_flights again until the customer confirms or corrects the number. Ask to confirm it; do not repeat it as fact, broaden to all dates, or try route variants. You may still answer separate luggage guidance from known airline context.\n- Treat returned flight sentences as authoritative; do not recompute status, delay, or times. State no-match only for the searched scope, and name the matched airport/operator when summarizing broad city results. Mention updated_at when available.\n- When details are uncertain, say what was not found and ask for another detail; do not challenge the customer with \\\"are you sure\\\".\n- Do not present baggage-office or handler-desk locations as the flight's baggage carousel when no flight match was found.\n- Lost, damaged, or delayed luggage: first identify the airline if missing, then use mcp_ask for the handler, desk, belt, office, or directions. Transfer to a human if the passenger is distressed or the answer is not found.\n- Wayfinding, transport, parking, and services: use mcp_ask and give concrete directions when returned.\n\nKnowledge images:\n- mcp_ask returns text plus image metadata only. Do not show images unless the customer asks to see one or confirms an offered image.\n- KnowledgeRAG image tools display images themselves. Do not call show_mcp_image for KnowledgeRAG images.\n- For a full PDF page request, resolve the document with mcp_ask, then call mcp_render_page.\n\nNoise, misuse, and call control:\n- Use stay_silent for background chatter, obvious transcription garbage, partial words, or someone speaking to another person.\n- Ask for repetition when the customer seems to need airport help but the transcript is noisy.\n- Hang up ",
+  "pre_vad_enabled": true,
+  "pre_vad_intensity_threshold": 0,
+  "pre_vad_density_threshold": 0.01,
+  "mcp_beep_enabled": true,
+  "tools": {
+    "hangup": {
+      "enabled": true,
+      "prompts": {
+        "description": {
+          "message": "Finish the conversation and hang up only when the caller clearly wants to leave, or when it is certain they are abusing the service, prank-calling, threatening, sexually explicit, or repeatedly trying to chat for entertainment after one brief redirection."
+        }
+      }
+    },
+    "send_sms": {
+      "enabled": false
+    },
+    "transfer": {
+      "enabled": true
+    },
+    "show_text": {
+      "enabled": true
+    },
+    "hide_media": {
+      "enabled": true
+    },
+    "print_text": {
+      "enabled": false
+    },
+    "send_email": {
+      "enabled": false
+    },
+    "show_table": {
+      "enabled": true
+    },
+    "video_hint": {
+      "enabled": true
+    },
+    "stay_silent": {
+      "enabled": true,
+      "prompts": {
+        "description": {
+          "message": "Use this as the response when the current transcript/event does not deserve speech: background chatter, gibberish, partial words, or someone speaking to another person. If it might be a real airport question, ask the customer to repeat instead."
+        }
+      }
+    },
+    "visual_hint": {
+      "enabled": true
+    },
+    "switch_camera": {
+      "enabled": true
+    },
+    "show_mcp_image": {
+      "enabled": true
+    },
+    "hide_prompt_box": {
+      "enabled": true
+    },
+    "show_prompt_box": {
+      "enabled": true
+    },
+    "verify_sms_code": {
+      "enabled": false
+    },
+    "email_after_call": {
+      "enabled": false
+    },
+    "hide_camera_view": {
+      "enabled": true
+    },
+    "hide_drawing_pad": {
+      "enabled": true
+    },
+    "hide_suggestions": {
+      "enabled": true
+    },
+    "show_bullet_list": {
+      "enabled": true
+    },
+    "show_camera_view": {
+      "enabled": true
+    },
+    "show_drawing_pad": {
+      "enabled": true
+    },
+    "show_suggestions": {
+      "enabled": true
+    },
+    "get_printer_state": {
+      "enabled": false
+    },
+    "verify_email_code": {
+      "enabled": false
+    },
+    "send_sms_no_verify": {
+      "enabled": false
+    },
+    "show_paintover_pad": {
+      "enabled": true
+    },
+    "knowledge_base_query": {
+      "enabled": true
+    },
+    "send_email_no_verify": {
+      "enabled": false
+    },
+    "show_knowledge_image": {
+      "enabled": true
+    },
+    "take_camera_snapshot": {
+      "enabled": true
+    },
+    "send_verification_sms": {
+      "enabled": false
+    },
+    "send_verification_email": {
+      "enabled": false
+    },
+    "save_conversation_summary": {
+      "enabled": true
+    },
+    "show_last_camera_snapshot": {
+      "enabled": true
+    },
+    "hide_camera_snapshot_button": {
+      "enabled": false
+    },
+    "show_camera_snapshot_button": {
+      "enabled": false
+    },
+    "knowledge_base_query_lightrag": {
+      "enabled": true
+    }
+  },
+  "events": {
+    "custom_config": {
+      "message": ""
+    }
+  },
+  "type": "voice_only",
+  "rem_ws_host": "<redacted>.ops.example.com",
+  "transfer_topics": [
+    {
+      "topic_id": "<id>",
+      "function_tag": "human_agent",
+      "prompt": "Human Malaga airport help desk for passengers who ask for a person, are distressed, need staff action, or have a service-critical issue the tools cannot answer"
+    }
+  ],
+  "recording_s3_presigned_url_generator_url": "https://<redacted>/recording",
+  "knowledge_base": [],
+  "visual_hints": [],
+  "notification_service_url": "https://<redacted>/notify",
+  "mcp_servers": [
+    {
+      "url": "https://malaga-airport-knowledge-mcp.hub01.polartie.com/mcp",
+      "authorization": "Bearer <redacted>"
+    },
+    {
+      "url": "https://malaga-schedule-mcp.hub01.polartie.com/mcp",
+      "authorization": "Bearer <redacted>"
+    }
+  ],
+  "remote_view_config": {
+    "type": "animated_character",
+    "background": "https://<redacted>/media",
+    "animated_character": {
+      "avatar": {
+        "hair": {
+          "color": "#AD8057",
+          "style": 55
+        },
+        "logo": null,
+        "clothes": "office-1",
+        "glasses": null,
+        "character": "female-1"
+      },
+      "camera_view": "upper"
+    }
+  }
+}

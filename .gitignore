@@ -37,6 +37,10 @@ use_case/screenshots/
 
 # the manifest is content-free — track it as the deliverable record
 !use_case/delivery/MANIFEST.md
+
+# real customer robot configs (contain live credentials) — never commit
+docs/examples/aena-robot-config*.json
+
 frontend/tsconfig.tsbuildinfo
 
 # local export bundles (customer content) — never commit
