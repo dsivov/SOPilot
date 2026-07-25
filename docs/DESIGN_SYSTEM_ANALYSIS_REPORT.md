@@ -46,9 +46,17 @@ the DB schema itself is the data source").
   },
 
   // Architecture — renders as a dependency diagram (reuses ConfigGraph).
+  // `exposes` = INBOUND endpoints the component serves (FastAPI routes, the
+  // /mcp mount, webhook receivers) — architectural, not editable config.
   "components": [
     { "id": "voice_agent", "name": "Voice Agent", "kind": "service",
       "description": "...", "depends_on": ["knowledge_mcp", "schedule_mcp"] },
+    { "id": "sopilot_api", "name": "SOPilot API", "kind": "service",
+      "exposes": [
+        { "kind": "http-route", "path": "/config/ruleset", "methods": ["GET","PUT"] },
+        { "kind": "mcp-mount", "path": "/mcp" },
+        { "kind": "webhook-receiver", "path": "/hooks/twilio", "methods": ["POST"] }
+      ] },
     { "id": "knowledge_mcp", "name": "Airport Knowledge MCP", "kind": "external",
       "description": "Context Graph", "depends_on": [] }
   ],
@@ -72,11 +80,28 @@ the DB schema itself is the data source").
       "status": "known", "source": "sample_config" }
   ],
 
-  // Retrieval / external systems → connectors + structure entries.
+  // OUTBOUND connections the running agent makes (db / http / webhook / mcp /
+  // rag). Non-secret SHAPE only — credentials/DSNs live in tenant_secrets and
+  // are referenced by auth.secret_ref (never stored here). `technology` records
+  // the connection tech; operator-settable host/url point at a config_item.
   "integration_points": [
-    { "name": "airport-facts", "kind": "rag",
-      "source_ref": "postgres:aena.documents",   // db-as-source example
-      "auth": "secret-ref", "description": "...", "component": "knowledge_mcp" }
+    { "name": "aena_documents", "kind": "db", "direction": "outbound",
+      "technology": { "dialect": "postgresql", "driver": "asyncpg", "protocol": "python" },
+      "target": { "host_field": "lightrag.postgres.host", "port": 5432, "database": "rag" },
+      "auth": { "secret_ref": "lightrag_dsn" },     // connection string/credential in tenant_secrets
+      "component": "knowledge_mcp", "status": "known", "source": "db_schema" },
+
+    { "name": "notify", "kind": "webhook", "direction": "outbound",
+      "technology": { "protocol": "http", "method": "POST" },
+      "target": { "url_field": "notification_service_url" },  // operator-set → a config_item
+      "auth": { "secret_ref": "notify_token", "header": "Authorization" },
+      "status": "known", "source": "code" },
+
+    { "name": "airport-facts", "kind": "rag", "direction": "outbound",
+      "technology": { "protocol": "http", "method": "POST" },
+      "target": { "url_field": "opensearch_endpoint" },
+      "auth": { "secret_ref": "opensearch_key" }, "component": "knowledge_mcp",
+      "status": "known", "source": "sample_config" }
   ],
 
   // The feedback loop: what analysis could NOT resolve — surfaced to Engineering.
@@ -98,6 +123,43 @@ Notes:
   parts of `ConfigSchema`.
 - `depends_on` on components (and optionally on config_items) drives the
   diagram and later cross-field rules.
+
+### 2a · Connections, credentials, and web endpoints
+
+The report separates three planes, and one hard rule governs secrets.
+
+**The rule — secrets are never in the report or the config.** Connection
+strings and credentials (a DB password, a DSN, an API token) live only in
+`tenant_secrets` and are referenced by **`secret-ref`** (exactly as connector
+auth works today). The report declares a secret is *needed*
+(`auth.secret_ref`, `status: needs_input` until provisioned); it never carries
+the value.
+
+| Concern | Where it goes | Editable in Stage 2? |
+|---|---|---|
+| DB connection tech (driver/dialect/protocol) | `integration_points[].technology` | via a linked config_item, if any |
+| DB/endpoint credential or DSN | **not stored** — `auth.secret_ref` → `tenant_secrets` | provisioned, not edited |
+| Outbound webhook / HTTP / MCP / RAG | `integration_points` (kind + technology + target + auth + `direction:"outbound"`) | url/host via a config_item |
+| Inbound FastAPI routes / `/mcp` / receivers | `components[].exposes` (architectural) | no (unless a knob → a config_item) |
+
+- **Databases** are `integration_points` with `kind: "db"`. `technology`
+  captures the "connection technology" — `dialect` (postgresql/mysql…),
+  `driver` (asyncpg/psycopg/jdbc/odbc), `protocol` (python/jdbc). Multiple
+  databases = multiple integration points, each with its own `secret_ref`.
+  Non-secret, operator-settable parts (host, port, database) are plain values
+  or a reference to a `config_item` (`host_field`) so they stay editable.
+- A database that is only the **analysis producer's input** ("the DB schema is
+  the data source") is *not* an integration point — it's recorded in
+  `system.sources`. It becomes an integration point only if the *running* agent
+  connects to it.
+- **Web items split by direction.** OUTBOUND (the agent calls out — webhooks,
+  notification URLs, HTTP/RAG endpoints, MCP servers) are `integration_points`
+  with `direction: "outbound"`, a `technology` block, a `target` (url/host,
+  usually a `config_item` reference so it's operator-set), and `auth.secret_ref`.
+  INBOUND (endpoints the system *exposes* — FastAPI routers, the `/mcp` mount,
+  webhook receivers) are architecture, listed under `components[].exposes`; the
+  admin does not configure them unless a specific knob (bind port, path,
+  enabled) is settable, which then becomes a `config_item`.
 
 ## 3. Importer: report → schema
 
