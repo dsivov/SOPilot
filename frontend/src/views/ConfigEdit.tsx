@@ -164,7 +164,14 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
   const neededFields = new Set(violated.flatMap((v) => v.rule.kind === "requires" ? [fieldOf(v.rule.needs)].filter(Boolean) : []));
 
   const toggleTool = (name: string) => setDraft((d) => setPath(d, `tools.${name}.enabled`, !d.tools?.[name]?.enabled));
-  const toolNames = Object.keys(draft.tools ?? {}).sort();
+  // When the schema declares a tool allowlist, only those tools are offerable;
+  // otherwise every tool the config has. Descriptions come from the schema.
+  const schemaTools = schema?.tools?.length ? schema.tools : null;
+  const toolDesc = new Map((schemaTools ?? []).map((t) => [t.name, t.description || ""]));
+  const toolNames = (schemaTools ? schemaTools.map((t) => t.name) : Object.keys(draft.tools ?? {})).sort();
+  // Structures the schema allows (else all three known lists).
+  const allowedStructures = schema?.structures?.length ? new Set(schema.structures.map((s) => s.key)) : null;
+  const showStructure = (key: string) => !allowedStructures || allowedStructures.has(key);
 
   // ---- complex structures (lists) ----
   const listOf = (p: string): any[] => (get(draft, p) as any[]) ?? [];
@@ -362,9 +369,11 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
             {toolNames.map((t) => {
               const on = draft.tools?.[t]?.enabled === true;
+              const desc = toolDesc.get(t);
               return (
                 <button key={t} className={"chip " + (on ? "accent" : "muted")} onClick={() => toggleTool(t)}
-                  style={{ cursor: "pointer", opacity: on ? 1 : 0.6 }} title={on ? "Click to disable" : "Click to enable"}>
+                  style={{ cursor: "pointer", opacity: on ? 1 : 0.6 }}
+                  title={(desc ? desc + " · " : "") + (on ? "click to disable" : "click to enable")}>
                   <span className="cd" />{t}
                 </button>
               );
@@ -426,7 +435,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
       {/* complex structures — each edit re-evaluates the ruleset live (kb index_mode
           drives kb_mode:* rules; the topic list drives field:transfer_topics) */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div>
+        {showStructure("mcp_servers") && <div>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>
             MCP servers ({listOf("mcp_servers").length})
           </div>
@@ -461,9 +470,9 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
               )}
             </div>
           </div>
-        </div>
+        </div>}
 
-        <div>
+        {showStructure("knowledge_base") && <div>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>
             Knowledge bases ({listOf("knowledge_base").length})
           </div>
@@ -488,9 +497,9 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
               onClick={() => setList("knowledge_base", [...listOf("knowledge_base"), { knowledge_id: "", index_mode: "simple", function_tag: "", prompt: "" }])}>
               + Add knowledge base</button>
           </div>
-        </div>
+        </div>}
 
-        <div>
+        {showStructure("transfer_topics") && <div>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>
             Transfer topics ({listOf("transfer_topics").length})
           </div>
@@ -510,7 +519,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
               onClick={() => setList("transfer_topics", [...listOf("transfer_topics"), { topic_id: "", function_tag: "", prompt: "" }])}>
               + Add transfer topic</button>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );

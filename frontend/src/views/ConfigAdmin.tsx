@@ -13,7 +13,7 @@ import {
   describeRule, evaluateRules, ruleVocabulary, seedRules,
   type Level, type Rule, type RuleResult,
 } from "../config/rules";
-import { schemaFromConfig, type ConfigSchema, type SchemaFieldDef } from "../config/schema";
+import { schemaFromConfig, foldEnumRulesIntoSchema, KNOWN_STRUCTURES, type ConfigSchema, type SchemaFieldDef, type ToolDef } from "../config/schema";
 import type { FieldType } from "../config/configVocab";
 import { api } from "../api";
 
@@ -168,6 +168,62 @@ function SchemaEditor({ schema, cfg, onChange }: { schema: ConfigSchema | null; 
         <button className="btn ghost sm" onClick={() => onChange(null)} title="Drop the schema — user stage reverts to config-derived fields">Clear schema</button>
       </div>
       {drafter}
+      <ToolsStructures schema={schema} cfg={cfg} onChange={onChange} />
+    </div>
+  );
+}
+
+// Declare which built-in TOOLS are offerable (allowlist + description) and which
+// list STRUCTURES are available — the user stage shows only these when declared.
+function ToolsStructures({ schema, cfg, onChange }: { schema: ConfigSchema; cfg: Config; onChange: (s: ConfigSchema) => void }) {
+  const tools = schema.tools ?? [];
+  const declared = new Set(tools.map((t) => t.name));
+  const allTools = Object.keys((cfg.tools ?? {}) as Record<string, unknown>).sort();
+  const setTools = (ts: ToolDef[]) => onChange({ ...schema, tools: ts });
+  const toggleTool = (name: string) =>
+    setTools(declared.has(name) ? tools.filter((t) => t.name !== name) : [...tools, { name }]);
+  const setToolDesc = (name: string, description: string) =>
+    setTools(tools.map((t) => (t.name === name ? { ...t, description } : t)));
+
+  const structs = schema.structures ?? [];
+  const structOn = new Set(structs.map((s) => s.key));
+  const toggleStruct = (key: string, label: string) =>
+    onChange({ ...schema, structures: structOn.has(key) ? structs.filter((s) => s.key !== key) : [...structs, { key, label }] });
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)" }}>
+        Offerable tools {tools.length ? `(${tools.length} of ${allTools.length})` : "· all (none restricted)"}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+        {allTools.map((name) => (
+          <button key={name} className={"chip " + (declared.has(name) || !tools.length ? "accent" : "muted")}
+            onClick={() => toggleTool(name)} style={{ cursor: "pointer", opacity: declared.has(name) || !tools.length ? 1 : 0.5 }}
+            title={tools.length ? (declared.has(name) ? "offerable — click to remove" : "click to allow") : "no allowlist — all tools offerable; click to start one"}>
+            <span className="cd" />{name}
+          </button>
+        ))}
+      </div>
+      {tools.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {tools.map((t) => (
+            <input key={t.name} className="area" style={{ flex: "1 1 240px", padding: "3px 7px", fontSize: 11.5 }}
+              placeholder={`${t.name} — description (help)`} value={t.description ?? ""}
+              onChange={(e) => setToolDesc(t.name, e.target.value)} />
+          ))}
+        </div>
+      )}
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginTop: 4 }}>
+        Available structures {structs.length ? `(${structs.length})` : "· all"}
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        {KNOWN_STRUCTURES.map((s) => (
+          <button key={s.key} className={"chip " + (structOn.has(s.key) || !structs.length ? "accent" : "muted")}
+            onClick={() => toggleStruct(s.key, s.label)} style={{ cursor: "pointer", opacity: structOn.has(s.key) || !structs.length ? 1 : 0.5 }}>
+            <span className="cd" />{s.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -219,7 +275,12 @@ export default function ConfigAdminView() {
   const save = async (publish: boolean) => {
     setSaveBusy(true); setSaveErr("");
     try {
-      const r = await api<{ version: number; published_version: number | null }>("PUT", "/config/ruleset", { rules, schema, publish });
+      // Migration: an enum RULE on a declared field is redundant once a schema
+      // exists — fold it into the field's options and drop the rule.
+      const folded = foldEnumRulesIntoSchema(rules, schema);
+      const r = await api<{ version: number; published_version: number | null }>("PUT", "/config/ruleset", { rules: folded.rules, schema: folded.schema, publish });
+      if (folded.rules !== rules) setRules(folded.rules);
+      if (folded.schema !== schema) setSchema(folded.schema);
       setVersion(r.version); setPublishedVersion(r.published_version); setDirty(false);
     } catch (e: any) {
       const m = String(e?.message ?? e);
