@@ -6,7 +6,6 @@
 // evaluated live against a real config so the admin sees each rule fire as they
 // write it. Rule drafting is LLM-assisted; the engine stays formal.
 import { useEffect, useMemo, useState } from "react";
-import EXAMPLE from "../config/exampleConfig.json";
 import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import type { Config } from "../config/configModel";
 import {
@@ -14,6 +13,7 @@ import {
   type Level, type Rule, type RuleResult,
 } from "../config/rules";
 import { schemaFromConfig, foldEnumRulesIntoSchema, KNOWN_STRUCTURES, type ConfigSchema, type SchemaFieldDef, type ToolDef } from "../config/schema";
+import { validateReport, schemaFromAnalysisReport, needsInputPaths, type AnalysisReport } from "../config/analysisReport";
 import type { FieldType } from "../config/configVocab";
 import { api } from "../api";
 
@@ -108,14 +108,34 @@ function SchemaEditor({ schema, cfg, onChange }: { schema: ConfigSchema | null; 
       setAskErr(m.includes("Not Found") ? "Draft endpoint not found — restart the backend for /config/draft-field." : `Drafting failed: ${m}`);
     } finally { setAskBusy(false); }
   };
+  // Stage-0: import a System Analysis report (JSON) to seed the schema.
+  const [importMsg, setImportMsg] = useState("");
+  const importReport = async (file: File) => {
+    setImportMsg("");
+    try {
+      const r = JSON.parse(await file.text()) as AnalysisReport;
+      const err = validateReport(r);
+      if (err) { setImportMsg(`Not a valid analysis report: ${err}`); return; }
+      onChange(schemaFromAnalysisReport(r));
+      const ni = needsInputPaths(r).length, oq = (r.open_questions ?? []).length;
+      setImportMsg(`Imported ${(r.config_items ?? []).length} items from “${r.system?.name ?? "system"}”`
+        + (ni ? ` · ${ni} need input` : "") + (oq ? ` · ${oq} open question${oq === 1 ? "" : "s"} for Engineering` : ""));
+    } catch (e: any) { setImportMsg(`Could not read report: ${e?.message ?? e}`); }
+  };
   const drafter = (
     <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--line)" }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <input className="area" style={{ flex: 1 }} placeholder='describe a field — e.g. "a weather provider, enum of openweather / tomorrow.io, required"'
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <input className="area" style={{ flex: 1, minWidth: 200 }} placeholder='describe a field — e.g. "a weather provider, enum of openweather / tomorrow.io, required"'
           value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !askBusy && draftField()} />
         <button className="btn sm primary" onClick={draftField} disabled={askBusy || !ask.trim()}>{askBusy ? "Drafting…" : "Draft field"}</button>
+        <label className="btn ghost sm" style={{ cursor: "pointer" }} title="Seed the schema from a Stage-0 System Analysis report (JSON)">
+          Import analysis report…
+          <input type="file" accept="application/json,.json" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) importReport(f); e.target.value = ""; }} />
+        </label>
       </div>
       {askErr && <div className="lintline" style={{ color: "var(--crit)", marginTop: 6 }}>{askErr}</div>}
+      {importMsg && <div className="lintline" style={{ color: importMsg.startsWith("Imported") ? "var(--good)" : "var(--crit)", marginTop: 6, whiteSpace: "normal" }}>{importMsg}</div>}
     </div>
   );
 
@@ -234,8 +254,9 @@ interface RulesetInfo { exists: boolean; latest_version: number; published_versi
 
 export default function ConfigAdminView() {
   const [rules, setRules] = useState<Rule[]>(seedRules());
-  const [cfg, setCfg] = useState<Config>(EXAMPLE as Config);
-  const [target, setTarget] = useState<"example" | "sample">("example");
+  // Rules are previewed against a generic sample config so the admin sees each
+  // rule fire — no customer's real config is shown here.
+  const [cfg] = useState<Config>(SAMPLE_CONFIG as Config);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [draftErr, setDraftErr] = useState("");
@@ -259,7 +280,6 @@ export default function ConfigAdminView() {
     }).catch(() => { /* backend down / pre-migration — stay on the seed */ });
   }, []);
 
-  const pick = (t: "example" | "sample") => { setTarget(t); setCfg((t === "example" ? EXAMPLE : SAMPLE_CONFIG) as Config); };
   const results = useMemo(() => evaluateRules(cfg, rules), [cfg, rules]);
   // Rule authoring references the SCHEMA's field paths when a schema exists,
   // else the config-derived vocabulary.
@@ -310,9 +330,7 @@ export default function ConfigAdminView() {
         <div className="chead">
           <span>Constraint rules</span>
           <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            <span className="sub">evaluated against</span>
-            <button className={"btn ghost sm" + (target === "example" ? " primary" : "")} onClick={() => pick("example")}>Example (real)</button>
-            <button className={"btn ghost sm" + (target === "sample" ? " primary" : "")} onClick={() => pick("sample")}>Sample</button>
+            <span className="sub">previewed against a sample config</span>
             {violated > 0
               ? <span className="chip crit"><span className="cd" />{violated} violated</span>
               : <span className="chip good"><span className="cd" />all pass</span>}
@@ -320,7 +338,7 @@ export default function ConfigAdminView() {
         </div>
         <div className="cbody" style={{ fontSize: 12.5, color: "var(--muted)" }}>
           The rules the user stage enforces — authored here as data (<b>enum · requires · conflicts</b>), not baked into
-          code. Each row shows how it evaluates against <b style={{ color: "var(--text2)" }}>{cfg.display_name || target}</b> right now.
+          code. Each row shows how it evaluates against a generic sample config right now.
         </div>
       </div>
 

@@ -14,6 +14,7 @@ export interface DerivedField {
   options?: string[];  // enum values (populated when the field comes from a schema)
   description?: string;// help text (from a schema)
   required?: boolean;  // must be set (from a schema)
+  status?: "known" | "needs_input" | "inferred"; // from a Stage-0 analysis report
 }
 
 // Keys that are transport/infra plumbing rather than agent behaviour: still

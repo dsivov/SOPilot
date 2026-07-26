@@ -183,8 +183,14 @@ def _validate_schema(schema) -> str | None:
         seen.add(path)
         if f.get("type") not in _FIELD_TYPES:
             return f"field '{path}': type must be one of {_FIELD_TYPES}"
-        if f.get("type") == "enum" and not (isinstance(f.get("options"), list) and f["options"]):
-            return f"field '{path}': enum requires a non-empty options list"
+        if f.get("type") == "enum":
+            opts = f.get("options")
+            if opts is not None and not isinstance(opts, list):
+                return f"field '{path}': enum options must be a list"
+            # empty options allowed ONLY while the field awaits input (a Stage-0
+            # analysis often knows a field is an enum before its allowed values).
+            if not opts and f.get("status") != "needs_input":
+                return f"field '{path}': enum requires options (unless status is 'needs_input')"
     return None
 
 

@@ -6,6 +6,8 @@
 import type { Config } from "./configModel";
 import { deriveFields, type DerivedField, type FieldType } from "./configVocab";
 
+export type ItemStatus = "known" | "needs_input" | "inferred";
+
 export interface SchemaFieldDef {
   path: string;
   type: FieldType;
@@ -16,6 +18,7 @@ export interface SchemaFieldDef {
   required?: boolean;
   group?: string;
   advanced?: boolean;
+  status?: ItemStatus;     // from a Stage-0 analysis report; "needs_input" = awaiting Engineering
 }
 
 export interface ToolDef {
@@ -102,6 +105,7 @@ export function editorFields(cfg: Config, schema: ConfigSchema | null | undefine
         options: f.type === "enum" ? f.options : undefined,
         description: f.description,
         required: f.required,
+        status: f.status,
       }))
       .sort((a, b) => (a.advanced === b.advanced ? a.path.localeCompare(b.path) : a.advanced ? 1 : -1));
   }

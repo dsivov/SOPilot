@@ -395,17 +395,20 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
             {visibleFields.map((fld: DerivedField) => {
               const f = fld.path;
               // enum options come from the schema field first (the DSL), else an enum rule.
-              const opts = fld.options ?? enumFor(f)?.options;
+              // empty enum options (a needs_input field) → fall back to a text
+              // input rather than a dropdown with nothing to pick.
+              const opts = (fld.options?.length ? fld.options : enumFor(f)?.options);
               const v = get(draft, f);
               const requiredUnset = fld.required && !(typeof v === "string" ? v.trim() : v != null);
+              const needsInput = fld.status === "needs_input";  // Stage-0 flagged it as awaiting Engineering
               const needed = neededFields.has(f) || requiredUnset;
               const setVal = (raw: string) =>
                 setDraft(setPath(draft, f, fld.type === "number" ? (raw === "" ? "" : Number(raw)) : raw));
               return (
                 <label key={f} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-                  <span className="mono" style={{ flex: "0 0 200px", color: needed ? "var(--crit)" : "var(--muted)" }}
-                    title={[fld.type, fld.required ? "required" : "", fld.advanced ? "advanced" : "", fld.description || ""].filter(Boolean).join(" · ")}>
-                    {f}{fld.required ? " *" : ""}{needed ? " ←" : ""}
+                  <span className="mono" style={{ flex: "0 0 200px", color: needed ? "var(--crit)" : needsInput ? "var(--warn)" : "var(--muted)" }}
+                    title={[fld.type, fld.required ? "required" : "", needsInput ? "needs input from Engineering" : "", fld.advanced ? "advanced" : "", fld.description || ""].filter(Boolean).join(" · ")}>
+                    {f}{fld.required ? " *" : ""}{needsInput ? " ⚑" : ""}{needed ? " ←" : ""}
                   </span>
                   {opts ? (
                     // enum: the schema (or admin's enum rule) bounds the widget itself
