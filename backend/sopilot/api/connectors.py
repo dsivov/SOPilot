@@ -150,8 +150,11 @@ _SUGGEST_SYS = (
     "Never put a real credential in the config — only the secret NAME the operator will create. Suggest a short "
     "snake_case connector name.\n\n"
     "Return ONLY JSON: {\"reply\":\"<a short, helpful explanation of what you picked and why, and any auth the operator "
-    "must set up>\", \"suggestion\":{ \"kind\":..., \"name\":..., \"description\":..., \"config\":{...} } }. If nothing "
-    "in the surface fits, return the reply explaining that and omit \"suggestion\" (or set it null)."
+    "must set up>\", \"suggestion\":{ \"kind\":..., \"name\":..., \"description\":..., \"config\":{...} }, "
+    "\"relevant\":[ {\"id\":<the exact discovered tool name, or \"METHOD /path\">, \"why\":<one short phrase>} ] }. "
+    "In \"relevant\", list EVERY discovered item that could plausibly serve the request, most relevant first (up to 6), "
+    "so the operator can compare — even ones you didn't pick as the primary suggestion. If nothing in the surface fits, "
+    "return the reply explaining that, an empty \"relevant\", and omit \"suggestion\" (or set it null)."
 )
 
 
@@ -356,8 +359,15 @@ async def suggest_connector(req: ConnectorSuggestRequest, scope: Scope = Depends
         cfg = {k: v for k, v in sug["config"].items() if k != "connector" and v not in (None, "")}
         suggestion = {"kind": sug["kind"], "name": str(sug.get("name") or "").strip(),
                       "description": str(sug.get("description") or "")[:200], "config": cfg}
+    # "why is this useful" notes, keyed to the discovered items so the UI can annotate them
+    why: dict[str, str] = {}
+    for r in (data.get("relevant") if isinstance(data, dict) else None) or []:
+        if isinstance(r, dict) and r.get("id"):
+            why[str(r["id"]).strip()] = str(r.get("why") or "")[:160]
     return {"probed_url": probed,
-            "discovered": {"kind": discovered["kind"], "base_url": discovered["base_url"], "count": discovered["count"]},
+            "discovered": {"kind": discovered["kind"], "base_url": discovered["base_url"],
+                           "count": discovered["count"], "items": discovered["items"][:40]},
+            "relevant": why,
             "reply": str((data or {}).get("reply") or ""), "suggestion": suggestion}
 
 

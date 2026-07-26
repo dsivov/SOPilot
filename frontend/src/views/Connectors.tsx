@@ -6,11 +6,32 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 
 type Suggestion = { kind: string; name: string; description: string; config: Record<string, unknown> };
+type DiscItem = { name?: string; description?: string; args?: string[]; method?: string; path?: string; summary?: string };
+type Discovered = { kind: string; base_url?: string; count: number; items?: DiscItem[] };
 type ChatMsg = {
   role: "user" | "assistant"; text: string;
   suggestion?: Suggestion | null;
-  discovered?: { kind: string; base_url?: string; count: number } | null;
+  discovered?: Discovered | null;
+  relevant?: Record<string, string>;   // item id ("tool" or "METHOD /path") → why it's relevant
+  showAll?: boolean;                    // UI: browse-all expanded
   error?: boolean; system?: boolean;
+};
+
+// Stable id for a discovered item — matches what the LLM keys "relevant" on.
+const itemId = (d: Discovered, it: DiscItem): string =>
+  d.kind === "mcp" ? (it.name ?? "") : `${it.method ?? ""} ${it.path ?? ""}`.trim();
+
+// Build a connector config from a single discovered item — no extra LLM call, so
+// the operator can pick ANY item, not just the assistant's top suggestion.
+const configForItem = (d: Discovered, it: DiscItem): Suggestion => {
+  if (d.kind === "mcp") {
+    const qa = (it.args ?? []).find((a) => /^(query|question|text|prompt|q|search)$/i.test(a)) ?? (it.args ?? [])[0];
+    return { kind: "mcp", name: it.name ?? "mcp_tool", description: it.description ?? "",
+      config: { server: d.base_url ?? "", tool: it.name ?? "", ...(qa ? { query_arg: qa } : {}) } };
+  }
+  const leaf = (it.path ?? "").split("/").filter(Boolean).pop() ?? "endpoint";
+  return { kind: "http", name: leaf.replace(/[^a-z0-9_]+/gi, "_").toLowerCase(), description: it.summary ?? "",
+    config: { url: (d.base_url ?? "") + (it.path ?? ""), method: it.method ?? "GET" } };
 };
 
 type ConnectorRow = {
@@ -57,19 +78,17 @@ export default function ConnectorsView() {
     setMessages((ms) => [...ms, { role: "user", text: q }]);
     setAskBusy(true);
     try {
-      const r = await api<{ reply?: string; suggestion?: Suggestion | null; discovered?: ChatMsg["discovered"]; error?: string }>(
+      const r = await api<{ reply?: string; suggestion?: Suggestion | null; discovered?: Discovered; relevant?: Record<string, string>; error?: string }>(
         "POST", "/connectors/suggest", { instruction: q, history });
       if (r.error) { setMessages((ms) => [...ms, { role: "assistant", text: r.error!, error: true }]); return; }
-      setMessages((ms) => [...ms, { role: "assistant", text: r.reply || "", suggestion: r.suggestion, discovered: r.discovered }]);
+      setMessages((ms) => [...ms, { role: "assistant", text: r.reply || "", suggestion: r.suggestion, discovered: r.discovered, relevant: r.relevant }]);
     } catch (e: unknown) {
       const m = String((e as { message?: string })?.message ?? e);
       setMessages((ms) => [...ms, { role: "assistant", text: m.includes("Not Found") ? "Assistant endpoint not found — restart the backend." : `Assistant failed: ${m}`, error: true }]);
     } finally { setAskBusy(false); }
   };
 
-  const applySuggestion = (idx: number) => {
-    const s = messages[idx]?.suggestion;
-    if (!s) return;
+  const applyConfig = (s: Suggestion) => {
     if (s.name) setName(s.name);
     setKind(s.kind);
     setDescription(s.description || "");
@@ -81,6 +100,9 @@ export default function ConnectorsView() {
       + (secret ? ` It references secret “${secret}” — add its value under Tenant secrets first.` : ""));
     setMessages((ms) => ms.concat([{ role: "assistant", system: true, text: `Loaded “${s.name}” into the editor — review and Save.` }]));
   };
+  const applySuggestion = (idx: number) => { const s = messages[idx]?.suggestion; if (s) applyConfig(s); };
+  const toggleShowAll = (idx: number) =>
+    setMessages((ms) => ms.map((m, i) => (i === idx ? { ...m, showAll: !m.showAll } : m)));
 
   const refresh = useCallback(async () => {
     setRows(await api<ConnectorRow[]>("GET", "/connectors"));
@@ -341,15 +363,11 @@ export default function ConnectorsView() {
                   background: m.error ? "var(--crit-dim, rgba(209,52,56,.1))" : "var(--panel2, rgba(127,127,127,.1))",
                   borderRadius: "10px 10px 10px 2px", padding: "8px 10px", fontSize: 12.5,
                   color: m.error ? "var(--crit)" : "var(--text2)", lineHeight: 1.45, wordBreak: "break-word" }}>
-                  {m.discovered && m.discovered.kind !== "none" && (
-                    <div style={{ marginBottom: 5 }}>
-                      <span className="chip good" style={{ fontSize: 11 }}><span className="cd" />discovered {m.discovered.count} {m.discovered.kind} item{m.discovered.count === 1 ? "" : "s"}</span>
-                    </div>
-                  )}
                   <span>{m.text}</span>
                   {m.suggestion && (
-                    <div style={{ marginTop: 8, border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px", background: "var(--surface)" }}>
+                    <div style={{ marginTop: 8, border: "1px solid var(--accent, #3b6ef5)", borderRadius: 8, padding: "8px 10px", background: "var(--surface)" }}>
                       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                        <span className="chip good" style={{ fontSize: 10.5 }}>★ recommended</span>
                         <span className="chip accent" style={{ fontSize: 11 }}>{m.suggestion.kind}</span>
                         <b className="mono" style={{ fontSize: 12 }}>{m.suggestion.name}</b>
                       </div>
@@ -357,6 +375,48 @@ export default function ConnectorsView() {
                       <button className="btn sm primary" onClick={() => applySuggestion(i)}>Apply to editor</button>
                     </div>
                   )}
+                  {m.discovered && m.discovered.kind !== "none" && (() => {
+                    const d = m.discovered!; const rel = m.relevant ?? {}; const items = d.items ?? [];
+                    const relItems = items.filter((it) => itemId(d, it) in rel);
+                    const shown = m.showAll ? items : relItems;
+                    return (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                          <span className="chip good" style={{ fontSize: 11 }}><span className="cd" />{d.count} {d.kind} item{d.count === 1 ? "" : "s"} found</span>
+                          {items.length > 0 && items.length !== shown.length && (
+                            <button className="btn ghost sm" onClick={() => toggleShowAll(i)}>Browse all {d.count}</button>
+                          )}
+                          {m.showAll && relItems.length > 0 && (
+                            <button className="btn ghost sm" onClick={() => toggleShowAll(i)}>Show relevant only</button>
+                          )}
+                        </div>
+                        {shown.length === 0 && (
+                          <div className="sub" style={{ fontSize: 11.5 }}>
+                            {relItems.length === 0 ? "None flagged as clearly relevant — " : ""}Browse all {d.count} to compare every tool.
+                          </div>
+                        )}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {shown.map((it, j) => {
+                            const id = itemId(d, it); const why = rel[id];
+                            const label = d.kind === "mcp" ? it.name : `${it.method} ${it.path}`;
+                            const desc = d.kind === "mcp" ? it.description : it.summary;
+                            return (
+                              <div key={j} style={{ border: "1px solid var(--line)", borderLeft: why ? "2px solid var(--warn)" : "1px solid var(--line)", borderRadius: 8, padding: "7px 9px", background: "var(--surface)" }}>
+                                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                                  {why && <span title="flagged relevant to your request" style={{ color: "var(--warn)" }}>★</span>}
+                                  <b className="mono" style={{ fontSize: 11.5, wordBreak: "break-all" }}>{label}</b>
+                                  {d.kind === "mcp" && (it.args?.length ?? 0) > 0 && <span className="sub mono" style={{ fontSize: 10.5 }}>({it.args!.join(", ")})</span>}
+                                  <button className="btn ghost sm" style={{ marginLeft: "auto" }} onClick={() => applyConfig(configForItem(d, it))}>Use this</button>
+                                </div>
+                                {why && <div style={{ fontSize: 11.5, color: "var(--warn)", marginTop: 2 }}>→ {why}</div>}
+                                {desc && <div className="sub" style={{ fontSize: 11.5, marginTop: 2, lineHeight: 1.4 }}>{desc}</div>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
