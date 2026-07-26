@@ -107,6 +107,51 @@ export function needsInputPaths(r: AnalysisReport): string[] {
   return (r.config_items ?? []).filter((c) => c.status === "needs_input").map((c) => c.path);
 }
 
+export interface MergeSummary { added: string[]; updated: string[]; removed: string[] }
+
+// Merge a (re-)analysis report into an EXISTING schema, preserving the admin's
+// curation. Report is authoritative for existence / type / enum options /
+// status; the admin keeps required / advanced / label and any non-empty
+// description. Fields the report no longer has are KEPT but reported as removed
+// (never silently dropped) so the admin decides.
+export function mergeReportIntoSchema(
+  schema: ConfigSchema, report: AnalysisReport,
+): { schema: ConfigSchema; summary: MergeSummary } {
+  const fresh = schemaFromAnalysisReport(report);
+  const byPath = new Map(schema.fields.map((f) => [f.path, f]));
+  const reportPaths = new Set(fresh.fields.map((f) => f.path));
+  const added: string[] = [], updated: string[] = [];
+
+  const mergedFields: SchemaFieldDef[] = fresh.fields.map((rf) => {
+    const ex = byPath.get(rf.path);
+    if (!ex) { added.push(rf.path); return rf; }
+    updated.push(rf.path);
+    return {
+      ...rf,                                   // report: type, options, status
+      required: ex.required ?? rf.required,    // admin overrides preserved
+      advanced: ex.advanced ?? rf.advanced,
+      label: ex.label ?? rf.label,
+      description: ex.description || rf.description,
+    };
+  });
+  // keep admin fields the report dropped (flag, don't lose)
+  const removed = schema.fields.filter((f) => !reportPaths.has(f.path)).map((f) => f.path);
+  for (const f of schema.fields) if (!reportPaths.has(f.path)) mergedFields.push(f);
+
+  // tools/structures: union by name/key, keeping admin descriptions
+  const toolByName = new Map((schema.tools ?? []).map((t) => [t.name, t]));
+  const tools: ToolDef[] = (fresh.tools ?? []).map((t) => ({ ...t, description: toolByName.get(t.name)?.description || t.description }));
+  for (const t of schema.tools ?? []) if (!tools.some((x) => x.name === t.name)) tools.push(t);
+  const structKeys = new Set((fresh.structures ?? []).map((s) => s.key));
+  const structures: StructureDef[] = [...(fresh.structures ?? [])];
+  for (const s of schema.structures ?? []) if (!structKeys.has(s.key)) structures.push(s);
+
+  return {
+    schema: { ...schema, name: schema.name || fresh.name, fields: mergedFields, tools, structures },
+    summary: { added, updated, removed },
+  };
+}
+
 // A tiny bootstrap "report" derived from a loaded config, so the import flow can
 // be demonstrated without a full analysis run. (Real reports come from Stage 0.)
 export function reportFromConfig(cfg: Config): AnalysisReport {

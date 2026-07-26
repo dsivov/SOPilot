@@ -142,6 +142,9 @@ export default function ConfigView() {
     const info = intro[s.url]; return n + (info && !info.error ? info.tools.filter((t) => !t.startsWith("polartie_")).length : 0);
   }, 0);
   const problems = [...struct, ...mcp, ...logical, ...adminFindings].filter((f) => f.level === "error").length;
+  const isEmptyConfig = !String(cfg.display_name || "").trim() && tools.length === 0
+    && !(cfg.mcp_servers ?? []).length && !(cfg.knowledge_base ?? []).length
+    && !(cfg.transfer_topics ?? []).length && !String(cfg.prompt || "").trim();
 
   const stat = (label: string, value: string) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid var(--line)", fontSize: 13 }}>
@@ -169,6 +172,12 @@ export default function ConfigView() {
           </span>
         </div>
         <div className="cbody">
+          {isEmptyConfig && (
+            <div style={{ marginBottom: 8, padding: "8px 12px", background: "var(--panel2, rgba(127,127,127,.08))", border: "1px solid var(--line)", borderRadius: 8, fontSize: 12.5, color: "var(--muted)" }}>
+              No working config in this browser yet — this is a local scratch copy, not your SOPs/blocks/connectors (those live on the server and are unaffected).
+              Start with <b>Load example</b>, <b>Import</b> a config JSON, or paste one below.
+            </div>
+          )}
           <textarea className="area mono" rows={7} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
           {err && <div className="lintline" style={{ color: "var(--crit)", marginTop: 6 }}>JSON error: {err}</div>}
           {renderNotes && renderNotes.length > 0 && (

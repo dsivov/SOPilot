@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_db
-from ..models import ConfigRuleset, ConfigRulesetVersion
+from ..models import ConfigAnalysisReport, ConfigAnalysisReportVersion, ConfigRuleset, ConfigRulesetVersion
 from ..tenancy import Scope, resolve_scope
 
 router = APIRouter(prefix="/config", tags=["config"])
@@ -255,6 +255,77 @@ async def publish_ruleset(scope: Scope = Depends(resolve_scope), db: AsyncSessio
     rs.published_version = rs.latest_version
     await db.commit()
     return {"version": rs.latest_version, "published_version": rs.published_version}
+
+
+# ---------- Stage-0 analysis report: DB-versioned (Phase B) ----------
+#
+# Each analysis run is stored as a new immutable version (SopVersion-style),
+# per project. The published version is the report the schema is synced from;
+# re-analysis appends a version and the admin re-syncs (merge, client-side).
+
+REPORT_KIND = "sopilot-system-analysis"
+
+
+async def _get_report(db: AsyncSession, scope: Scope) -> ConfigAnalysisReport | None:
+    return (await db.execute(select(ConfigAnalysisReport).where(
+        ConfigAnalysisReport.tenant_id == scope.tenant_id,
+        ConfigAnalysisReport.project_id == scope.project_id,
+        ConfigAnalysisReport.name == "default"))).scalar_one_or_none()
+
+
+async def _report_version(db: AsyncSession, report_id: str, version: int) -> dict | None:
+    row = (await db.execute(select(ConfigAnalysisReportVersion).where(
+        ConfigAnalysisReportVersion.report_id == report_id,
+        ConfigAnalysisReportVersion.version == version))).scalar_one_or_none()
+    return None if row is None else row.report
+
+
+@router.get("/analysis")
+async def get_analysis(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)) -> dict:
+    """The project's Stage-0 report: latest + published, plus the version list."""
+    r = await _get_report(db, scope)
+    if r is None:
+        return {"exists": False, "latest_version": 0, "published_version": None,
+                "report": None, "published_report": None, "versions": []}
+    versions = (await db.execute(select(ConfigAnalysisReportVersion.version, ConfigAnalysisReportVersion.created_at)
+        .where(ConfigAnalysisReportVersion.report_id == r.id)
+        .order_by(ConfigAnalysisReportVersion.version.desc()))).all()
+    return {
+        "exists": True,
+        "latest_version": r.latest_version,
+        "published_version": r.published_version,
+        "report": await _report_version(db, r.id, r.latest_version),
+        "published_report": (await _report_version(db, r.id, r.published_version)) if r.published_version else None,
+        "versions": [{"version": v, "created_at": c.isoformat()} for v, c in versions],
+    }
+
+
+class AnalysisSaveRequest(BaseModel):
+    report: dict = {}
+    publish: bool = True   # a new analysis run is normally the one to sync from
+
+
+@router.put("/analysis")
+async def save_analysis(
+    req: AnalysisSaveRequest, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Store a Stage-0 report as a NEW immutable version; publish it by default
+    (it becomes the report the schema syncs from)."""
+    if req.report.get("kind") != REPORT_KIND:
+        raise HTTPException(status_code=422, detail=f"not a {REPORT_KIND} report")
+    if not isinstance(req.report.get("config_items"), list):
+        raise HTTPException(status_code=422, detail="report.config_items must be a list")
+    r = await _get_report(db, scope)
+    if r is None:
+        r = ConfigAnalysisReport(tenant_id=scope.tenant_id, project_id=scope.project_id, name="default")
+        db.add(r)
+        await db.flush()
+    r.latest_version += 1
+    db.add(ConfigAnalysisReportVersion(report_id=r.id, version=r.latest_version, report=req.report))
+    if req.publish:
+        r.published_version = r.latest_version
+    await db.commit()
+    return {"version": r.latest_version, "published_version": r.published_version}
 
 
 class DraftFieldRequest(BaseModel):

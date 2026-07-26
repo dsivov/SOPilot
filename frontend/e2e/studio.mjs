@@ -59,6 +59,10 @@ ok("named-key session lands in Studio", true);
 await page.getByText("Config viewer").click();
 await page.getByText("Guided edit").waitFor({ timeout: 5000 });
 const card = page.locator(".card", { hasText: "Guided edit" });
+// The viewer defaults to an empty working config now; load the example so there
+// is a real config (tools, fields) to exercise the guided editor against.
+await page.getByRole("button", { name: "Load example" }).click();
+await page.waitForTimeout(300);
 const applyBtn = page.getByRole("button", { name: "Apply changes" }).first(); // header button (a 2nd appears in the dirty banner)
 ok("Apply disabled when clean (no edits)", await applyBtn.isDisabled());
 

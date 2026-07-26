@@ -14,6 +14,7 @@ from ..db import get_db
 from ..models import (
     ABTest,
     ApiKey,
+    ConfigAnalysisReport,
     ConfigRuleset,
     Connector,
     ConversationSession,
@@ -127,7 +128,7 @@ async def list_projects(tenant: Tenant = Depends(resolve_tenant), db: AsyncSessi
 # versions) cascade via their own FKs; projects / api_keys / tenant_secrets / sops
 # cascade from the tenant row itself (ondelete=CASCADE).
 _TENANT_SCOPED_PARENTS = [
-    Connector, ABTest, PromptBlock, ConfigRuleset, ConversationSession,
+    Connector, ABTest, PromptBlock, ConfigRuleset, ConfigAnalysisReport, ConversationSession,
     RoutingEvent, PrecedentTrace, Corpus, DataFetchAudit, PoolPickAudit,
 ]
 

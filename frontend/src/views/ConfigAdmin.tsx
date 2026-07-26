@@ -13,7 +13,7 @@ import {
   type Level, type Rule, type RuleResult,
 } from "../config/rules";
 import { schemaFromConfig, foldEnumRulesIntoSchema, KNOWN_STRUCTURES, type ConfigSchema, type SchemaFieldDef, type ToolDef } from "../config/schema";
-import { validateReport, schemaFromAnalysisReport, needsInputPaths, type AnalysisReport } from "../config/analysisReport";
+import { validateReport, schemaFromAnalysisReport, mergeReportIntoSchema, needsInputPaths, type AnalysisReport } from "../config/analysisReport";
 import type { FieldType } from "../config/configVocab";
 import { api } from "../api";
 
@@ -108,7 +108,9 @@ function SchemaEditor({ schema, cfg, onChange }: { schema: ConfigSchema | null; 
       setAskErr(m.includes("Not Found") ? "Draft endpoint not found — restart the backend for /config/draft-field." : `Drafting failed: ${m}`);
     } finally { setAskBusy(false); }
   };
-  // Stage-0: import a System Analysis report (JSON) to seed the schema.
+  // Stage-0: import a System Analysis report (JSON). It's persisted (DB-versioned
+  // via /config/analysis) AND used to seed a new schema — or MERGE into the
+  // existing one, preserving the admin's curation (re-analysis).
   const [importMsg, setImportMsg] = useState("");
   const importReport = async (file: File) => {
     setImportMsg("");
@@ -116,10 +118,22 @@ function SchemaEditor({ schema, cfg, onChange }: { schema: ConfigSchema | null; 
       const r = JSON.parse(await file.text()) as AnalysisReport;
       const err = validateReport(r);
       if (err) { setImportMsg(`Not a valid analysis report: ${err}`); return; }
-      onChange(schemaFromAnalysisReport(r));
+      let saveNote = "";
+      try {
+        const v = await api<{ version: number }>("PUT", "/config/analysis", { report: r, publish: true });
+        saveNote = ` · saved as report v${v.version}`;
+      } catch { saveNote = " · (not persisted — restart backend for /config/analysis)"; }
       const ni = needsInputPaths(r).length, oq = (r.open_questions ?? []).length;
-      setImportMsg(`Imported ${(r.config_items ?? []).length} items from “${r.system?.name ?? "system"}”`
-        + (ni ? ` · ${ni} need input` : "") + (oq ? ` · ${oq} open question${oq === 1 ? "" : "s"} for Engineering` : ""));
+      if (schema && schema.fields.length) {
+        const { schema: merged, summary } = mergeReportIntoSchema(schema, r);
+        onChange(merged);
+        setImportMsg(`Merged report into schema — +${summary.added.length} new, ${summary.updated.length} updated`
+          + (summary.removed.length ? `, ${summary.removed.length} no longer in report (kept)` : "") + saveNote);
+      } else {
+        onChange(schemaFromAnalysisReport(r));
+        setImportMsg(`Imported ${(r.config_items ?? []).length} items from “${r.system?.name ?? "system"}”`
+          + (ni ? ` · ${ni} need input` : "") + (oq ? ` · ${oq} open Q for Engineering` : "") + saveNote);
+      }
     } catch (e: any) { setImportMsg(`Could not read report: ${e?.message ?? e}`); }
   };
   const drafter = (
