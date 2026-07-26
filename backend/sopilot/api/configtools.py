@@ -14,7 +14,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_db
-from ..models import ConfigRuleset, ConfigRulesetVersion
+from ..models import (
+    ConfigAnalysisReport, ConfigAnalysisReportVersion,
+    ConfigDocument, ConfigDocumentVersion,
+    ConfigRuleset, ConfigRulesetVersion,
+)
 from ..tenancy import Scope, resolve_scope
 
 router = APIRouter(prefix="/config", tags=["config"])
@@ -183,8 +187,14 @@ def _validate_schema(schema) -> str | None:
         seen.add(path)
         if f.get("type") not in _FIELD_TYPES:
             return f"field '{path}': type must be one of {_FIELD_TYPES}"
-        if f.get("type") == "enum" and not (isinstance(f.get("options"), list) and f["options"]):
-            return f"field '{path}': enum requires a non-empty options list"
+        if f.get("type") == "enum":
+            opts = f.get("options")
+            if opts is not None and not isinstance(opts, list):
+                return f"field '{path}': enum options must be a list"
+            # empty options allowed ONLY while the field awaits input (a Stage-0
+            # analysis often knows a field is an enum before its allowed values).
+            if not opts and f.get("status") != "needs_input":
+                return f"field '{path}': enum requires options (unless status is 'needs_input')"
     return None
 
 
@@ -251,6 +261,153 @@ async def publish_ruleset(scope: Scope = Depends(resolve_scope), db: AsyncSessio
     return {"version": rs.latest_version, "published_version": rs.published_version}
 
 
+# ---------- Stage-0 analysis report: DB-versioned (Phase B) ----------
+#
+# Each analysis run is stored as a new immutable version (SopVersion-style),
+# per project. The published version is the report the schema is synced from;
+# re-analysis appends a version and the admin re-syncs (merge, client-side).
+
+REPORT_KIND = "sopilot-system-analysis"
+
+
+async def _get_report(db: AsyncSession, scope: Scope) -> ConfigAnalysisReport | None:
+    return (await db.execute(select(ConfigAnalysisReport).where(
+        ConfigAnalysisReport.tenant_id == scope.tenant_id,
+        ConfigAnalysisReport.project_id == scope.project_id,
+        ConfigAnalysisReport.name == "default"))).scalar_one_or_none()
+
+
+async def _report_version(db: AsyncSession, report_id: str, version: int) -> dict | None:
+    row = (await db.execute(select(ConfigAnalysisReportVersion).where(
+        ConfigAnalysisReportVersion.report_id == report_id,
+        ConfigAnalysisReportVersion.version == version))).scalar_one_or_none()
+    return None if row is None else row.report
+
+
+@router.get("/analysis")
+async def get_analysis(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)) -> dict:
+    """The project's Stage-0 report: latest + published, plus the version list."""
+    r = await _get_report(db, scope)
+    if r is None:
+        return {"exists": False, "latest_version": 0, "published_version": None,
+                "report": None, "published_report": None, "versions": []}
+    versions = (await db.execute(select(ConfigAnalysisReportVersion.version, ConfigAnalysisReportVersion.created_at)
+        .where(ConfigAnalysisReportVersion.report_id == r.id)
+        .order_by(ConfigAnalysisReportVersion.version.desc()))).all()
+    return {
+        "exists": True,
+        "latest_version": r.latest_version,
+        "published_version": r.published_version,
+        "report": await _report_version(db, r.id, r.latest_version),
+        "published_report": (await _report_version(db, r.id, r.published_version)) if r.published_version else None,
+        "versions": [{"version": v, "created_at": c.isoformat()} for v, c in versions],
+    }
+
+
+class AnalysisSaveRequest(BaseModel):
+    report: dict = {}
+    publish: bool = True   # a new analysis run is normally the one to sync from
+
+
+@router.put("/analysis")
+async def save_analysis(
+    req: AnalysisSaveRequest, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Store a Stage-0 report as a NEW immutable version; publish it by default
+    (it becomes the report the schema syncs from)."""
+    if req.report.get("kind") != REPORT_KIND:
+        raise HTTPException(status_code=422, detail=f"not a {REPORT_KIND} report")
+    if not isinstance(req.report.get("config_items"), list):
+        raise HTTPException(status_code=422, detail="report.config_items must be a list")
+    r = await _get_report(db, scope)
+    if r is None:
+        r = ConfigAnalysisReport(tenant_id=scope.tenant_id, project_id=scope.project_id, name="default")
+        db.add(r)
+        await db.flush()
+    r.latest_version += 1
+    db.add(ConfigAnalysisReportVersion(report_id=r.id, version=r.latest_version, report=req.report))
+    if req.publish:
+        r.published_version = r.latest_version
+    await db.commit()
+    return {"version": r.latest_version, "published_version": r.published_version}
+
+
+# ---------- Config document: the robot config itself, DB-versioned ----------
+#
+# The config's durable home (replaces the browser working copy). Stage-2 saves
+# create versions; the published version is the deploy config. One "default"
+# per project.
+
+async def _get_document(db: AsyncSession, scope: Scope) -> ConfigDocument | None:
+    return (await db.execute(select(ConfigDocument).where(
+        ConfigDocument.tenant_id == scope.tenant_id,
+        ConfigDocument.project_id == scope.project_id,
+        ConfigDocument.name == "default"))).scalar_one_or_none()
+
+
+async def _document_version(db: AsyncSession, document_id: str, version: int) -> dict | None:
+    row = (await db.execute(select(ConfigDocumentVersion).where(
+        ConfigDocumentVersion.document_id == document_id,
+        ConfigDocumentVersion.version == version))).scalar_one_or_none()
+    return None if row is None else row.config
+
+
+@router.get("/document")
+async def get_document(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)) -> dict:
+    """The project's config document: latest (editing) + published (deploy),
+    plus the version list. exists=False → nothing saved yet."""
+    d = await _get_document(db, scope)
+    if d is None:
+        return {"exists": False, "latest_version": 0, "published_version": None,
+                "config": None, "published_config": None, "versions": []}
+    versions = (await db.execute(select(ConfigDocumentVersion.version, ConfigDocumentVersion.created_at)
+        .where(ConfigDocumentVersion.document_id == d.id)
+        .order_by(ConfigDocumentVersion.version.desc()))).all()
+    return {
+        "exists": True,
+        "latest_version": d.latest_version,
+        "published_version": d.published_version,
+        "config": await _document_version(db, d.id, d.latest_version),
+        "published_config": (await _document_version(db, d.id, d.published_version)) if d.published_version else None,
+        "versions": [{"version": v, "created_at": c.isoformat()} for v, c in versions],
+    }
+
+
+class DocumentSaveRequest(BaseModel):
+    config: dict = {}
+    publish: bool = False
+
+
+@router.put("/document")
+async def save_document(
+    req: DocumentSaveRequest, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Save the config as a NEW immutable version; optionally publish (deploy)."""
+    if not isinstance(req.config, dict):
+        raise HTTPException(status_code=422, detail="config must be an object")
+    d = await _get_document(db, scope)
+    if d is None:
+        d = ConfigDocument(tenant_id=scope.tenant_id, project_id=scope.project_id, name="default")
+        db.add(d)
+        await db.flush()
+    d.latest_version += 1
+    db.add(ConfigDocumentVersion(document_id=d.id, version=d.latest_version, config=req.config))
+    if req.publish:
+        d.published_version = d.latest_version
+    await db.commit()
+    return {"version": d.latest_version, "published_version": d.published_version}
+
+
+@router.post("/document/publish")
+async def publish_document(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)) -> dict:
+    d = await _get_document(db, scope)
+    if d is None or d.latest_version == 0:
+        raise HTTPException(status_code=404, detail="no saved config to publish")
+    d.published_version = d.latest_version
+    await db.commit()
+    return {"version": d.latest_version, "published_version": d.published_version}
+
+
 class DraftFieldRequest(BaseModel):
     instruction: str = ""              # admin's plain-English field description
     existing_fields: list[str] = []    # field paths already declared (avoid dupes)
@@ -313,7 +470,9 @@ class DraftEditRequest(BaseModel):
     tools: list[dict] = []             # [{name, enabled}] — current tool states
     fields: list[dict] = []            # [{field, value, options?}] — editable scalars (+ enum options)
     rules: list[str] = []              # the admin ruleset, described (bounds shown to the LLM)
+    prompt: str = ""                   # the agent's current global prompt
     structures: dict = {}              # current lists: mcp_servers (urls), knowledge_bases, transfer_topics (ids)
+    history: list[dict] = []           # prior chat turns [{role, content}] — conversational memory
 
 
 _DRAFT_EDIT_SYS = (
@@ -325,6 +484,8 @@ _DRAFT_EDIT_SYS = (
     "  {\"op\":\"disable_tool\",\"tool\":<name>}\n"
     "  {\"op\":\"set_field\",\"field\":<dot.path>,\"value\":<string>}\n"
     "  {\"op\":\"unset_field\",\"field\":<dot.path>}\n"
+    "  {\"op\":\"set_prompt\",\"value\":<the full new agent prompt>}\n"
+    "  {\"op\":\"append_prompt\",\"value\":<text to add to the agent prompt>}\n"
     "  {\"op\":\"add_mcp_server\",\"url\":<url>,\"authorization\":<optional bearer>}\n"
     "  {\"op\":\"remove_mcp_server\",\"url\":<existing url>}\n"
     "  {\"op\":\"add_kb\",\"knowledge_id\":<id>,\"index_mode\":\"simple\"|\"lightrag\",\"function_tag\":<optional>}\n"
@@ -335,6 +496,9 @@ _DRAFT_EDIT_SYS = (
     "names. Stay within the ADMIN RULES (allowed enum options only; if enabling a tool or adding a structure "
     "requires a field per a rule, include the set_field — placeholder value only when none can be inferred).\n\n"
     "HOW THIS CONFIG WORKS (use to answer 'how do I…' questions):\n"
+    "- The agent PROMPT is the robot's global instructions/persona. To change or extend it, use set_prompt "
+    "(replace the whole prompt) or append_prompt (add to it) — write the actual prompt text. It is the agent's "
+    "behavior when no SOP is bound.\n"
     "- Built-in TOOLS are capabilities toggled on/off (send_email, transfer, show_table, …).\n"
     "- EXTERNAL DATA/KNOWLEDGE (weather, flight status, prices, any live or document data the agent should draw on) "
     "comes through a CONNECTOR — an MCP server, a RAG/HTTP endpoint, or a managed corpus — registered in the "
@@ -376,13 +540,21 @@ async def draft_edit(req: DraftEditRequest, scope: Scope = Depends(resolve_scope
         + "  mcp_servers: " + _json.dumps((req.structures.get("mcp_servers") or [])[:20])
         + "\n  knowledge_bases: " + _json.dumps((req.structures.get("knowledge_bases") or [])[:20])
         + "\n  transfer_topics: " + _json.dumps((req.structures.get("transfer_topics") or [])[:20])
+        + "\n\nCURRENT AGENT PROMPT:\n" + (req.prompt[:2000] or "(empty)")
         + "\n\nCHANGE REQUEST:\n" + req.instruction[:1000]
     )
+    # Conversational memory: replay prior turns so the assistant remembers what
+    # was discussed/applied. Only role/content text is carried (not the ops).
+    hist_msgs = [
+        {"role": "assistant" if h.get("role") == "assistant" else "user", "content": str(h.get("content", ""))[:2000]}
+        for h in req.history[-12:] if h.get("content")
+    ]
     try:
         res = await client().chat.completions.create(
             model=get_settings().builder_model,
-            messages=[{"role": "system", "content": _DRAFT_EDIT_SYS}, {"role": "user", "content": user}],
-            temperature=0.1, max_tokens=500, response_format={"type": "json_object"},
+            messages=[{"role": "system", "content": _DRAFT_EDIT_SYS}, *hist_msgs, {"role": "user", "content": user}],
+            # prompt edits can be long — allow room for a full rewritten prompt
+            temperature=0.1, max_tokens=1500, response_format={"type": "json_object"},
         )
         data = _json.loads(res.choices[0].message.content or "{}")
     except Exception as e:  # LLM/key issue — surface, don't 500
@@ -399,6 +571,8 @@ async def draft_edit(req: DraftEditRequest, scope: Scope = Depends(resolve_scope
             edits.append({"op": op, "field": str(e["field"]), "value": str(e.get("value", ""))})
         elif op == "unset_field" and e.get("field"):
             edits.append({"op": op, "field": str(e["field"])})
+        elif op in ("set_prompt", "append_prompt") and e.get("value"):
+            edits.append({"op": op, "value": str(e["value"])[:8000]})
         elif op in ("add_mcp_server", "remove_mcp_server") and e.get("url"):
             out_e = {"op": op, "url": str(e["url"])}
             if op == "add_mcp_server" and e.get("authorization"):

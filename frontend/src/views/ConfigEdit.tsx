@@ -33,11 +33,23 @@ const fieldOf = (pred: string): string | null => (pred.startsWith("field:") ? pr
 
 // ---- LLM-assisted edits: the model PROPOSES formal ops; the engine decides --
 
+interface ChatMessage {
+  role: "user" | "assistant";
+  text: string;
+  ops?: EditOp[];          // staged edits the assistant proposed
+  blocking?: RuleResult[]; // violations these ops would introduce
+  appliedDone?: boolean;   // ops were added to the draft
+  error?: boolean;
+  system?: boolean;        // a local note (e.g. "applied…"), not a model reply
+}
+
 export type EditOp =
   | { op: "enable_tool"; tool: string }
   | { op: "disable_tool"; tool: string }
   | { op: "set_field"; field: string; value: string }
   | { op: "unset_field"; field: string }
+  | { op: "set_prompt"; value: string }
+  | { op: "append_prompt"; value: string }
   | { op: "add_mcp_server"; url: string; authorization?: string }
   | { op: "remove_mcp_server"; url: string }
   | { op: "add_kb"; knowledge_id: string; index_mode?: string; function_tag?: string }
@@ -51,6 +63,8 @@ export function describeOp(e: EditOp): string {
     case "disable_tool": return `Disable ${e.tool}`;
     case "set_field": return `Set ${e.field} = "${e.value}"`;
     case "unset_field": return `Clear ${e.field}`;
+    case "set_prompt": return `Set the agent prompt (${e.value.length} chars)`;
+    case "append_prompt": return `Append to the agent prompt: "${e.value.slice(0, 60)}${e.value.length > 60 ? "…" : ""}"`;
     case "add_mcp_server": return `Add MCP server ${e.url}`;
     case "remove_mcp_server": return `Remove MCP server ${e.url}`;
     case "add_kb": return `Add knowledge base "${e.knowledge_id}" (${e.index_mode || "simple"})`;
@@ -62,19 +76,39 @@ export function describeOp(e: EditOp): string {
 
 // Apply ops to a draft; unknown tools/fields/entries are SKIPPED (the LLM must
 // not invent atoms — a skipped op is surfaced, never silently applied).
-export function applyEdits(draft: Config, edits: EditOp[], allowedFields: Set<string>): { next: Config; applied: EditOp[]; skipped: EditOp[] } {
+// allowedTools = the tools the editor offers (schema allowlist, else the config's
+// own). enable_tool may CREATE an entry for an allowed-but-not-yet-present tool,
+// matching what clicking the tool chip does — otherwise the assistant could
+// "enable" a schema tool and silently change nothing.
+export function applyEdits(draft: Config, edits: EditOp[], allowedFields: Set<string>, allowedTools?: Set<string>): { next: Config; applied: EditOp[]; skipped: EditOp[] } {
   let next = draft;
   const applied: EditOp[] = [], skipped: EditOp[] = [];
   const list = (p: string): any[] => (get(next, p) as any[]) ?? [];
   for (const e of edits) {
     switch (e.op) {
-      case "enable_tool": case "disable_tool":
-        if (!next.tools || !(e.tool in next.tools)) { skipped.push(e); continue; }
+      case "enable_tool": case "disable_tool": {
+        const present = !!next.tools && e.tool in next.tools;
+        if (!present) {
+          // Not in the config yet. enable_tool can add it if the editor offers it;
+          // disable_tool on an absent tool is already-off → nothing to do.
+          if (e.op === "enable_tool" && allowedTools?.has(e.tool)) {
+            next = setPath(next, `tools.${e.tool}.enabled`, true);
+            break;
+          }
+          skipped.push(e); continue;
+        }
         next = setPath(next, `tools.${e.tool}.enabled`, e.op === "enable_tool");
         break;
+      }
       case "set_field": case "unset_field":
         if (!allowedFields.has(e.field)) { skipped.push(e); continue; }
         next = setPath(next, e.field, e.op === "set_field" ? e.value : "");
+        break;
+      case "set_prompt":
+        next = setPath(next, "prompt", e.value);
+        break;
+      case "append_prompt":
+        next = setPath(next, "prompt", [String(next.prompt ?? "").trim(), e.value].filter(Boolean).join("\n\n"));
         break;
       case "add_mcp_server":
         if (!e.url.trim() || list("mcp_servers").some((m) => m.url === e.url)) { skipped.push(e); continue; }
@@ -169,6 +203,9 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
   const schemaTools = schema?.tools?.length ? schema.tools : null;
   const toolDesc = new Map((schemaTools ?? []).map((t) => [t.name, t.description || ""]));
   const toolNames = (schemaTools ? schemaTools.map((t) => t.name) : Object.keys(draft.tools ?? {})).sort();
+  // The tools the assistant is allowed to enable — the same set the chips offer,
+  // so "enable X" from chat behaves exactly like clicking X's chip.
+  const allowedTools = useMemo(() => new Set(toolNames), [toolNames]);
   // Structures the schema allows (else all three known lists).
   const allowedStructures = schema?.structures?.length ? new Set(schema.structures.map((s) => s.key)) : null;
   const showStructure = (key: string) => !allowedStructures || allowedStructures.has(key);
@@ -213,52 +250,58 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
     } catch { /* surfaced by the registry views; row stays ad-hoc */ }
   };
 
-  // ---- LLM-assisted edits ("change X for me") ----
+  // ---- Config assistant: a persistent chat with history (not one-shot) ----
   const [ask, setAsk] = useState("");
   const [askBusy, setAskBusy] = useState(false);
-  const [askErr, setAskErr] = useState("");
-  const [proposal, setProposal] = useState<{
-    note: string; applied: EditOp[]; skipped: EditOp[]; next: Config; blocking: RuleResult[]; warns: RuleResult[];
-  } | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  const propose = async () => {
-    if (!ask.trim()) return;
-    setAskBusy(true); setAskErr(""); setProposal(null);
+  const sendMessage = async () => {
+    const q = ask.trim();
+    if (!q || askBusy) return;
+    setAsk("");
+    const history = messages.map((m) => ({ role: m.role, content: m.text }));
+    setMessages((ms) => [...ms, { role: "user", text: q }]);
+    setAskBusy(true);
     try {
       const r = await api<{ edits?: EditOp[]; reply?: string; note?: string; error?: string }>("POST", "/config/draft-edit", {
-        instruction: ask,
+        instruction: q, history,
         tools: toolNames.map((t) => ({ name: t, enabled: draft.tools?.[t]?.enabled === true })),
         fields: [...allowedFields].map((f) => ({ field: f, value: get(draft, f) ?? null, options: enumFor(f)?.options })),
         rules: rules.map(describeRule),
+        prompt: String(draft.prompt ?? ""),
         structures: {
           mcp_servers: listOf("mcp_servers").map((m) => String(m.url ?? "")),
           knowledge_bases: listOf("knowledge_base").map((k) => ({ knowledge_id: String(k.knowledge_id ?? ""), index_mode: String(k.index_mode ?? "simple") })),
           transfer_topics: listOf("transfer_topics").map((t) => String(t.topic_id ?? "")),
         },
       });
-      if (r.error) { setAskErr(r.error); return; }
+      if (r.error) { setMessages((ms) => [...ms, { role: "assistant", text: r.error!, error: true }]); return; }
       const reply = r.reply || r.note || "";
-      // Answer-only (a question, or a request that needs something outside the
-      // editor's vocabulary): show the reply conversationally, no edits to stage.
-      if (!r.edits?.length) {
-        setProposal({ note: reply, applied: [], skipped: [], next: draft, blocking: [], warns: [] });
-        return;
+      const ops = r.edits ?? [];
+      let blocking: RuleResult[] = [];
+      if (ops.length) {
+        // gate: violations the proposal INTRODUCES vs the current draft
+        const { next } = applyEdits(draft, ops, allowedFields, allowedTools);
+        const before = new Set(evaluateRules(draft, rules).filter((v) => v.state === "violated").map((v) => v.rule.id));
+        blocking = evaluateRules(next, rules).filter((v) => v.state === "violated" && v.rule.level === "error" && !before.has(v.rule.id));
       }
-      // The gate: evaluate the admin ruleset on the EDITED draft before offering
-      // it — judged on the violations the proposal INTRODUCES (pre-existing
-      // draft violations are the editor's business, not the proposal's).
-      const { next, applied, skipped } = applyEdits(draft, r.edits, allowedFields);
-      const before = new Set(evaluateRules(draft, rules).filter((res) => res.state === "violated").map((res) => res.rule.id));
-      const evald = evaluateRules(next, rules).filter((res) => res.state === "violated" && !before.has(res.rule.id));
-      setProposal({
-        note: reply, applied, skipped, next,
-        blocking: evald.filter((v) => v.rule.level === "error"),
-        warns: evald.filter((v) => v.rule.level !== "error"),
-      });
+      setMessages((ms) => [...ms, { role: "assistant", text: reply, ops, blocking }]);
     } catch (e: any) {
       const m = String(e?.message ?? e);
-      setAskErr(m.includes("Not Found") ? "Assistant endpoint not found — restart the backend for /config/draft-edit." : `Assistant failed: ${m}`);
+      setMessages((ms) => [...ms, { role: "assistant", text: m.includes("Not Found") ? "Assistant endpoint not found — restart the backend." : `Assistant failed: ${m}`, error: true }]);
     } finally { setAskBusy(false); }
+  };
+
+  // Apply a message's staged ops to the draft (recomputed against the CURRENT
+  // draft, not a stale snapshot), and note it in the chat so the model knows.
+  const applyMessageOps = (idx: number) => {
+    const msg = messages[idx];
+    if (!msg.ops?.length) return;
+    const { next, applied } = applyEdits(draft, msg.ops, allowedFields, allowedTools);
+    setDraft(next);
+    setMessages((ms) => ms.map((m, i) => (i === idx ? { ...m, appliedDone: true } : m))
+      .concat([{ role: "assistant", text: `Applied: ${applied.map(describeOp).join("; ") || "(nothing new)"}. Remember to Apply changes to save.`, system: true }]));
   };
 
   return (
@@ -314,51 +357,18 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
         </div>
       )}
 
-      {/* assistant: plain English → formal ops, gated by the same ruleset */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 8 }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input className="area" style={{ flex: 1 }} placeholder='ask or change — e.g. "how do I add weather data?" or "let the agent send verification SMS"'
-            value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !askBusy && propose()} />
-          <button className="btn sm primary" onClick={propose} disabled={askBusy || !ask.trim()}>{askBusy ? "Thinking…" : "Propose"}</button>
+      {/* The config assistant now lives in a floating chat panel (rendered at the
+          end of this component) so it's available while scrolling the whole tab. */}
+
+      {/* Agent prompt — the robot's global instructions. Central when there's no
+          SOP; edited here directly (free-text, so not a scalar schema field). */}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>
+          Agent prompt <span className="sub" style={{ textTransform: "none", fontWeight: 400 }}>· the robot's global instructions</span>
         </div>
-        {askErr && <div className="lintline" style={{ color: "var(--crit)" }}>{askErr}</div>}
-        {proposal && (() => {
-          const answerOnly = proposal.applied.length === 0 && proposal.skipped.length === 0 && proposal.blocking.length === 0;
-          return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 10px", background: "var(--panel2, rgba(127,127,127,.06))", borderRadius: 8 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-              {answerOnly
-                ? <span className="chip muted" style={{ flex: "0 0 auto" }}><span className="cd" />answer</span>
-                : proposal.blocking.length > 0
-                  ? <span className="chip crit" style={{ flex: "0 0 auto" }}><span className="cd" />violates admin rules</span>
-                  : proposal.warns.length > 0
-                    ? <span className="chip warn" style={{ flex: "0 0 auto" }}><span className="cd" />{proposal.warns.length} warning{proposal.warns.length === 1 ? "" : "s"}</span>
-                    : <span className="chip good" style={{ flex: "0 0 auto" }}><span className="cd" />within bounds</span>}
-              {proposal.note && <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.45 }}>{proposal.note}</span>}
-            </div>
-            {proposal.applied.map((e, i) => (
-              <div key={i} className="lintline mono" style={{ fontSize: 12, color: "var(--text2)" }}>→ {describeOp(e)}</div>
-            ))}
-            {proposal.skipped.map((e, i) => (
-              <div key={"s" + i} className="lintline" style={{ fontSize: 12, color: "var(--muted)" }}>✕ skipped (unknown atom): {describeOp(e)}</div>
-            ))}
-            {proposal.blocking.map((v) => (
-              <div key={v.rule.id} className="lintline" style={{ fontSize: 12, color: "var(--crit)" }}>✖ {v.rule.msg}</div>
-            ))}
-            <div style={{ display: "flex", gap: 8, marginTop: 2, alignItems: "center" }}>
-              {proposal.applied.length > 0 && proposal.blocking.length === 0 && (
-                <button className="btn sm primary" onClick={() => { setDraft(proposal.next); setProposal(null); setAsk(""); }}
-                  title="Stage these edits in the editor below — then Apply changes to write them to the config">
-                  Add to edits
-                </button>
-              )}
-              <button className="btn ghost sm" onClick={() => setProposal(null)}>{answerOnly ? "Dismiss" : "Discard"}</button>
-              {proposal.applied.length > 0 && proposal.blocking.length === 0 && <span className="sub">stages the edits — review, then Apply changes</span>}
-              {proposal.blocking.length > 0 && <span className="sub">The admin's ruleset forbids this change — it cannot be applied.</span>}
-            </div>
-          </div>
-          );
-        })()}
+        <textarea className="area" rows={5} style={{ width: "100%" }}
+          placeholder="e.g. You are Ava, a friendly front-desk assistant. Keep replies short and factual…"
+          value={String(draft.prompt ?? "")} onChange={(e) => setDraft((d) => setPath(d, "prompt", e.target.value))} />
       </div>
 
       <div className="grid2">
@@ -395,17 +405,20 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
             {visibleFields.map((fld: DerivedField) => {
               const f = fld.path;
               // enum options come from the schema field first (the DSL), else an enum rule.
-              const opts = fld.options ?? enumFor(f)?.options;
+              // empty enum options (a needs_input field) → fall back to a text
+              // input rather than a dropdown with nothing to pick.
+              const opts = (fld.options?.length ? fld.options : enumFor(f)?.options);
               const v = get(draft, f);
               const requiredUnset = fld.required && !(typeof v === "string" ? v.trim() : v != null);
+              const needsInput = fld.status === "needs_input";  // Stage-0 flagged it as awaiting Engineering
               const needed = neededFields.has(f) || requiredUnset;
               const setVal = (raw: string) =>
                 setDraft(setPath(draft, f, fld.type === "number" ? (raw === "" ? "" : Number(raw)) : raw));
               return (
                 <label key={f} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-                  <span className="mono" style={{ flex: "0 0 200px", color: needed ? "var(--crit)" : "var(--muted)" }}
-                    title={[fld.type, fld.required ? "required" : "", fld.advanced ? "advanced" : "", fld.description || ""].filter(Boolean).join(" · ")}>
-                    {f}{fld.required ? " *" : ""}{needed ? " ←" : ""}
+                  <span className="mono" style={{ flex: "0 0 200px", color: needed ? "var(--crit)" : needsInput ? "var(--warn)" : "var(--muted)" }}
+                    title={[fld.type, fld.required ? "required" : "", needsInput ? "needs input from Engineering" : "", fld.advanced ? "advanced" : "", fld.description || ""].filter(Boolean).join(" · ")}>
+                    {f}{fld.required ? " *" : ""}{needsInput ? " ⚑" : ""}{needed ? " ←" : ""}
                   </span>
                   {opts ? (
                     // enum: the schema (or admin's enum rule) bounds the widget itself
@@ -528,6 +541,69 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
           </div>
         </div>}
       </div>
+
+      {/* ---- floating config assistant: persistent chat, fixed while scrolling ---- */}
+      {!chatOpen && (
+        <button className="btn primary" onClick={() => setChatOpen(true)}
+          style={{ position: "fixed", right: 20, bottom: 20, zIndex: 50, borderRadius: 22, padding: "10px 16px", boxShadow: "0 6px 24px rgba(0,0,0,.25)" }}>
+          💬 Config assistant{messages.length ? ` (${messages.filter((m) => m.role === "user").length})` : ""}
+        </button>
+      )}
+      {chatOpen && (
+        <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 50, width: 400, maxWidth: "calc(100vw - 40px)",
+          height: "min(560px, 80vh)", display: "flex", flexDirection: "column",
+          background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 10px 40px rgba(0,0,0,.3)" }}>
+          <div className="chead" style={{ borderBottom: "1px solid var(--line)", padding: "10px 12px" }}>
+            <span>Config assistant</span>
+            <span className="sub" style={{ marginLeft: 6, fontSize: 11 }}>· remembers this conversation</span>
+            <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+              {messages.length > 0 && <button className="btn ghost sm" title="Clear the conversation" onClick={() => setMessages([])}>Clear</button>}
+              <button className="btn ghost sm" onClick={() => setChatOpen(false)}>✕</button>
+            </span>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+            {messages.length === 0 && (
+              <div className="sub" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+                Ask about the config or request changes — e.g. “how do I add weather data?”, “let the agent send verification SMS”,
+                “make the prompt more concise”. I remember what we’ve done this session; edits are gated by the admin’s rules.
+              </div>
+            )}
+            {messages.map((m, i) => {
+              if (m.role === "user") return (
+                <div key={i} style={{ alignSelf: "flex-end", maxWidth: "85%", background: "var(--accent-soft, rgba(59,110,245,.12))",
+                  borderRadius: "10px 10px 2px 10px", padding: "7px 10px", fontSize: 12.5 }}>{m.text}</div>
+              );
+              const hasOps = (m.ops?.length ?? 0) > 0;
+              const blocked = (m.blocking?.length ?? 0) > 0;
+              return (
+                <div key={i} style={{ alignSelf: "flex-start", maxWidth: "90%",
+                  background: m.error ? "var(--crit-dim, rgba(209,52,56,.1))" : m.system ? "transparent" : "var(--panel2, rgba(127,127,127,.1))",
+                  borderRadius: "10px 10px 10px 2px", padding: m.system ? "2px 4px" : "7px 10px",
+                  fontSize: m.system ? 11.5 : 12.5, color: m.error ? "var(--crit)" : m.system ? "var(--muted)" : "var(--text2)", lineHeight: 1.45 }}>
+                  {m.system ? <span>✓ {m.text}</span> : <span>{m.text}</span>}
+                  {hasOps && !m.system && (
+                    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+                      {m.ops!.map((e, j) => <div key={j} className="mono" style={{ fontSize: 11, color: blocked ? "var(--muted)" : "var(--text2)" }}>→ {describeOp(e)}</div>)}
+                      {(m.blocking ?? []).map((v) => <div key={v.rule.id} style={{ fontSize: 11, color: "var(--crit)" }}>✖ {v.rule.msg}</div>)}
+                      {!m.appliedDone && !blocked && (
+                        <button className="btn sm primary" style={{ alignSelf: "flex-start", marginTop: 3 }} onClick={() => applyMessageOps(i)}>Add to edits</button>
+                      )}
+                      {m.appliedDone && <span className="sub" style={{ fontSize: 11 }}>added ✓ — remember to Apply changes</span>}
+                      {blocked && <span className="sub" style={{ fontSize: 11 }}>the admin’s ruleset forbids this — not applied</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {askBusy && <div className="sub" style={{ fontSize: 12 }}>Thinking…</div>}
+          </div>
+          <div style={{ display: "flex", gap: 6, padding: "10px 12px", borderTop: "1px solid var(--line)" }}>
+            <input className="area" style={{ flex: 1 }} placeholder="ask or request a change…" value={ask}
+              onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendMessage()} />
+            <button className="btn sm primary" onClick={sendMessage} disabled={askBusy || !ask.trim()}>Send</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

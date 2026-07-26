@@ -13,6 +13,7 @@ import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings
 import { ruleFindings, seedRules, type Rule } from "../config/rules";
 import type { ConfigSchema } from "../config/schema";
 import GuidedEditor from "./ConfigEdit";
+import Help from "./Help";
 import { api, getCreds } from "../api";
 
 // A fresh project starts from this empty skeleton — NOT the bundled example
@@ -68,6 +69,13 @@ export default function ConfigView() {
   const [adminSchema, setAdminSchema] = useState<ConfigSchema | null>(null);
   const [renderNotes, setRenderNotes] = useState<string[] | null>(null);
   const [renderBusy, setRenderBusy] = useState(false);
+  // DB-versioned config document — the durable home for the config. localStorage
+  // is now just an offline draft cache; the DB is the source of truth.
+  const [docVersion, setDocVersion] = useState(0);
+  const [docPublished, setDocPublished] = useState<number | null>(null);
+  const [docBaseline, setDocBaseline] = useState<string>(JSON.stringify(initial));  // last saved config JSON
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
 
   // Write-back: resolve connector/secret references server-side into the
   // deploy-ready config.json the robot consumes, and download it.
@@ -89,16 +97,56 @@ export default function ConfigView() {
         if (r.published_schema) setAdminSchema(r.published_schema);
       })
       .catch(() => { /* backend down — seed fallback below */ });
+    // Load the DB config document (source of truth) for versioning + dirty
+    // tracking. The DB config is always the baseline, but DON'T clobber an
+    // unsaved local draft: if the browser holds edits that differ from the DB
+    // (e.g. "Apply changes" without "Save", then a tab switch remounted this
+    // view), keep the draft and let the "unsaved" chip prompt a Save — otherwise
+    // navigating away would silently discard in-progress work.
+    api<{ config: any; latest_version: number; published_version: number | null }>("GET", "/config/document")
+      .then((d) => {
+        setDocVersion(d.latest_version); setDocPublished(d.published_version);
+        if (d.config) {
+          setDocBaseline(JSON.stringify(d.config));
+          const local = loadStoredConfig();
+          if (!local || JSON.stringify(local) === JSON.stringify(d.config)) preset(d.config);
+          // else: a divergent local draft exists — leave it in place (dirty vs DB).
+        }
+      })
+      .catch(() => { /* no document / backend down — localStorage/empty stands */ });
   }, []);
 
-  // Persist the working config per project so edits survive navigation & reload.
+  // Persist the working config per project (offline draft cache; DB is truth).
   useEffect(() => {
     try { localStorage.setItem(cfgStoreKey(), JSON.stringify(cfg)); } catch { /* quota/serialization — non-fatal */ }
   }, [cfg]);
 
+  const docDirty = JSON.stringify(cfg) !== docBaseline;
+  const saveDocument = async (publish: boolean) => {
+    setSaveBusy(true); setSaveMsg("");
+    try {
+      const r = await api<{ version: number; published_version: number | null }>("PUT", "/config/document", { config: cfg, publish });
+      setDocVersion(r.version); setDocPublished(r.published_version); setDocBaseline(JSON.stringify(cfg));
+      setSaveMsg(`Saved v${r.version}${publish ? " · published" : ""}`);
+    } catch (e: any) {
+      const m = String(e?.message ?? e);
+      setSaveMsg(m.includes("Not Found") ? "Save endpoint not found — restart the backend for /config/document." : `Save failed: ${m}`);
+    } finally { setSaveBusy(false); }
+  };
+
   const load = (v: string) => { try { setCfg(JSON.parse(v)); setErr(""); setLogicalLive(null); } catch (e: any) { setErr(String(e?.message ?? e)); } };
   const preset = (c: any) => { setText(JSON.stringify(c, null, 2)); setCfg(c); setErr(""); setIntro(MCP_INTROSPECTION); setLive(false); setLogicalLive(null); };
   const resetEmpty = () => { try { localStorage.removeItem(cfgStoreKey()); } catch { /* ignore */ } preset(EMPTY_CONFIG); };
+  // Throw away the local draft and reload the last-saved config from the DB.
+  const discardToSaved = async () => {
+    try {
+      const d = await api<{ config: any; latest_version: number; published_version: number | null }>("GET", "/config/document");
+      setDocVersion(d.latest_version); setDocPublished(d.published_version);
+      setDocBaseline(JSON.stringify(d.config ?? EMPTY_CONFIG));
+      preset(d.config ?? EMPTY_CONFIG);
+      setSaveMsg("");
+    } catch (e: any) { setSaveMsg(`Reload failed: ${String(e?.message ?? e)}`); }
+  };
 
   const validate = async () => {
     setBusy2(true);
@@ -142,6 +190,9 @@ export default function ConfigView() {
     const info = intro[s.url]; return n + (info && !info.error ? info.tools.filter((t) => !t.startsWith("polartie_")).length : 0);
   }, 0);
   const problems = [...struct, ...mcp, ...logical, ...adminFindings].filter((f) => f.level === "error").length;
+  const isEmptyConfig = !String(cfg.display_name || "").trim() && tools.length === 0
+    && !(cfg.mcp_servers ?? []).length && !(cfg.knowledge_base ?? []).length
+    && !(cfg.transfer_topics ?? []).length && !String(cfg.prompt || "").trim();
 
   const stat = (label: string, value: string) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid var(--line)", fontSize: 13 }}>
@@ -155,22 +206,38 @@ export default function ConfigView() {
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="chead">
           <span>Robot config.json</span>
-          <span className="sub" style={{ fontSize: 11 }}>· saved in this browser</span>
+          {docVersion > 0 && (
+            <span className={"chip " + (docPublished === docVersion && !docDirty ? "good" : "muted")} style={{ marginLeft: 6 }}>
+              <span className="cd" />v{docVersion}{docPublished ? (docPublished === docVersion ? " published" : ` · v${docPublished} deployed`) : " draft"}
+            </span>
+          )}
+          {docDirty && <span className="chip warn" style={{ marginLeft: 4 }}><span className="cd" />unsaved</span>}
           <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
             <button className="btn ghost sm" onClick={() => preset(EXAMPLE)} title="Load the bundled example (a sanitized real robot config) into this working copy">Load example</button>
             <button className="btn ghost sm" onClick={() => preset(SAMPLE_CONFIG)}>Sample</button>
-            <button className="btn ghost sm" onClick={resetEmpty} title="Clear the locally-saved working config back to an empty config">Reset</button>
-            {problems > 0 && <span className="chip crit"><span className="cd" />{problems} problem{problems === 1 ? "" : "s"}</span>}
+            <button className="btn ghost sm" onClick={resetEmpty} title="Clear back to an empty config">Reset</button>
+            {docDirty && docVersion > 0 && (
+              <button className="btn ghost sm" onClick={discardToSaved} title="Discard unsaved local changes and reload the last-saved config from the database">Discard changes</button>
+            )}
+            <button className="btn ghost sm" onClick={() => saveDocument(false)} disabled={saveBusy || !docDirty} title="Save this config as a new version in the database">Save</button>
+            <button className="btn sm primary" onClick={() => saveDocument(true)} disabled={saveBusy || problems > 0} title={problems > 0 ? "Fix errors before publishing" : "Save and mark as the deploy version"}>Save &amp; publish</button>
             <button className="btn sm ghost" onClick={downloadRobot} disabled={renderBusy || problems > 0}
               title={problems > 0 ? "Fix the errors first — a config with problems can't be deployed" : "Resolve connector/secret references server-side and download the deploy-ready config.json"}>
-              {renderBusy ? "Rendering…" : "Download robot config"}
+              {renderBusy ? "Rendering…" : "Download"}
             </button>
-            <button className="btn sm primary" onClick={() => load(text)}>Load &amp; render</button>
+            <button className="btn ghost sm" onClick={() => load(text)}>Load &amp; render</button>
           </span>
         </div>
         <div className="cbody">
+          {isEmptyConfig && (
+            <div style={{ marginBottom: 8, padding: "8px 12px", background: "var(--panel2, rgba(127,127,127,.08))", border: "1px solid var(--line)", borderRadius: 8, fontSize: 12.5, color: "var(--muted)" }}>
+              No working config in this browser yet — this is a local scratch copy, not your SOPs/blocks/connectors (those live on the server and are unaffected).
+              Start with <b>Load example</b>, <b>Import</b> a config JSON, or paste one below.
+            </div>
+          )}
           <textarea className="area mono" rows={7} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
           {err && <div className="lintline" style={{ color: "var(--crit)", marginTop: 6 }}>JSON error: {err}</div>}
+          {saveMsg && <div className="lintline" style={{ color: saveMsg.startsWith("Saved") ? "var(--good)" : "var(--crit)", marginTop: 6 }}>{saveMsg}</div>}
           {renderNotes && renderNotes.length > 0 && (
             <div style={{ marginTop: 6 }}>
               {renderNotes.map((n, i) => <div key={i} className="lintline" style={{ color: "var(--warn)", fontSize: 12.5 }}>⚠ {n}</div>)}
@@ -180,7 +247,7 @@ export default function ConfigView() {
       </div>
 
       <div className="card" style={{ marginBottom: 14 }}>
-        <div className="chead"><span>Guided edit</span>
+        <div className="chead"><span>Guided edit<Help topic="write_back" text="Edit the config within the admin's published schema & rules. Changes are staged here; Apply changes writes them to the config. Blocking rule violations can't be applied." /></span>
           <span className="sub" style={{ marginLeft: "auto" }}>edit within the admin's bounds — blocking violations can't be applied</span></div>
         <div className="cbody">
           <GuidedEditor cfg={cfg} rules={effectiveRules} schema={adminSchema}

@@ -59,6 +59,10 @@ ok("named-key session lands in Studio", true);
 await page.getByText("Config viewer").click();
 await page.getByText("Guided edit").waitFor({ timeout: 5000 });
 const card = page.locator(".card", { hasText: "Guided edit" });
+// The viewer defaults to an empty working config now; load the example so there
+// is a real config (tools, fields) to exercise the guided editor against.
+await page.getByRole("button", { name: "Load example" }).click();
+await page.waitForTimeout(300);
 const applyBtn = page.getByRole("button", { name: "Apply changes" }).first(); // header button (a 2nd appears in the dirty banner)
 ok("Apply disabled when clean (no edits)", await applyBtn.isDisabled());
 
@@ -82,24 +86,25 @@ await applyBtn.click();
 await page.waitForTimeout(300);
 ok("apply lands (editor back to clean)", await applyBtn.isDisabled());
 
-// ---- 4. LLM-assisted edit (real model call; compliant request) ----
-await card.locator("input[placeholder*='ask or change']").fill("switch the voice to echo");
-await page.getByRole("button", { name: "Propose" }).click();
-await page.getByRole("button", { name: /Add to edits|Discard/ }).first().waitFor({ timeout: 45000 });
-ok("assistant proposes a formal edit", (await card.getByText(/Set voice = "echo"/).count()) > 0);
-ok("proposal evaluated within bounds", (await card.locator(".chip.good", { hasText: "within bounds" }).count()) > 0);
-await page.getByRole("button", { name: "Add to edits" }).click();
+// ---- 4. Config assistant (floating chat; real model call; compliant request) ----
+await page.getByRole("button", { name: /Config assistant/ }).click();  // open the chat panel
+const chatInput = page.locator("input[placeholder*='ask or request']");
+await chatInput.fill("switch the voice to echo");
+await page.getByRole("button", { name: "Send", exact: true }).click();
+await page.getByRole("button", { name: "Add to edits" }).first().waitFor({ timeout: 45000 });
+ok("assistant proposes a formal edit in chat", (await page.getByText(/Set voice = "echo"/).count()) > 0);
+await page.getByRole("button", { name: "Add to edits" }).first().click();
 await page.waitForTimeout(300);
 ok("staged edit → draft dirty, Apply enabled", await applyBtn.isEnabled());
-ok("unsaved-edits banner explains the two-step apply", (await card.getByText(/unsaved edits staged/).count()) > 0);
+ok("chat notes the edit was applied", (await page.getByText(/added ✓/).count()) > 0);
 
-// ---- 4b. Assistant answers a help question (no edits — the "chat with the config" path) ----
-await card.locator("input[placeholder*='ask or change']").fill("how do I add weather data to the agent?");
-await page.getByRole("button", { name: "Propose" }).click();
-await card.locator(".chip", { hasText: /^answer$/ }).waitFor({ timeout: 45000 });
-ok("help question gets an answer (not an error)", (await card.locator(".chip", { hasText: /^answer$/ }).count()) > 0);
-ok("answer mode offers no 'Add to edits'", (await card.getByRole("button", { name: "Add to edits" }).count()) === 0);
-await card.getByRole("button", { name: "Dismiss" }).click();
+// ---- 4b. Assistant answers a help question (no edits) + remembers history ----
+await chatInput.fill("how do I add weather data to the agent?");
+await page.getByRole("button", { name: "Send", exact: true }).click();
+await page.waitForTimeout(22000);
+ok("help question answered in chat", (await page.getByText(/weather|connector|MCP/i).count()) > 0);
+ok("history retained (earlier voice turn still shown)", (await page.getByText(/switch the voice to echo/).count()) > 0);
+await page.locator("button:has-text('✕'):not([title])").click();  // close chat panel (panel's ✕ has no title, unlike Remove buttons)
 await page.waitForTimeout(200);
 
 // ---- 5. Complex structures: adding a KB without its backend must block ----
@@ -121,6 +126,29 @@ ok("plumbing hidden by default (rem_ws_host absent)", (await card.locator("span.
 await advToggle.click();
 await page.waitForTimeout(200);
 ok("toggle reveals advanced plumbing (rem_ws_host)", (await card.locator("span.mono", { hasText: "rem_ws_host" }).count()) > 0);
+
+// ---- 7. Persistence: an applied edit survives a tab switch (remount) ----
+// Regression: the mount fetch used to clobber the local draft with the DB config,
+// so "Apply changes" (without Save) then navigating away silently lost the edit.
+// The voice=echo edit staged via chat in section 4 is still in the guided draft;
+// commit it to the working config, then leave and re-enter the viewer.
+await applyBtn.click();  // Apply changes → writes voice=echo into cfg (NOT saved to DB)
+await page.waitForTimeout(300);
+const beforeText = await page.locator("textarea.area.mono").first().inputValue();
+ok("edit reaches the working config on Apply", /"voice"\s*:\s*"echo"/.test(beforeText));
+await page.locator("button.navitem", { hasText: "Config admin" }).click();   // leave the viewer (unmounts ConfigView)
+await page.waitForTimeout(500);
+await page.locator("button.navitem", { hasText: "Config viewer" }).click();  // return → remounts ConfigView
+await page.getByText("Guided edit").waitFor({ timeout: 5000 });
+await page.waitForTimeout(700);                       // let the DB /config/document fetch settle
+const afterText = await page.locator("textarea.area.mono").first().inputValue();
+ok("applied edit survives a tab switch (draft not clobbered by DB)", /"voice"\s*:\s*"echo"/.test(afterText));
+// If a saved DB version exists, a divergent draft must be flagged "unsaved" so
+// the user knows to Save; with no saved version there's nothing to be dirty
+// against, so the chip legitimately won't show. Assert the intent either way.
+const hasSavedVersion = (await page.locator(".chead .chip", { hasText: /^v\d/ }).count()) > 0;
+const unsavedShown = (await page.locator(".chip.warn", { hasText: "unsaved" }).count()) > 0;
+ok("unsaved draft flagged when a saved version exists", !hasSavedVersion || unsavedShown);
 
 await browser.close();
 

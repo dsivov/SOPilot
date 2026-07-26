@@ -1,0 +1,61 @@
+{
+  "kind": "sopilot-system-analysis",
+  "report_version": 1,
+  "system": {
+    "name": "demo-voice-robot",
+    "description": "Sample Stage-0 analysis output for the config manager.",
+    "analyzed_at": "2026-07-26T00:00:00Z",
+    "sources": ["sample_config", "code", "db_schema"]
+  },
+  "components": [
+    { "id": "voice_agent", "name": "Voice Agent", "kind": "service",
+      "description": "the caller-facing agent", "depends_on": ["knowledge_mcp", "documents_db"] },
+    { "id": "knowledge_mcp", "name": "Knowledge MCP", "kind": "external",
+      "description": "Context Graph knowledge server", "depends_on": ["documents_db"] },
+    { "id": "documents_db", "name": "Documents DB", "kind": "datastore",
+      "description": "Postgres store of source documents" },
+    { "id": "api", "name": "SOPilot API", "kind": "service",
+      "exposes": [
+        { "kind": "http-route", "path": "/config/ruleset", "methods": ["GET", "PUT"] },
+        { "kind": "mcp-mount", "path": "/mcp" }
+      ] }
+  ],
+  "config_items": [
+    { "path": "voice", "item": "field", "type": "enum",
+      "options": ["alloy", "echo", "coral", "sage"], "required": false,
+      "description": "the TTS voice the caller hears", "component": "voice_agent",
+      "status": "known", "source": "sample_config" },
+    { "path": "default_language_iso", "item": "field", "type": "string",
+      "description": "default reply language (ISO code)", "status": "known", "source": "sample_config" },
+    { "path": "notification_service_url", "item": "field", "type": "string", "required": true,
+      "description": "endpoint email/SMS notifications post to", "status": "known", "source": "code" },
+    { "path": "weather_provider", "item": "field", "type": "enum", "options": [], "required": true,
+      "description": "live weather data source", "component": "voice_agent",
+      "status": "needs_input", "source": "code" },
+    { "path": "max_call_duration", "item": "field", "type": "number", "advanced": true,
+      "description": "hard cap on call length (seconds)", "status": "known", "source": "sample_config" },
+    { "path": "send_email", "item": "tool", "description": "send an email to the caller",
+      "status": "known", "source": "code" },
+    { "path": "transfer", "item": "tool", "description": "hand off to a human desk",
+      "status": "known", "source": "code" },
+    { "path": "mcp_servers", "item": "structure", "description": "MCP endpoints the agent consults",
+      "status": "known", "source": "sample_config" },
+    { "path": "knowledge_base", "item": "structure", "description": "retrieval knowledge sources",
+      "status": "known", "source": "sample_config" }
+  ],
+  "integration_points": [
+    { "name": "documents", "kind": "db", "direction": "outbound",
+      "technology": { "dialect": "postgresql", "driver": "asyncpg", "protocol": "python" },
+      "target": { "host_field": "lightrag.postgres.host", "port": 5432, "database": "docs" },
+      "auth": { "secret_ref": "documents_dsn" },
+      "component": "documents_db", "status": "known", "source": "db_schema" },
+    { "name": "notify", "kind": "webhook", "direction": "outbound",
+      "technology": { "protocol": "http", "method": "POST" },
+      "target": { "url_field": "notification_service_url" },
+      "auth": { "secret_ref": "notify_token", "header": "Authorization" },
+      "status": "known", "source": "code" }
+  ],
+  "open_questions": [
+    { "about": "weather_provider", "question": "Which weather providers are supported, and their allowed values?", "needs_from": "engineering" }
+  ]
+}

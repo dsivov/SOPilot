@@ -1,0 +1,738 @@
+{
+  "kind": "sopilot-system-analysis",
+  "report_version": 1,
+  "system": {
+    "name": "PolarTie MultiRobot",
+    "description": "PolarTie real-time voice-agent platform: a robot config.json drives an OpenAI-realtime voice agent with tools, MCP servers, knowledge bases and transfer topics. Master orchestrator + generator server + notification service; supervisor via MCP.",
+    "analyzed_at": "2026-07-26T00:00:00Z",
+    "sources": [
+      "defaults.json",
+      "sample_config",
+      "code"
+    ]
+  },
+  "components": [
+    {
+      "id": "voice_agent",
+      "name": "Voice Agent",
+      "kind": "service",
+      "description": "per-call OpenAI-realtime agent (gpt_voice_assistant)",
+      "depends_on": [
+        "master",
+        "generator_server",
+        "notification_service",
+        "kb_backend"
+      ],
+      "exposes": [
+        {
+          "kind": "webrtc",
+          "path": "realtime",
+          "methods": [
+            "SDP"
+          ]
+        },
+        {
+          "kind": "mcp-client",
+          "path": "/mcp",
+          "methods": [
+            "tool-call"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "master",
+      "name": "Master orchestrator",
+      "kind": "service",
+      "description": "session lifecycle + routing (master.py)",
+      "depends_on": [
+        "voice_agent"
+      ]
+    },
+    {
+      "id": "generator_server",
+      "name": "Generator Server",
+      "kind": "external",
+      "description": "mints realtime client tokens / SDP",
+      "depends_on": []
+    },
+    {
+      "id": "notification_service",
+      "name": "Notification Service",
+      "kind": "external",
+      "description": "email/SMS delivery",
+      "depends_on": []
+    },
+    {
+      "id": "kb_backend",
+      "name": "Knowledge backends",
+      "kind": "datastore",
+      "description": "OpenSearch (simple) or LightRAG/Context Graph (postgres)"
+    },
+    {
+      "id": "supervisor_mcp",
+      "name": "Supervisor MCP",
+      "kind": "external",
+      "description": "SOPilot supervisor surface (polartie_ai_agent_supervisor)"
+    }
+  ],
+  "config_items": [
+    {
+      "path": "display_name",
+      "item": "field",
+      "type": "string",
+      "description": "The robot's display name / persona shown to callers.",
+      "advanced": false,
+      "status": "known",
+      "source": "sample_config",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "voice",
+      "item": "field",
+      "type": "enum",
+      "description": "OpenAI realtime TTS voice.",
+      "advanced": false,
+      "status": "known",
+      "source": "code",
+      "component": "voice_agent",
+      "required": false,
+      "options": [
+        "alloy",
+        "ash",
+        "ballad",
+        "coral",
+        "echo",
+        "marin",
+        "sage",
+        "shimmer",
+        "verse"
+      ]
+    },
+    {
+      "path": "default_language_iso",
+      "item": "field",
+      "type": "string",
+      "description": "Default reply language (ISO code, e.g. en, es).",
+      "advanced": false,
+      "status": "known",
+      "source": "sample_config",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "custom_config.gpt_model",
+      "item": "field",
+      "type": "enum",
+      "description": "Realtime model driving the voice agent.",
+      "advanced": false,
+      "status": "known",
+      "source": "code",
+      "component": "voice_agent",
+      "required": false,
+      "options": [
+        "gpt-realtime",
+        "gpt-4o-realtime-preview",
+        "gpt-4o-mini-realtime-preview"
+      ]
+    },
+    {
+      "path": "notification_service_url",
+      "item": "field",
+      "type": "string",
+      "description": "Endpoint the email/SMS tools post to (required if any send_* tool is enabled).",
+      "advanced": false,
+      "status": "known",
+      "source": "code",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "opensearch_endpoint",
+      "item": "field",
+      "type": "string",
+      "description": "OpenSearch endpoint for the simple knowledge base.",
+      "advanced": false,
+      "status": "known",
+      "source": "code",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "record_audio",
+      "item": "field",
+      "type": "boolean",
+      "description": "Record call audio.",
+      "advanced": true,
+      "status": "known",
+      "source": "sample_config",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "record_transcript",
+      "item": "field",
+      "type": "boolean",
+      "description": "Record the transcript.",
+      "advanced": true,
+      "status": "known",
+      "source": "sample_config",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "record_summary",
+      "item": "field",
+      "type": "boolean",
+      "description": "Store a call summary.",
+      "advanced": true,
+      "status": "known",
+      "source": "sample_config",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "max_call_duration",
+      "item": "field",
+      "type": "number",
+      "description": "Hard cap on call length (seconds).",
+      "advanced": true,
+      "status": "known",
+      "source": "sample_config",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "call_wrap_up_after",
+      "item": "field",
+      "type": "number",
+      "description": "Wrap-up window before force-hangup (seconds).",
+      "advanced": true,
+      "status": "known",
+      "source": "sample_config",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "pre_vad_enabled",
+      "item": "field",
+      "type": "boolean",
+      "description": "Pre-VAD noise gating on.",
+      "advanced": true,
+      "status": "known",
+      "source": "sample_config",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "pre_vad_intensity_threshold",
+      "item": "field",
+      "type": "number",
+      "description": "Pre-VAD intensity threshold.",
+      "advanced": true,
+      "status": "known",
+      "source": "sample_config",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "mcp_beep_enabled",
+      "item": "field",
+      "type": "boolean",
+      "description": "Play a beep during MCP tool calls.",
+      "advanced": true,
+      "status": "known",
+      "source": "sample_config",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "account_id",
+      "item": "field",
+      "type": "string",
+      "description": "PolarTie account id this robot belongs to.",
+      "advanced": true,
+      "status": "known",
+      "source": "sample_config",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "rem_ws_host",
+      "item": "field",
+      "type": "string",
+      "description": "Remote-view websocket host (deployment-specific).",
+      "advanced": true,
+      "status": "needs_input",
+      "source": "code",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "recording_s3_presigned_url_generator_url",
+      "item": "field",
+      "type": "string",
+      "description": "Service that mints S3 presigned URLs for recordings.",
+      "advanced": true,
+      "status": "needs_input",
+      "source": "code",
+      "component": "voice_agent",
+      "required": false
+    },
+    {
+      "path": "hangup",
+      "item": "tool",
+      "description": "Hang Up Call",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "transfer",
+      "item": "tool",
+      "description": "Transfer Call",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_text",
+      "item": "tool",
+      "description": "Show Text",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_bullet_list",
+      "item": "tool",
+      "description": "Show Bullet List",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_table",
+      "item": "tool",
+      "description": "Show Table",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_suggestions",
+      "item": "tool",
+      "description": "Show Suggestions",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "hide_suggestions",
+      "item": "tool",
+      "description": "Hide Suggestions",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_prompt_box",
+      "item": "tool",
+      "description": "Show Prompt Box",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "hide_prompt_box",
+      "item": "tool",
+      "description": "Hide Prompt Box",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_paintover_pad",
+      "item": "tool",
+      "description": "Show Paintover Pad",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_drawing_pad",
+      "item": "tool",
+      "description": "Show Drawing Pad",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "hide_drawing_pad",
+      "item": "tool",
+      "description": "Hide Drawing/Paintover Pad",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "hide_media",
+      "item": "tool",
+      "description": "Hide Media/Text",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "visual_hint",
+      "item": "tool",
+      "description": "Display Image Knowledge Item",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "video_hint",
+      "item": "tool",
+      "description": "Play Video Knowledge Item",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "switch_camera",
+      "item": "tool",
+      "description": "Switch Camera",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "take_camera_snapshot",
+      "item": "tool",
+      "description": "Take Camera Snapshot",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_last_camera_snapshot",
+      "item": "tool",
+      "description": "Show Last Camera Snapshot",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_camera_view",
+      "item": "tool",
+      "description": "Show Camera Preview",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "hide_camera_view",
+      "item": "tool",
+      "description": "Hide Camera Preview",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_camera_snapshot_button",
+      "item": "tool",
+      "description": "Show Camera Snapshot Button",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "hide_camera_snapshot_button",
+      "item": "tool",
+      "description": "Hide Camera Snapshot Button",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "knowledge_base_query",
+      "item": "tool",
+      "description": "Query Knowledge Base (Simple)",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "knowledge_base_query_lightrag",
+      "item": "tool",
+      "description": "Query Knowledge Base (LightRAG)",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_knowledge_image",
+      "item": "tool",
+      "description": "Show Image from Knowledge Base Response",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "send_email",
+      "item": "tool",
+      "description": "Send Email To Verified Address",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "send_email_no_verify",
+      "item": "tool",
+      "description": "Send Email (No Verification)",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "send_verification_email",
+      "item": "tool",
+      "description": "Send Verification Email",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "verify_email_code",
+      "item": "tool",
+      "description": "Verify Email Code",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "send_sms",
+      "item": "tool",
+      "description": "Send SMS To Verified Number",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "send_sms_no_verify",
+      "item": "tool",
+      "description": "Send SMS (No Verification)",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "send_verification_sms",
+      "item": "tool",
+      "description": "Send Verification SMS",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "verify_sms_code",
+      "item": "tool",
+      "description": "Verify SMS Code",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "show_mcp_image",
+      "item": "tool",
+      "description": "Show Image from MCP Server Response",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "stay_silent",
+      "item": "tool",
+      "description": "Stay Silent",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "email_after_call",
+      "item": "tool",
+      "description": "Email After Call",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "save_conversation_summary",
+      "item": "tool",
+      "description": "Save Conversation Summary",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "get_printer_state",
+      "item": "tool",
+      "description": "Get Printer State",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "print_text",
+      "item": "tool",
+      "description": "Print Text",
+      "status": "known",
+      "source": "defaults.json",
+      "component": "voice_agent"
+    },
+    {
+      "path": "mcp_servers",
+      "item": "structure",
+      "description": "MCP endpoints the agent consults",
+      "status": "known",
+      "source": "code",
+      "component": "voice_agent"
+    },
+    {
+      "path": "knowledge_base",
+      "item": "structure",
+      "description": "retrieval knowledge sources",
+      "status": "known",
+      "source": "code",
+      "component": "voice_agent"
+    },
+    {
+      "path": "transfer_topics",
+      "item": "structure",
+      "description": "human/AI handoff targets",
+      "status": "known",
+      "source": "code",
+      "component": "voice_agent"
+    }
+  ],
+  "integration_points": [
+    {
+      "name": "notification",
+      "kind": "http",
+      "direction": "outbound",
+      "technology": {
+        "protocol": "http",
+        "method": "POST"
+      },
+      "target": {
+        "url_field": "notification_service_url"
+      },
+      "auth": {
+        "secret_ref": "notification_token",
+        "header": "Authorization"
+      },
+      "description": "email/SMS send + verification",
+      "component": "notification_service",
+      "status": "known",
+      "source": "code"
+    },
+    {
+      "name": "opensearch",
+      "kind": "http",
+      "direction": "outbound",
+      "technology": {
+        "protocol": "http"
+      },
+      "target": {
+        "url_field": "opensearch_endpoint"
+      },
+      "auth": {
+        "secret_ref": "opensearch_key"
+      },
+      "description": "simple KB queries",
+      "component": "kb_backend",
+      "status": "known",
+      "source": "code"
+    },
+    {
+      "name": "lightrag_pg",
+      "kind": "db",
+      "direction": "outbound",
+      "technology": {
+        "dialect": "postgresql",
+        "driver": "asyncpg",
+        "protocol": "python"
+      },
+      "target": {
+        "host_field": "lightrag.postgres.host",
+        "port": 5432
+      },
+      "auth": {
+        "secret_ref": "lightrag_dsn"
+      },
+      "description": "LightRAG knowledge base store",
+      "component": "kb_backend",
+      "status": "known",
+      "source": "config.ini"
+    },
+    {
+      "name": "realtime_llm",
+      "kind": "http",
+      "direction": "outbound",
+      "technology": {
+        "protocol": "webrtc",
+        "api": "openai-realtime"
+      },
+      "target": {
+        "url_field": "generator_server_url"
+      },
+      "auth": {
+        "secret_ref": "openai_api_key",
+        "header": "Authorization"
+      },
+      "description": "OpenAI realtime speech model (token via generator server)",
+      "component": "generator_server",
+      "status": "known",
+      "source": "code"
+    },
+    {
+      "name": "supervisor",
+      "kind": "mcp",
+      "direction": "outbound",
+      "technology": {
+        "protocol": "http",
+        "transport": "streamable-http"
+      },
+      "target": {
+        "url_field": "mcp_servers[].url"
+      },
+      "auth": {
+        "secret_ref": "supervisor_token",
+        "header": "Authorization"
+      },
+      "description": "SOPilot MCP supervisor (per-turn steering)",
+      "component": "supervisor_mcp",
+      "status": "known",
+      "source": "code"
+    }
+  ],
+  "open_questions": [
+    {
+      "about": "rem_ws_host",
+      "question": "Remote-view websocket host is deployment-specific \u2014 what is it for this robot?",
+      "needs_from": "engineering"
+    },
+    {
+      "about": "recording_s3_presigned_url_generator_url",
+      "question": "Which service mints S3 presigned URLs for recordings in this deployment?",
+      "needs_from": "engineering"
+    },
+    {
+      "about": "custom_config.gpt_model",
+      "question": "Which realtime model should this use case run?",
+      "needs_from": "admin"
+    }
+  ]
+}
