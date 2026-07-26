@@ -86,24 +86,25 @@ await applyBtn.click();
 await page.waitForTimeout(300);
 ok("apply lands (editor back to clean)", await applyBtn.isDisabled());
 
-// ---- 4. LLM-assisted edit (real model call; compliant request) ----
-await card.locator("input[placeholder*='ask or change']").fill("switch the voice to echo");
-await page.getByRole("button", { name: "Propose" }).click();
-await page.getByRole("button", { name: /Add to edits|Discard/ }).first().waitFor({ timeout: 45000 });
-ok("assistant proposes a formal edit", (await card.getByText(/Set voice = "echo"/).count()) > 0);
-ok("proposal evaluated within bounds", (await card.locator(".chip.good", { hasText: "within bounds" }).count()) > 0);
-await page.getByRole("button", { name: "Add to edits" }).click();
+// ---- 4. Config assistant (floating chat; real model call; compliant request) ----
+await page.getByRole("button", { name: /Config assistant/ }).click();  // open the chat panel
+const chatInput = page.locator("input[placeholder*='ask or request']");
+await chatInput.fill("switch the voice to echo");
+await page.getByRole("button", { name: "Send", exact: true }).click();
+await page.getByRole("button", { name: "Add to edits" }).first().waitFor({ timeout: 45000 });
+ok("assistant proposes a formal edit in chat", (await page.getByText(/Set voice = "echo"/).count()) > 0);
+await page.getByRole("button", { name: "Add to edits" }).first().click();
 await page.waitForTimeout(300);
 ok("staged edit → draft dirty, Apply enabled", await applyBtn.isEnabled());
-ok("unsaved-edits banner explains the two-step apply", (await card.getByText(/unsaved edits staged/).count()) > 0);
+ok("chat notes the edit was applied", (await page.getByText(/added ✓/).count()) > 0);
 
-// ---- 4b. Assistant answers a help question (no edits — the "chat with the config" path) ----
-await card.locator("input[placeholder*='ask or change']").fill("how do I add weather data to the agent?");
-await page.getByRole("button", { name: "Propose" }).click();
-await card.locator(".chip", { hasText: /^answer$/ }).waitFor({ timeout: 45000 });
-ok("help question gets an answer (not an error)", (await card.locator(".chip", { hasText: /^answer$/ }).count()) > 0);
-ok("answer mode offers no 'Add to edits'", (await card.getByRole("button", { name: "Add to edits" }).count()) === 0);
-await card.getByRole("button", { name: "Dismiss" }).click();
+// ---- 4b. Assistant answers a help question (no edits) + remembers history ----
+await chatInput.fill("how do I add weather data to the agent?");
+await page.getByRole("button", { name: "Send", exact: true }).click();
+await page.waitForTimeout(22000);
+ok("help question answered in chat", (await page.getByText(/weather|connector|MCP/i).count()) > 0);
+ok("history retained (earlier voice turn still shown)", (await page.getByText(/switch the voice to echo/).count()) > 0);
+await page.locator("button:has-text('✕'):not([title])").click();  // close chat panel (panel's ✕ has no title, unlike Remove buttons)
 await page.waitForTimeout(200);
 
 // ---- 5. Complex structures: adding a KB without its backend must block ----

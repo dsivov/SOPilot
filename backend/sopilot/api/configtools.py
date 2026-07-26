@@ -472,6 +472,7 @@ class DraftEditRequest(BaseModel):
     rules: list[str] = []              # the admin ruleset, described (bounds shown to the LLM)
     prompt: str = ""                   # the agent's current global prompt
     structures: dict = {}              # current lists: mcp_servers (urls), knowledge_bases, transfer_topics (ids)
+    history: list[dict] = []           # prior chat turns [{role, content}] — conversational memory
 
 
 _DRAFT_EDIT_SYS = (
@@ -542,10 +543,16 @@ async def draft_edit(req: DraftEditRequest, scope: Scope = Depends(resolve_scope
         + "\n\nCURRENT AGENT PROMPT:\n" + (req.prompt[:2000] or "(empty)")
         + "\n\nCHANGE REQUEST:\n" + req.instruction[:1000]
     )
+    # Conversational memory: replay prior turns so the assistant remembers what
+    # was discussed/applied. Only role/content text is carried (not the ops).
+    hist_msgs = [
+        {"role": "assistant" if h.get("role") == "assistant" else "user", "content": str(h.get("content", ""))[:2000]}
+        for h in req.history[-12:] if h.get("content")
+    ]
     try:
         res = await client().chat.completions.create(
             model=get_settings().builder_model,
-            messages=[{"role": "system", "content": _DRAFT_EDIT_SYS}, {"role": "user", "content": user}],
+            messages=[{"role": "system", "content": _DRAFT_EDIT_SYS}, *hist_msgs, {"role": "user", "content": user}],
             # prompt edits can be long — allow room for a full rewritten prompt
             temperature=0.1, max_tokens=1500, response_format={"type": "json_object"},
         )
