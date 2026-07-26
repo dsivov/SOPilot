@@ -529,10 +529,11 @@ async def draft_edit(req: DraftEditRequest, scope: Scope = Depends(resolve_scope
     user = (
         "TOOLS (name · enabled):\n"
         + "\n".join(f"  {t.get('name')} · {'on' if t.get('enabled') else 'off'}" for t in req.tools[:80])
-        + "\n\nEDITABLE FIELDS (field · current value · allowed options if enum-bound):\n"
+        + "\n\nEDITABLE FIELDS (field · current value · allowed options if enum-bound · description):\n"
         + "\n".join(
             f"  {f.get('field')} · {_json.dumps(f.get('value'))[:80]}"
             + (f" · one of {f['options']}" if f.get("options") else "")
+            + (f" · {f['description']}" if f.get("description") else "")
             for f in req.fields[:40])
         + "\n\nADMIN RULES (the config must satisfy these):\n"
         + "\n".join(f"  - {r}" for r in req.rules[:40])

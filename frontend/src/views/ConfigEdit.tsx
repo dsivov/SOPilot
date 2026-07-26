@@ -267,7 +267,17 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
       const r = await api<{ edits?: EditOp[]; reply?: string; note?: string; error?: string }>("POST", "/config/draft-edit", {
         instruction: q, history,
         tools: toolNames.map((t) => ({ name: t, enabled: draft.tools?.[t]?.enabled === true })),
-        fields: [...allowedFields].map((f) => ({ field: f, value: get(draft, f) ?? null, options: enumFor(f)?.options })),
+        // Options come from the SCHEMA field first (admin-declared enums, e.g.
+        // custom_config.gpt_model), then an enum rule — otherwise the assistant
+        // is blind to the allowed values and can't honor "pick a cheaper model".
+        fields: [...allowedFields].map((f) => {
+          const def = fields.find((d) => d.path === f);
+          return {
+            field: f, value: get(draft, f) ?? null,
+            type: def?.type, description: def?.description,
+            options: def?.options ?? enumFor(f)?.options,
+          };
+        }),
         rules: rules.map(describeRule),
         prompt: String(draft.prompt ?? ""),
         structures: {
