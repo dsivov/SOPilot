@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The SOPilot Configuration Engine — PolarTie team guide (Stage 0 → Stage 2)</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.11), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.07), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(91,141,239,.08),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.05;margin:.3em 0 .25em;background:linear-gradient(92deg,#cfe0ff,#8fd9c9 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}.tag b{color:var(--ink)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(91,141,239,.2),transparent);color:#fff;border-left:2px solid var(--a)}
+main{min-width:0;max-width:772px}article section{margin:0 0 54px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}p{margin:.7em 0}.lead-p{font-size:19px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--a);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.1)}.callout.key .clabel{color:#9cc0ff}
+.callout.danger{border-color:rgba(239,91,110,.5);background:rgba(239,91,110,.08)}.callout.danger .clabel{color:#f6a2ad}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line);white-space:nowrap}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+.filepath{font-family:var(--mono);font-size:12.5px;color:#8fd9c9;background:rgba(25,184,154,.08);border:1px solid rgba(25,184,154,.25);border-radius:6px;padding:1px 6px;white-space:nowrap}
+.ladder{list-style:none;margin:14px 0;padding:0;counter-reset:st}
+.ladder li{counter-increment:st;position:relative;padding:2px 0 14px 42px;color:var(--ink-soft)}
+.ladder li::before{content:counter(st);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:8px;background:rgba(91,141,239,.16);color:#9cc0ff;font-family:var(--mono);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+.ladder li::after{content:"";position:absolute;left:12px;top:28px;bottom:0;width:2px;background:var(--line-soft)}
+.ladder li:last-child::after{display:none}.ladder li b{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Product guide · Config management · PolarTie team</div>
+    <h1>The SOPilot Configuration Engine</h1>
+    <p class="lede">How to take a robot from an unknown system to a safe, deployable configuration — <b>Stage&nbsp;0</b> discovery,
+      through <b>Stage&nbsp;1</b> admin guard-rails, to a <b>Stage&nbsp;2</b> customer-authored config — and how all of that
+      lives alongside SOP management. Written from the shipped code, not the design proposals.</p>
+    <div class="byline">Audience: PolarTie engineers &amp; deployment admins · source of truth:
+      <span class="mono">/config/*</span> API, <span class="filepath">docs/CONFIG_MANAGER_E2E.md</span>,
+      <span class="filepath">docs/STAGE0_ANALYSIS_PLAYBOOK.md</span>, <span class="filepath">docs/INTEGRATION.md</span></div>
+    <div class="hero-tags">
+      <span class="tag">stage 0: <b>discovery</b></span>
+      <span class="tag">stage 1: <b>schema + rules</b></span>
+      <span class="tag">stage 2: <b>configure</b></span>
+      <span class="tag">write-back: <b>render-robot</b></span>
+      <span class="tag">alongside: <b>SOP management</b></span>
+      <span class="tag">durable: <b>DB-versioned</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this guide</div>
+  <ol>
+    <li><a href="#overview">What this is</a></li>
+    <li><a href="#bigpicture">The big picture</a></li>
+    <li><a href="#concepts">Key concepts</a></li>
+    <li><a href="#sop-cm">SOP ↔ Config management</a></li>
+    <li><a href="#stage0">Stage 0 — Discovery</a></li>
+    <li><a href="#stage1">Stage 1 — Admin bounds</a></li>
+    <li><a href="#stage2">Stage 2 — Configure</a></li>
+    <li><a href="#deploy">Write-back &amp; deploy</a></li>
+    <li><a href="#ops">Operations</a></li>
+    <li><a href="#endpoints">API reference</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+    <li><a href="#checklist">Quick-start checklist</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="overview">
+  <div class="kicker">The idea</div>
+  <h2>What this is</h2>
+  <p class="lead-p">The configuration engine is <b>a constraint-graph over your robot's config surface</b>. Instead of
+  hand-editing a fragile <span class="mono">config.json</span>, the work is split into three roles, each producing one
+  durable, versioned artifact.</p>
+  <div class="grid g3" style="margin:16px 0">
+    <div class="card"><span class="pill ctrl">Stage 0 · Discovery</span>
+      <p class="small" style="margin-top:8px">Analyze a system and emit a machine-readable <b>analysis report</b>:
+      what can be configured, what's unknown, and how the pieces connect.</p></div>
+    <div class="card"><span class="pill a">Stage 1 · Bounds (admin)</span>
+      <p class="small" style="margin-top:8px">Turn that report into a <b>schema</b> (the available options, typed) plus
+      <b>rules</b> (what combinations are legal). The guard rail.</p></div>
+    <div class="card"><span class="pill b">Stage 2 · Configure (customer)</span>
+      <p class="small" style="margin-top:8px">Author the actual <b>config document</b>, guided and gated by the published
+      schema + rules — impossible-to-deploy states are blocked before they happen.</p></div>
+  </div>
+  <p>A final <b>write-back</b> step resolves connector and secret references into the deploy-ready
+  <span class="mono">config.json</span> the robot consumes.</p>
+  <div class="callout key"><div class="clabel">◆ The core principle</div>
+    The admin defines the space of valid configurations <i>once</i>; every customer then configures <i>within</i> that
+    space. The engine — not a human reviewer — enforces the boundary on every edit.</div>
+</section>
+
+<!-- 2 -->
+<section id="bigpicture">
+  <div class="kicker">Orientation</div>
+  <h2>The big picture</h2>
+  <p>The four steps form a pipeline. Each stage hands a versioned artifact to the next; the roles (who does the work) are
+  distinct.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 168" role="img" aria-label="The Stage 0 to Stage 2 to deploy pipeline">
+      <defs>
+        <marker id="mkctrl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#a974f0"/></marker>
+        <marker id="mka" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5b8def"/></marker>
+        <marker id="mkb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#19b89a"/></marker>
+        <linearGradient id="g0" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(169,116,240,.34)"/><stop offset="1" stop-color="rgba(169,116,240,.14)"/></linearGradient>
+        <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(91,141,239,.34)"/><stop offset="1" stop-color="rgba(91,141,239,.14)"/></linearGradient>
+        <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(25,184,154,.34)"/><stop offset="1" stop-color="rgba(25,184,154,.14)"/></linearGradient>
+        <linearGradient id="gd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(240,167,60,.34)"/><stop offset="1" stop-color="rgba(240,167,60,.14)"/></linearGradient>
+      </defs>
+      <style>
+        .bx{rx:10;stroke-width:2}
+        .tt{fill:#fff;font:700 13px "Segoe UI",sans-serif;text-anchor:middle}
+        .kk{font:800 10px var(--mono),monospace;text-anchor:middle}
+        .ss{fill:#e7ebf3;font:10px var(--mono),monospace;text-anchor:middle}
+        .role{font:700 10px "Segoe UI",sans-serif;text-anchor:middle;fill:#7b8499}
+        .lbl{font:700 10px "Segoe UI",sans-serif;text-anchor:middle}
+      </style>
+      <rect class="bx" x="12" y="46" width="168" height="66" fill="url(#g0)" stroke="#a974f0"/>
+      <text class="kk" x="96" y="66" fill="#cdb1f7">STAGE 0</text><text class="tt" x="96" y="85">System Discovery</text><text class="ss" x="96" y="102">→ analysis report</text>
+      <rect class="bx" x="208" y="46" width="168" height="66" fill="url(#g1)" stroke="#5b8def"/>
+      <text class="kk" x="292" y="66" fill="#9cc0ff">STAGE 1</text><text class="tt" x="292" y="85">Admin bounds</text><text class="ss" x="292" y="102">→ schema + rules</text>
+      <rect class="bx" x="404" y="46" width="168" height="66" fill="url(#g2)" stroke="#19b89a"/>
+      <text class="kk" x="488" y="66" fill="#7fe3cf">STAGE 2</text><text class="tt" x="488" y="85">Configure</text><text class="ss" x="488" y="102">→ config document</text>
+      <rect class="bx" x="600" y="46" width="148" height="66" fill="url(#gd)" stroke="#f0a73c"/>
+      <text class="kk" x="674" y="66" fill="#ffce86">WRITE-BACK</text><text class="tt" x="674" y="85">Deploy</text><text class="ss" x="674" y="102">→ config.json</text>
+      <line x1="180" y1="79" x2="207" y2="79" stroke="#a974f0" stroke-width="2.4" marker-end="url(#mkctrl)"/><text class="lbl" x="194" y="40" fill="#cdb1f7">seeds</text>
+      <line x1="376" y1="79" x2="403" y2="79" stroke="#5b8def" stroke-width="2.4" marker-end="url(#mka)"/><text class="lbl" x="390" y="40" fill="#9cc0ff">gates</text>
+      <line x1="572" y1="79" x2="599" y2="79" stroke="#19b89a" stroke-width="2.4" marker-end="url(#mkb)"/><text class="lbl" x="586" y="40" fill="#7fe3cf">renders</text>
+      <text class="role" x="96" y="132">engineer / analyst</text><text class="role" x="292" y="132">deployment admin</text>
+      <text class="role" x="488" y="132">customer / operator</text><text class="role" x="674" y="132">automatic</text>
+    </svg>
+    <figcaption><b>One pipeline, four roles.</b> The engineer runs discovery · the admin owns the bounds · the customer
+      configures within them · write-back is automatic.</figcaption>
+  </div></figure>
+
+  <h3>Three artifacts, all versioned in the database</h3>
+  <p>Per <b>tenant × project</b>, the engine stores three independent artifacts in Postgres. Each is an <b>immutable
+  version history</b> with a single <span class="mono">published_version</span> pointer — the published version is the
+  only one anything downstream reads. Everything survives an API restart or redeploy; the browser holds only a
+  <i>draft cache</i>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Stage</th><th>Artifact</th><th>Tables</th><th>Endpoint</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill ctrl">0</span></td><td>Analysis report</td><td><span class="mono">config_analysis_reports</span> (+ versions)</td><td><span class="mono">/config/analysis</span></td></tr>
+      <tr><td><span class="pill a">1</span></td><td>Schema + rules</td><td><span class="mono">config_rulesets</span> (+ versions)</td><td><span class="mono">/config/ruleset</span></td></tr>
+      <tr><td><span class="pill b">2</span></td><td>Config document</td><td><span class="mono">config_documents</span> (+ versions)</td><td><span class="mono">/config/document</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout ok"><div class="clabel">◆ Restart-survival, proven</div>
+    You can verify persistence end-to-end: run <span class="filepath">scripts/e2e_config_manager.py</span> (writes all
+    three stages), restart the API, then re-run with <span class="mono">--verify-only</span>. Both runs end with
+    <span class="mono">ALL CHECKS PASSED</span>. See <a href="#ops">§09</a>.</div>
+</section>
+
+<!-- 3 -->
+<section id="concepts">
+  <div class="kicker">Vocabulary</div>
+  <h2>Key concepts</h2>
+  <p>A short glossary — every term below appears in the Studio and the rest of this guide.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Term</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td><b>Schema (DSL)</b></td><td>The admin's declaration of the <i>available options</i>: fields (with types), the tool allowlist, and which structures are offered. This is what Stage 2 renders as widgets.</td></tr>
+      <tr><td><b>Rule</b></td><td>A constraint authored as data — one of three kinds: <span class="pill a">enum</span> (a field must be one of N options), <span class="pill a">requires</span> (if A then B), <span class="pill a">conflicts</span> (not both A and B). Each is <span class="mono">error</span> or <span class="mono">warn</span>.</td></tr>
+      <tr><td><b>Predicate</b></td><td>The atom a rule tests: <span class="mono">tool:&lt;name&gt;</span> (tool enabled; <span class="mono">|</span> = any-of), <span class="mono">field:&lt;dot.path&gt;</span> (field set), <span class="mono">kb_mode:&lt;mode&gt;</span> (a knowledge base uses that index mode).</td></tr>
+      <tr><td><b>Field type</b></td><td><span class="mono">string · number · boolean · enum · secret-ref · connector-ref</span>. The last two point at a stored secret or a registry connector rather than holding a value.</td></tr>
+      <tr><td><b>Status</b></td><td>On a discovered item: <span class="mono">known</span>, <span class="mono">inferred</span>, or <span class="mono">needs_input</span> (declared but awaiting Engineering — shown with a ⚑ in Stage 2).</td></tr>
+      <tr><td><b>Structure</b></td><td>A list-valued part of the config: <span class="mono">mcp_servers</span>, <span class="mono">knowledge_base</span>, <span class="mono">transfer_topics</span>.</td></tr>
+      <tr><td><b>Connector</b></td><td>A connection (MCP / RAG / HTTP / DB) defined <i>once</i> in the registry and reused by both SOPs and the config editor. Referenced by name; resolved at write-back.</td></tr>
+      <tr><td><b>secret-ref</b></td><td>The string <span class="mono">secret:&lt;name&gt;</span>. Raw credentials never enter a config or report — they live encrypted (Fernet) in <span class="mono">tenant_secrets</span> and resolve only at write-back.</td></tr>
+      <tr><td><b>Published version</b></td><td>The one version of an artifact that downstream reads. Saving a <i>draft</i> creates a version but does not move the published pointer.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 4 -->
+<section id="sop-cm">
+  <div class="kicker">The boundary</div>
+  <h2>SOP management ↔ Config management</h2>
+  <p class="lead-p">SOPilot has two subsystems that live in the same instance and Studio. They answer different questions
+  and are easy to confuse, so this section is deliberate about the boundary.</p>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill ctrl">SOP management</span>
+      <p class="small" style="margin:8px 0 6px;color:var(--ink)">“What should the agent <i>do and say</i>, turn by turn?”</p>
+      <p class="small" style="margin:0">Versioned procedures — actions, user-states, data dependencies, prompt blocks.
+      Drives runtime <b>guidance</b>: per-turn steering, gated flows, live data resolution. Reaches the robot over the
+      <b>MCP supervisor</b> at <span class="mono">/mcp</span>. Studio: <b>SOPs</b> · <b>Prompt blocks</b>.</p></div>
+    <div class="card"><span class="pill a">Config management</span>
+      <p class="small" style="margin:8px 0 6px;color:var(--ink)">“What <i>is</i> this robot — its capabilities and settings?”</p>
+      <p class="small" style="margin:0">Versioned configuration — persona, voice, tool allowlist, MCP servers, KBs,
+      transfer topics, prompt. Authored within admin bounds; rendered to a deploy <span class="mono">config.json</span>.
+      This document's Stage 0 → Stage 2. Studio: <b>Config admin</b> · <b>Config viewer</b>.</p></div>
+  </div>
+
+  <h3>How they connect at runtime</h3>
+  <p>They are not rivals — they compose. The config manager defines the robot's <span class="mono">mcp_servers</span>; one
+  of those entries points at SOPilot's own MCP surface, which is how the robot consults its SOPs mid-call. The
+  <b>connector registry is shared</b>: define a connection once, bind it in an SOP's data dependency <i>and</i> add it to a
+  config via “+ from connector”.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 300" role="img" aria-label="How the config engine and SOP management compose at runtime">
+      <defs>
+        <marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#a974f0"/></marker>
+        <marker id="mbl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5b8def"/></marker>
+        <marker id="mgr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8fd9c9"/></marker>
+        <linearGradient id="pp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(169,116,240,.36)"/><stop offset="1" stop-color="rgba(169,116,240,.15)"/></linearGradient>
+        <linearGradient id="bb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(91,141,239,.36)"/><stop offset="1" stop-color="rgba(91,141,239,.15)"/></linearGradient>
+        <linearGradient id="tt2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(25,184,154,.30)"/><stop offset="1" stop-color="rgba(25,184,154,.12)"/></linearGradient>
+      </defs>
+      <style>
+        .bx2{rx:9;stroke-width:2}
+        .t2{fill:#fff;font:700 12.5px "Segoe UI",sans-serif;text-anchor:middle}
+        .s2{fill:#e7ebf3;font:9.5px var(--mono),monospace;text-anchor:middle}
+        .lb3{font:700 9.5px "Segoe UI",sans-serif;text-anchor:middle}
+      </style>
+      <!-- robot -->
+      <rect class="bx2" x="20" y="120" width="150" height="60" fill="url(#bb)" stroke="#5b8def"/>
+      <text class="t2" x="95" y="145">PolarTie robot</text><text class="s2" x="95" y="162">runs config.json</text>
+      <!-- SOPilot container -->
+      <rect class="bx2" x="250" y="34" width="490" height="232" fill="rgba(255,255,255,.02)" stroke="var(--line)" style="stroke-width:1.3"/>
+      <text class="s2" x="495" y="26" style="font-size:11px;fill:#7b8499">SOPilot instance</text>
+      <rect class="bx2" x="272" y="60" width="210" height="56" fill="url(#pp)" stroke="#a974f0"/>
+      <text class="t2" x="377" y="83" fill="#e6d8ff">MCP supervisor</text><text class="s2" x="377" y="100">/mcp</text>
+      <rect class="bx2" x="504" y="60" width="214" height="56" fill="url(#bb)" stroke="#5b8def"/>
+      <text class="t2" x="611" y="83" fill="#d6e4ff">Config engine</text><text class="s2" x="611" y="100">schema · rules · document</text>
+      <rect class="bx2" x="272" y="150" width="210" height="56" fill="url(#pp)" stroke="#a974f0"/>
+      <text class="t2" x="377" y="173" fill="#e6d8ff">SOP engine</text><text class="s2" x="377" y="190">procedures + steering</text>
+      <rect class="bx2" x="504" y="150" width="214" height="56" fill="url(#tt2)" stroke="#19b89a"/>
+      <text class="t2" x="611" y="173" fill="#c6f2e6">Connector registry</text><text class="s2" x="611" y="190">+ tenant secrets (Fernet)</text>
+      <!-- arrows -->
+      <line x1="170" y1="140" x2="271" y2="98" stroke="#a974f0" stroke-width="2.4" marker-end="url(#mp)"/><text class="lb3" x="222" y="112" fill="#cdb1f7">per-turn call</text>
+      <line x1="377" y1="116" x2="377" y2="149" stroke="#a974f0" stroke-width="2.4" marker-end="url(#mp)"/>
+      <path d="M504,74 C360,20 210,44 171,128" fill="none" stroke="#5b8def" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#mbl)"/><text class="lb3" x="345" y="16" fill="#9cc0ff">config.json declares mcp_servers → /mcp</text>
+      <line x1="504" y1="178" x2="483" y2="178" stroke="#8fd9c9" stroke-width="2.4" marker-end="url(#mgr)"/><text class="lb3" x="493" y="224" fill="#7fe3cf">reused by SOP</text>
+      <line x1="611" y1="150" x2="611" y2="117" stroke="#8fd9c9" stroke-width="2.4" marker-end="url(#mgr)"/><text class="lb3" x="611" y="138" fill="#7fe3cf" style="font-size:8.5px">reused by config</text>
+    </svg>
+    <figcaption><b>The config engine <i>builds</i> the robot; SOP management <i>guides</i> it</b> at runtime through the
+      MCP surface the config points to. <span style="color:#cdb1f7">purple = SOP</span>,
+      <span style="color:#9cc0ff">blue = config</span>, and the connector registry feeds both.</figcaption>
+  </div></figure>
+
+  <h3>Subsystem modes</h3>
+  <p>A project runs in one of four modes. The default is <span class="mono">both</span> (deployment env
+  <span class="mono">SOPILOT_SUBSYSTEMS</span>); it can be overridden per project (Studio topbar dropdown) and per session
+  (most specific wins).</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Mode</th><th>SOP</th><th>Background retrieval</th><th>Use when</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill b">both</span></td><td>✔ gated per-turn contract</td><td>✔ prediction + prefetch</td><td>Full system — the default.</td></tr>
+      <tr><td><span class="pill a">sop</span></td><td>✔ instruction management + live data</td><td>—</td><td>Procedure guidance without speculative retrieval.</td></tr>
+      <tr><td><span class="pill a">retrieval</span></td><td>—</td><td>✔ per-turn <span class="mono">context_block</span></td><td>Bring your own agent; take our context block into your prompt.</td></tr>
+      <tr><td><span class="pill c">advisory</span></td><td>✔ full SOP text in one call</td><td>off the reply path</td><td><b>Lowest latency.</b> AENA production runs advisory.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout info"><div class="clabel">◆ SOP-only vs Advisory</div>
+    <b>SOP-only</b> keeps the full per-turn contract (classification + tracking on the reply path) so the flow is gated
+    step by step. <b>Advisory</b> hands the responder the full SOP text plus fresh data in <i>one</i> call and moves
+    classification/tracking off the reply path — you trade fine-grained gating for the lowest possible latency.</div>
+</section>
+
+<hr class="soft">
+
+<!-- 5 -->
+<section id="stage0">
+  <div class="kicker">Stage 0 · engineer / analyst</div>
+  <h2>System Discovery</h2>
+  <p class="lead-p">Stage 0 turns an unknown system into a machine-readable <b>analysis report</b>: what's configurable,
+  what's still unknown, and how the components connect. It's a Claude-driven discovery run — not a deterministic parser —
+  so it works whether the “source” is a codebase, a DB schema, or a sample config.</p>
+
+  <h3>Producing a report — three ways</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Way</th><th>How</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill win">Skill (recommended)</span></td><td>Point Claude Code at the target (e.g. <span class="filepath">../pt-multirobot</span>) and invoke the <span class="mono">system-analysis</span> skill. It explores the code, writes <span class="filepath">docs/examples/&lt;system&gt;-analysis.json</span>, validates it, and reports the path + summary.</td></tr>
+      <tr><td><span class="pill a">Playbook (manual)</span></td><td>Follow <span class="filepath">docs/STAGE0_ANALYSIS_PLAYBOOK.md</span> — 7 steps: orient → find the config surface → map components → map connections → record unknowns → emit &amp; validate → load.</td></tr>
+      <tr><td><span class="pill c">Bootstrap demo</span></td><td>Derive a throwaway report from a loaded config just to exercise the import flow (tools only) — not real analysis.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The report JSON — the contract</h3>
+  <p>Top-level keys (see <span class="filepath">docs/examples/pt-multirobot-analysis.json</span> for a full example):</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><span class="mono">kind</span></td><td>Must equal <span class="mono">"sopilot-system-analysis"</span>.</td></tr>
+      <tr><td><span class="mono">report_version</span></td><td>Number (currently <span class="mono">1</span>).</td></tr>
+      <tr><td><span class="mono">system</span></td><td><span class="mono">{ name, description, analyzed_at, sources[] }</span>. Sources: <span class="mono">sample_config · code · db_schema · …</span></td></tr>
+      <tr><td><span class="mono">components[]</span></td><td>Architecture nodes: <span class="mono">{ id, name, kind(service|external|datastore), depends_on[], exposes[] }</span>. <span class="mono">exposes[]</span> = inbound endpoints the component serves.</td></tr>
+      <tr><td><span class="mono">config_items[]</span></td><td>The config surface (see below) — this is what seeds the schema.</td></tr>
+      <tr><td><span class="mono">integration_points[]</span></td><td>Outbound connections: <span class="mono">{ name, kind(db|http|webhook|mcp|rag), direction, technology, target, auth{secret_ref} }</span>. Credentials are <span class="mono">secret_ref</span> only.</td></tr>
+      <tr><td><span class="mono">open_questions[]</span></td><td><span class="mono">{ about, question, needs_from(engineering|admin) }</span> — the unknowns to route back.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>A single <span class="mono">config_items[]</span> entry maps 1:1 to a schema field / tool / structure:</p>
+  <div class="card" style="background:var(--bg2)"><pre style="margin:0;font-size:12.5px;line-height:1.55;color:#c9d3e6;overflow:auto"><span style="color:#7b8499">// one entry in config_items[]</span>
+{
+  <span style="color:#9cc0ff">"path"</span>: <span style="color:#8fd9c9">"custom_config.gpt_model"</span>,
+  <span style="color:#9cc0ff">"item"</span>: <span style="color:#8fd9c9">"field"</span>,        <span style="color:#7b8499">// field | tool | structure → schema fields/tools/structures</span>
+  <span style="color:#9cc0ff">"type"</span>: <span style="color:#8fd9c9">"enum"</span>,         <span style="color:#7b8499">// string|number|boolean|enum|secret-ref|connector-ref</span>
+  <span style="color:#9cc0ff">"options"</span>: [<span style="color:#8fd9c9">"gpt-realtime"</span>, <span style="color:#8fd9c9">"gpt-4o-realtime"</span>],
+  <span style="color:#9cc0ff">"required"</span>: <span style="color:#ffce86">true</span>,
+  <span style="color:#9cc0ff">"status"</span>: <span style="color:#8fd9c9">"known"</span>,      <span style="color:#7b8499">// known | inferred | needs_input</span>
+  <span style="color:#9cc0ff">"description"</span>: <span style="color:#8fd9c9">"Realtime model the voice agent uses"</span>
+}</pre></div>
+  <div class="callout caveat"><div class="clabel">◆ enum needs options — unless it's unknown</div>
+    An <span class="mono">enum</span> field must carry <span class="mono">options</span>, <i>except</i> when
+    <span class="mono">status: "needs_input"</span> (then <span class="mono">options: []</span> is allowed and Stage 2 renders
+    it as a text input until Engineering fills it in).</div>
+
+  <h3>Validate, then load</h3>
+  <ol class="ladder">
+    <li><b>Validate offline.</b> <span class="mono">python scripts/validate_analysis_report.py &lt;report.json&gt;</span> →
+    exit 0 prints <span class="mono">✔ valid</span> + a summary (<i>N fields · N tools · N structures · N integrations ·
+    N components</i>); exit 1 lists the problems. It checks the <span class="mono">kind</span>, unique
+    <span class="mono">item:path</span> keys, valid statuses/types, and enum-has-options-or-needs-input.</li>
+    <li><b>Import in the Studio.</b> Go to <b>Config admin</b> → the card <b>“Available options — schema (DSL)”</b> →
+    <b>“Import analysis report…”</b> and pick the JSON.</li>
+    <li><b>It persists and seeds.</b> The report is saved as a version (<span class="mono">PUT /config/analysis</span>) and
+    the schema is seeded from it. First import seeds fresh; a later import <i>merges</i> — the report is authoritative for
+    existence/type/options/status, the admin keeps required/advanced/labels, and dropped fields are kept and flagged.</li>
+  </ol>
+  <div class="callout ok"><div class="clabel">◆ What a successful import looks like</div>
+    Config admin shows, e.g. — <b>Imported 17 items from “pt-multirobot” · 3 need input · 6 open Q for Engineering</b>
+    (the pt-multirobot report seeds <b>17 fields, 39 tools, 3 structures</b>).</div>
+
+  <h3>What you get back: a map + the open questions</h3>
+  <p>Once a report is present, two cards render:</p>
+  <ul>
+    <li><b>“System architecture”</b> — a diagram (services → datastores → external / integration points) built from the
+    report's components &amp; integrations. <span class="mono">needs_input</span> integrations show as warnings.</li>
+    <li><b>“Open questions for Engineering”</b> — each unknown with a <span class="mono">needs_from</span> chip. The
+    <b>“Export for Engineering”</b> button downloads <span class="mono">open-questions-&lt;system&gt;.json</span> to hand
+    back to the code owners.</li>
+  </ul>
+</section>
+
+<hr class="soft">
+
+<!-- 6 -->
+<section id="stage1">
+  <div class="kicker">Stage 1 · deployment admin</div>
+  <h2>Admin defines the bounds</h2>
+  <p class="lead-p">Stage 1 lives in <b>Config admin</b>. Here you curate the <b>schema</b> (what can be set) and author
+  <b>rules</b> (what's legal). Rules are previewed against a sample config — no customer's real config is shown on this
+  screen.</p>
+
+  <h3>The schema (available options)</h3>
+  <p>In the <b>“Available options — schema (DSL)”</b> card:</p>
+  <ul>
+    <li>If no schema exists yet, click <b>“Bootstrap from the loaded config”</b> to seed fields/tools/structures from a
+    config — or import a Stage-0 report (above).</li>
+    <li>Each <b>field</b> row: <span class="mono">dot.path</span>, a <i>type</i> dropdown (the six field types),
+    <i>options</i> (enum only), a <i>description</i> shown to the customer, and <span class="mono">req</span> /
+    <span class="mono">adv</span> checkboxes. Add with <b>“+ Add field”</b>.</li>
+    <li><b>“Offerable tools”</b> — click a tool chip to allow it. If you allow none, all tools are offerable. Give each a
+    description.</li>
+    <li><b>“Available structures”</b> — choose which of <span class="mono">mcp_servers</span> /
+    <span class="mono">knowledge_base</span> / <span class="mono">transfer_topics</span> the customer may edit.</li>
+    <li><b>“Draft field”</b> — describe a field in plain English (<i>“a weather provider, enum of openweather /
+    tomorrow.io, required”</i>) and the LLM proposes a field definition.</li>
+  </ul>
+  <div class="callout caveat"><div class="clabel">◆ Destructive vs merge</div>
+    <b>“Re-bootstrap”</b> and <b>“Clear schema”</b> replace/drop the schema — they don't merge. Re-importing an
+    <i>analysis report</i>, by contrast, merges and preserves your curation.</div>
+
+  <h3>The rules (what's legal)</h3>
+  <p>Three kinds, authored as data — never baked into code:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Kind</th><th>Shape</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill a">enum</span></td><td>field must be one of options</td><td><span class="mono">voice</span> ∈ {alloy, echo, shimmer}</td></tr>
+      <tr><td><span class="pill a">requires</span></td><td>if <span class="mono">when</span> then <span class="mono">needs</span></td><td><span class="mono">tool:send_email</span> → <span class="mono">field:notification_service_url</span></td></tr>
+      <tr><td><span class="pill a">conflicts</span></td><td>not both <span class="mono">a</span> and <span class="mono">b</span></td><td><span class="mono">kb_mode:simple</span> ✕ <span class="mono">kb_mode:lightrag</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>Author them three ways: the structured <b>“Author a rule”</b> form, or <b>“Draft rule”</b> (plain English → one
+  structured rule, grounded in your tools &amp; fields), and every rule carries a <i>level</i> —
+  <span class="mono">error</span> (blocks the customer) or <span class="mono">warn</span> (advisory).</p>
+  <div class="callout info"><div class="clabel">◆ enum rules fold into the schema</div>
+    On save, an <span class="mono">enum</span> rule whose field is a declared schema field is folded into that field's
+    <span class="mono">options</span> (and the rule is dropped). The admin's options literally <i>become</i> the customer's
+    dropdown in Stage 2.</div>
+
+  <h3>Save draft vs Save &amp; publish</h3>
+  <p>Both write a new immutable version. <b>“Save draft”</b> does <i>not</i> move the published pointer;
+  <b>“Save &amp; publish”</b> sets <span class="mono">published_version</span> to the latest.</p>
+  <div class="callout danger"><div class="clabel">◆ Only the published version is enforced</div>
+    Stage 2 gates against the <b>published</b> ruleset — <i>not</i> the latest draft. If your new rule “isn't working,”
+    the usual cause is you clicked <b>Save draft</b>, not <b>Save &amp; publish</b>.</div>
+</section>
+
+<hr class="soft">
+
+<!-- 7 -->
+<section id="stage2">
+  <div class="kicker">Stage 2 · customer / operator</div>
+  <h2>Configure within bounds</h2>
+  <p class="lead-p">Stage 2 lives in <b>Config viewer</b>. A fresh project starts empty. Everything you do here is checked
+  against the admin's <b>published</b> schema + rules — you literally cannot apply a config the rules forbid.</p>
+
+  <h3>The guided editor</h3>
+  <p>The <b>“Guided edit”</b> card renders widgets from the schema:</p>
+  <ul>
+    <li><b>Agent prompt</b> — the robot's global instructions (a first-class textarea; no SOP required).</li>
+    <li><b>Tools</b> — clickable chips; only schema-allowed tools are offerable, with the admin's descriptions.</li>
+    <li><b>Fields</b> — typed widgets: enum → dropdown (an out-of-range value shows <span class="mono">… — not allowed</span>),
+    boolean → true/false, number → number input. Markers: <span class="mono">*</span> required, ⚑ needs_input,
+    <span class="mono">←</span> needed by a violated rule. A <b>“Show advanced”</b> toggle hides plumbing.</li>
+    <li><b>Complex structures</b> — row editors for MCP servers, knowledge bases, and transfer topics, each re-evaluated
+    live against the rules.</li>
+    <li><b>Connector reuse</b> — <b>“+ from connector…”</b> adds an MCP server from the registry as a reference
+    (<span class="mono">{connector, authorization:"secret:…"}</span>); <b>“Save as connector”</b> promotes an ad-hoc URL
+    into the registry so SOPs can bind it too.</li>
+  </ul>
+
+  <h3>The Config assistant (chat)</h3>
+  <p>The floating <b>“💬 Config assistant”</b> button opens a persistent chat that <b>remembers the conversation</b> —
+  it's a real assistant, not a one-shot box. Ask <i>“let the agent send verification SMS”</i> or <i>“make the prompt more
+  concise”</i>. It proposes <b>formal edits</b> (enable a tool, set a field, add an MCP server, edit the prompt…). Each
+  proposal is <b>rule-gated</b>: edits that would introduce an error-level violation are shown but marked
+  <i>“the admin's ruleset forbids this — not applied”</i>. Otherwise click <b>“Add to edits”</b> to stage them.</p>
+  <div class="callout info"><div class="clabel">◆ It can't invent capabilities</div>
+    The assistant may only touch tools/fields the schema declares — unknown atoms are skipped and surfaced, never
+    silently applied. (“Enable X” also works for a schema-allowed tool not yet in the config — it creates the entry,
+    exactly like clicking the chip.)</div>
+
+  <h3>The commit ladder — the #1 thing to understand</h3>
+  <p>There are four distinct levels. Getting these confused is the most common trip-up, so the UI calls it out explicitly.</p>
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 226" role="img" aria-label="The four-step commit ladder in Stage 2">
+      <defs>
+        <marker id="lc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#f0a73c"/></marker>
+        <marker id="lbb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5b8def"/></marker>
+        <marker id="lok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#3ecf8e"/></marker>
+        <linearGradient id="lgb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(91,141,239,.36)"/><stop offset="1" stop-color="rgba(91,141,239,.15)"/></linearGradient>
+        <linearGradient id="lgg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(62,207,142,.32)"/><stop offset="1" stop-color="rgba(62,207,142,.13)"/></linearGradient>
+        <linearGradient id="lgc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(240,167,60,.32)"/><stop offset="1" stop-color="rgba(240,167,60,.13)"/></linearGradient>
+      </defs>
+      <style>
+        .b4{rx:9;stroke-width:2}.t4{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}
+        .s4{fill:#e7ebf3;font:9.5px var(--mono),monospace;text-anchor:middle}
+        .g4{font:700 10px "Segoe UI",sans-serif;text-anchor:middle}
+      </style>
+      <rect class="b4" x="16" y="88" width="150" height="52" fill="#222736" stroke="#5c6785"/>
+      <text class="t4" x="91" y="110">staged edit</text><text class="s4" x="91" y="126">editor / chat</text>
+      <rect class="b4" x="236" y="88" width="152" height="52" fill="url(#lgb)" stroke="#5b8def"/>
+      <text class="t4" x="312" y="110" fill="#d6e4ff">working config</text><text class="s4" x="312" y="126">browser only</text>
+      <line x1="166" y1="114" x2="235" y2="114" stroke="#5b8def" stroke-width="2.6" marker-end="url(#lbb)"/><text class="g4" x="201" y="80" fill="#9cc0ff">Apply changes</text>
+      <rect class="b4" x="470" y="14" width="274" height="46" fill="url(#lgb)" stroke="#5b8def"/>
+      <text class="t4" x="607" y="33" fill="#d6e4ff">Save</text><text class="s4" x="607" y="49">→ DB draft version</text>
+      <rect class="b4" x="470" y="90" width="274" height="46" fill="url(#lgg)" stroke="#3ecf8e"/>
+      <text class="t4" x="607" y="109" fill="#a8f0cf">Save &amp; publish</text><text class="s4" x="607" y="125">→ deploy version</text>
+      <rect class="b4" x="470" y="166" width="274" height="46" fill="url(#lgc)" stroke="#f0a73c"/>
+      <text class="t4" x="607" y="185" fill="#ffce86">Download</text><text class="s4" x="607" y="201">→ rendered config.json</text>
+      <path d="M388,104 C430,86 440,50 469,40" fill="none" stroke="#5b8def" stroke-width="2.4" marker-end="url(#lbb)"/>
+      <line x1="388" y1="114" x2="469" y2="114" stroke="#3ecf8e" stroke-width="2.4" marker-end="url(#lok)"/>
+      <path d="M388,124 C430,142 440,178 469,188" fill="none" stroke="#f0a73c" stroke-width="2.4" marker-end="url(#lc)"/>
+    </svg>
+    <figcaption><b>Apply ≠ Save ≠ Publish ≠ Download.</b> “Apply changes” only commits to the in-browser working config;
+      the database and the deploy artifact are separate, deliberate steps.</figcaption>
+  </div></figure>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Action</th><th>What it does</th><th>Persists?</th></tr></thead>
+    <tbody>
+      <tr><td><b>Apply changes</b></td><td>Writes staged edits into the working config (updates JSON + graph). Blocked by error-level violations.</td><td><span class="pill c">Browser only</span></td></tr>
+      <tr><td><b>Save</b></td><td><span class="mono">PUT /config/document</span> — a new immutable DB version (draft).</td><td><span class="pill a">DB (not deployed)</span></td></tr>
+      <tr><td><b>Save &amp; publish</b></td><td>New version <i>and</i> moves the published pointer. Disabled if there are errors.</td><td><span class="pill win">DB (deployed)</span></td></tr>
+      <tr><td><b>Download</b></td><td>Renders the deploy-ready <span class="mono">config.json</span> (resolves refs — see §08).</td><td><span class="pill c">Downloads a file</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout caveat"><div class="clabel">◆ Applied ≠ Saved</div>
+    <i>Apply changes</i> commits to your in-browser working config; it does not reach the database. Your draft now survives
+    switching tabs (and shows an <b>unsaved</b> chip), but you must click <b>Save</b> or <b>Save &amp; publish</b> to
+    persist it. <b>Discard changes</b> throws the local draft away and reloads the last-saved DB version.</div>
+
+  <h3>Blocking violations are the guidance</h3>
+  <p>When an edit breaks a rule, the violations panel explains it and offers <b>one-click fixes</b> derived from the rule
+  itself — e.g. clearing <span class="mono">notification_service_url</span> while <span class="mono">send_email</span> is
+  on shows a blocking error and a <b>“Disable send_email”</b> button. Error-level violations disable <i>Apply changes</i>,
+  <i>Save &amp; publish</i>, and <i>Download</i> until resolved.</p>
+</section>
+
+<hr class="soft">
+
+<!-- 8 -->
+<section id="deploy">
+  <div class="kicker">Write-back · automatic</div>
+  <h2>Turning the config into the robot's config.json</h2>
+  <p class="lead-p"><b>“Download”</b> calls <span class="mono">POST /config/render-robot</span>, which resolves every
+  reference server-side and returns a deploy-ready <span class="mono">config.json</span> (downloaded as
+  <span class="mono">&lt;display_name&gt;-config.json</span>). Raw credentials never pass through the browser.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 210" role="img" aria-label="Write-back resolves connector and secret references">
+      <defs>
+        <marker id="wc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#f0a73c"/></marker>
+        <marker id="wo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#19b89a"/></marker>
+        <linearGradient id="wgb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(91,141,239,.34)"/><stop offset="1" stop-color="rgba(91,141,239,.14)"/></linearGradient>
+        <linearGradient id="wgp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(169,116,240,.30)"/><stop offset="1" stop-color="rgba(169,116,240,.12)"/></linearGradient>
+        <linearGradient id="wgd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(239,91,110,.28)"/><stop offset="1" stop-color="rgba(239,91,110,.11)"/></linearGradient>
+        <linearGradient id="wgc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(240,167,60,.36)"/><stop offset="1" stop-color="rgba(240,167,60,.15)"/></linearGradient>
+        <linearGradient id="wgg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(25,184,154,.36)"/><stop offset="1" stop-color="rgba(25,184,154,.15)"/></linearGradient>
+      </defs>
+      <style>
+        .b5{rx:9;stroke-width:2}.t5{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}
+        .s5{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}
+      </style>
+      <rect class="b5" x="20" y="26" width="196" height="42" fill="url(#wgb)" stroke="#5b8def"/>
+      <text class="t5" x="118" y="45" fill="#d6e4ff">Config document</text><text class="s5" x="118" y="60">connector + secret refs</text>
+      <rect class="b5" x="20" y="84" width="196" height="42" fill="url(#wgp)" stroke="#a974f0"/>
+      <text class="t5" x="118" y="103" fill="#e6d8ff">Connector registry</text><text class="s5" x="118" y="118">url · auth_secret</text>
+      <rect class="b5" x="20" y="142" width="196" height="42" fill="url(#wgd)" stroke="#ef5b6e"/>
+      <text class="t5" x="118" y="161" fill="#f6c0c7">Tenant secrets</text><text class="s5" x="118" y="176">Fernet-encrypted</text>
+      <rect class="b5" x="300" y="84" width="176" height="42" fill="url(#wgc)" stroke="#f0a73c"/>
+      <text class="t5" x="388" y="103" fill="#ffce86">/config/render-robot</text><text class="s5" x="388" y="118">resolve · validate</text>
+      <rect class="b5" x="556" y="84" width="184" height="42" fill="url(#wgg)" stroke="#19b89a"/>
+      <text class="t5" x="648" y="103" fill="#c6f2e6">config.json</text><text class="s5" x="648" y="118">deploy-ready + notes</text>
+      <line x1="216" y1="47" x2="299" y2="98" stroke="#5b8def" stroke-width="2.4" marker-end="url(#wc)"/>
+      <line x1="216" y1="105" x2="299" y2="105" stroke="#a974f0" stroke-width="2.4" marker-end="url(#wc)"/>
+      <line x1="216" y1="163" x2="299" y2="112" stroke="#ef5b6e" stroke-width="2.4" marker-end="url(#wc)"/>
+      <line x1="476" y1="105" x2="555" y2="105" stroke="#19b89a" stroke-width="2.6" marker-end="url(#wo)"/>
+    </svg>
+    <figcaption><b>Every reference resolves server-side.</b> Connector names become URLs, <span class="mono">secret:…</span>
+      references become <span class="mono">Bearer</span> tokens (Fernet-decrypted), and the schema is checked — advisory only.</figcaption>
+  </div></figure>
+
+  <p>What it resolves:</p>
+  <ul>
+    <li><b>Connector refs</b> — an <span class="mono">mcp_servers</span> entry with a <span class="mono">connector</span>
+    name gets its <span class="mono">url</span> (and, if the connector has an <span class="mono">auth_secret</span>, a
+    <span class="mono">secret:</span> authorization) filled from the registry; the <span class="mono">connector</span> key
+    is stripped. Missing/disabled/non-MCP connectors produce a note and the entry is kept as typed.</li>
+    <li><b>Secret refs</b> — any <span class="mono">authorization: "secret:&lt;name&gt;"</span> is Fernet-decrypted and
+    emitted as <span class="mono">Bearer &lt;value&gt;</span>. A missing secret leaves the reference in place with a note.</li>
+    <li><b>Advisory schema notes</b> — if a schema is published, the config is validated against it (required set? enum in
+    range? types right?). These are <i>notes only — write-back never blocks</i>; the Studio already gates on rule errors.</li>
+  </ul>
+  <div class="callout key"><div class="clabel">◆ Deployment decision (PolarTie)</div>
+    Per the PolarTie team, this rendered <span class="mono">config.json</span> is the robot's config — it <b>replaces</b>
+    the earlier robot-side config optimizer (a pilot), rather than complementing it. SOPilot does not replace the robot's
+    own knowledge-base MCP servers; it carries the procedures and steering the robot consults over
+    <span class="mono">/mcp</span>.</div>
+</section>
+
+<hr class="soft">
+
+<!-- 9 -->
+<section id="ops">
+  <div class="kicker">Reference</div>
+  <h2>Operations</h2>
+
+  <h3>Reproducible end-to-end script</h3>
+  <p>The whole three-stage cycle, with a restart-survival proof, is scripted:</p>
+  <div class="card" style="background:var(--bg2)"><pre style="margin:0;font-size:12.5px;line-height:1.6;color:#c9d3e6;overflow:auto"><span style="color:#7b8499"># 1) write all three stages + verify persistence</span>
+python scripts/e2e_config_manager.py \
+    --base http://127.0.0.1:8100 --admin-token <span style="color:#8fd9c9">"$SOPILOT_ADMIN_TOKEN"</span> \
+    --tenant pt-e2e --project robot1
+
+<span style="color:#7b8499"># 2) restart the API   (systemctl restart sopilot-api, or redeploy)</span>
+
+<span style="color:#7b8499"># 3) prove nothing was lost — re-fetch only, no writes</span>
+python scripts/e2e_config_manager.py --base http://127.0.0.1:8100 \
+    --admin-token <span style="color:#8fd9c9">"$SOPILOT_ADMIN_TOKEN"</span> --tenant pt-e2e --project robot1 --verify-only</pre></div>
+  <p>Both runs end with <span class="mono">ALL CHECKS PASSED</span>. It creates the tenant/project if missing, imports the
+  pt-multirobot report, publishes a schema + rule, publishes a customer config, then re-fetches all three and asserts they
+  match. It never deletes the tenant. A dependency-free report validator lives at
+  <span class="filepath">scripts/validate_analysis_report.py</span>; the full manual walkthrough is
+  <span class="filepath">docs/CONFIG_MANAGER_E2E.md</span>.</p>
+
+  <h3>Deployment settings you'll touch</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Setting</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="mono">SOPILOT_ADMIN_TOKEN</span></td><td>Deployment-operator credential (header <span class="mono">X-Admin-Token</span>); the admin console login. <b>Required in prod</b> — generate with <span class="mono">openssl rand -hex 24</span>; rotate by editing env + restart.</td></tr>
+      <tr><td><span class="mono">SOPILOT_HOST</span> / <span class="mono">SOPILOT_PORT</span></td><td>API bind (default <span class="mono">127.0.0.1</span>/<span class="mono">8100</span>). Studio dev: <span class="mono">SOPILOT_UI_PORT</span> (5174), <span class="mono">SOPILOT_API_URL</span>.</td></tr>
+      <tr><td><span class="mono">SOPILOT_MCP_MOUNT</span></td><td><span class="mono">true</span> mounts the MCP surface at <span class="mono">/mcp</span> in-process. <b>Single-tenant</b> — must <i>also</i> set <span class="mono">SOPILOT_API_KEY</span> + <span class="mono">SOPILOT_PROJECT</span>. <span class="mono">SOPILOT_MCP_MODE</span> = <span class="mono">tool|supervisor|both</span>.</td></tr>
+      <tr><td><span class="mono">SOPILOT_SUBSYSTEMS</span></td><td>Default subsystem mode (<span class="mono">both|sop|retrieval|advisory</span>).</td></tr>
+      <tr><td><span class="mono">OPENAI_API_KEY</span></td><td>LLM key — <b>server-side only</b>, never sent to the client. The config manager's LLM endpoints use <span class="mono">BUILDER_MODEL</span>.</td></tr>
+      <tr><td><span class="mono">SOPILOT_SECRET_KEY</span></td><td>Fernet key for tenant connector secrets. <b>Set it before storing any secret</b>, or references won't resolve at write-back.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout caveat"><div class="clabel">◆ MCP mount gotcha</div>
+    <span class="mono">SOPILOT_MCP_MOUNT=true</span> <i>alone</i> won't work — it's single-tenant and needs
+    <span class="mono">SOPILOT_API_KEY</span> + <span class="mono">SOPILOT_PROJECT</span>, and behind a reverse proxy you
+    need <span class="mono">proxy_buffering off; proxy_http_version 1.1;</span> for the streaming surface. Full go-live
+    checklist in <span class="filepath">docs/INTEGRATION.md</span>.</div>
+</section>
+
+<!-- 10 -->
+<section id="endpoints">
+  <div class="kicker">Reference</div>
+  <h2>API — <span class="mono">/config/*</span></h2>
+  <p>All routes are tenant-scoped: <span class="mono">Authorization: Bearer sop_&lt;key&gt;</span> +
+  <span class="mono">X-Project: &lt;slug&gt;</span>. <span class="pill b">GET</span> reads,
+  <span class="pill c">PUT</span> writes a new version, <span class="pill a">POST … /publish</span> moves the pointer.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill b">GET</span></td><td><span class="mono">/config/analysis</span></td><td>Stage 0 · latest + published report + versions.</td></tr>
+      <tr><td><span class="pill c">PUT</span></td><td><span class="mono">/config/analysis</span></td><td>Stage 0 · store a report as a new version (publish default).</td></tr>
+      <tr><td><span class="pill b">GET</span></td><td><span class="mono">/config/ruleset</span></td><td>Stage 1 · latest + published rules &amp; schema.</td></tr>
+      <tr><td><span class="pill c">PUT</span></td><td><span class="mono">/config/ruleset</span></td><td>Stage 1 · save rules (+ schema) as a version; optional publish.</td></tr>
+      <tr><td><span class="pill a">POST</span></td><td><span class="mono">/config/ruleset/publish</span></td><td>Stage 1 · publish the latest saved ruleset.</td></tr>
+      <tr><td><span class="pill b">GET</span></td><td><span class="mono">/config/document</span></td><td>Stage 2 · latest + published config + versions.</td></tr>
+      <tr><td><span class="pill c">PUT</span></td><td><span class="mono">/config/document</span></td><td>Stage 2 · save the config as a version; optional publish.</td></tr>
+      <tr><td><span class="pill a">POST</span></td><td><span class="mono">/config/document/publish</span></td><td>Stage 2 · publish the latest saved config.</td></tr>
+      <tr><td><span class="pill a">POST</span></td><td><span class="mono">/config/render-robot</span></td><td>Write-back · resolve connector/secret refs → deploy <span class="mono">config.json</span>.</td></tr>
+      <tr><td><span class="pill a">POST</span></td><td><span class="mono">/config/draft-field</span></td><td>LLM · plain English → one schema field.</td></tr>
+      <tr><td><span class="pill a">POST</span></td><td><span class="mono">/config/draft-rule</span></td><td>LLM · plain English → one structured rule.</td></tr>
+      <tr><td><span class="pill a">POST</span></td><td><span class="mono">/config/draft-edit</span></td><td>LLM · Stage-2 assistant: instruction + history → edit ops.</td></tr>
+      <tr><td><span class="pill a">POST</span></td><td><span class="mono">/config/introspect-mcp</span></td><td>Live <span class="mono">list_tools</span> against MCP servers.</td></tr>
+      <tr><td><span class="pill a">POST</span></td><td><span class="mono">/config/validate-prompt</span></td><td>LLM check: prompt vs the agent's real capabilities.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 11 -->
+<section id="troubleshooting">
+  <div class="kicker">Reference</div>
+  <h2>Troubleshooting</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Symptom</th><th>Cause / fix</th></tr></thead>
+    <tbody>
+      <tr><td>“I changed a config, switched tabs, and it was gone.”</td><td>You clicked <i>Apply changes</i> but not <i>Save</i>. The draft now survives tab switches and shows an <b>unsaved</b> chip — click <b>Save</b> / <b>Save &amp; publish</b> to persist.</td></tr>
+      <tr><td>“The assistant said it enabled a tool but nothing changed.”</td><td>The tool wasn't in the schema allowlist (or, previously, wasn't yet in the config). Allow it in Stage 1, or click its chip. Schema-allowed tools now get created on enable.</td></tr>
+      <tr><td>“…endpoint not found — restart the backend for /config/…”</td><td>The running backend predates that route. Redeploy/restart the API — it's not a config error.</td></tr>
+      <tr><td>“Save &amp; publish / Download is disabled.”</td><td>There are error-level problems (rule violations or structural errors). Resolve them — the guided editor offers one-click fixes.</td></tr>
+      <tr><td>“My published rules aren't being enforced.”</td><td>You clicked <i>Save draft</i>, not <i>Save &amp; publish</i>. Only the published version gates Stage 2.</td></tr>
+      <tr><td>“A secret came out as the literal <span class="mono">secret:…</span>.”</td><td>The secret isn't stored (or <span class="mono">SOPILOT_SECRET_KEY</span> changed). Re-enter it via the secrets API; check the write-back notes.</td></tr>
+      <tr><td>“A new tenant already shows another customer's config.”</td><td>It doesn't — that's the bundled <i>example</i>. A fresh project starts empty; use <i>Load example</i> deliberately. Real data lives in the DB, untouched.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 12 -->
+<section id="checklist">
+  <div class="kicker">Cheat sheet</div>
+  <h2>Quick-start checklist</h2>
+  <div class="card">
+    <ol class="ladder" style="margin:0">
+      <li><b>Stage 0</b> — run the <span class="mono">system-analysis</span> skill on the target code → validate the report → <b>Config admin ▸ Import analysis report…</b></li>
+      <li><b>Stage 1</b> — curate the schema (types, enums, required, descriptions), author rules (enum / requires / conflicts), then <b>Save &amp; publish</b>.</li>
+      <li><b>Stage 2</b> — in <b>Config viewer</b>, build the config with the guided editor + assistant, resolve any blocking violations, then <b>Apply changes → Save &amp; publish</b>.</li>
+      <li><b>Deploy</b> — <b>Download</b> the rendered <span class="mono">config.json</span> and ship it to the robot; point its <span class="mono">mcp_servers</span> at SOPilot's <span class="mono">/mcp</span> for SOP guidance.</li>
+      <li><b>Verify</b> — run <span class="mono">e2e_config_manager.py --verify-only</span> after a restart to confirm all three stages persisted.</li>
+    </ol>
+  </div>
+  <div class="callout key"><div class="clabel">◆ Two rules of thumb</div>
+    <b>(1)</b> Only <i>published</i> versions matter downstream. <b>(2)</b> <i>Apply</i> → <i>Save</i> → <i>Publish</i> →
+    <i>Download</i> are four distinct steps.</div>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  SOPilot Configuration Engine — internal guide for the PolarTie team. Written from the shipped code and the
+  <span class="mono">/config/*</span> API; source of truth: <span class="mono">docs/CONFIG_MANAGER_E2E.md</span>,
+  <span class="mono">docs/STAGE0_ANALYSIS_PLAYBOOK.md</span>, <span class="mono">docs/INTEGRATION.md</span>. No customer
+  conversation content or secrets appear in this document.
+</footer>
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
+</script>
+</body>
+</html>
