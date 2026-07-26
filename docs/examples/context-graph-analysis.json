@@ -1,0 +1,94 @@
+{
+  "kind": "sopilot-system-analysis",
+  "report_version": 1,
+  "system": {
+    "name": "Context Graph",
+    "description": "Decision-aware knowledge-graph system built on LightRAG (FastAPI API + React WebUI, Python 3.12). Pluggable KV / vector / graph / doc-status storage backends and pluggable LLM / embedding / rerank providers.",
+    "analyzed_at": "2026-07-26T00:00:00Z",
+    "sources": ["env.example", "config.ini.example", "docker-compose.yml", "code"]
+  },
+  "components": [
+    { "id": "api", "name": "LightRAG API", "kind": "service",
+      "description": "FastAPI server on :9621 — query, ingestion, graph, ontology, governance",
+      "depends_on": ["kv_store", "vector_store", "graph_store", "llm_provider", "embedding_provider"],
+      "exposes": [
+        { "kind": "http-route", "path": "/query", "methods": ["POST"] },
+        { "kind": "http-route", "path": "/documents", "methods": ["GET", "POST", "DELETE"] },
+        { "kind": "http-route", "path": "/graphs", "methods": ["GET"] },
+        { "kind": "http-route", "path": "/ontology", "methods": ["GET", "POST"] },
+        { "kind": "http-route", "path": "/rules", "methods": ["GET", "POST"] },
+        { "kind": "http-route", "path": "/actions", "methods": ["POST"] },
+        { "kind": "http-route", "path": "/flows", "methods": ["POST"] },
+        { "kind": "http-route", "path": "/rbac", "methods": ["GET", "POST"] },
+        { "kind": "http-route", "path": "/web-ingest", "methods": ["POST"] },
+        { "kind": "ollama-emulation", "path": "/api", "methods": ["POST"] },
+        { "kind": "http-route", "path": "/health", "methods": ["GET"] }
+      ] },
+    { "id": "webui", "name": "Context Graph WebUI", "kind": "service", "description": "React 19 dashboard", "depends_on": ["api"] },
+    { "id": "kv_store", "name": "KV / doc-status store", "kind": "datastore", "description": "pluggable: JSON | Redis | Postgres | Mongo" },
+    { "id": "vector_store", "name": "Vector store", "kind": "datastore", "description": "pluggable: Nano | Postgres(pgvector) | Qdrant | Milvus | Faiss" },
+    { "id": "graph_store", "name": "Graph store", "kind": "datastore", "description": "pluggable: NetworkX | Neo4j | Memgraph | Postgres(AGE)" },
+    { "id": "llm_provider", "name": "LLM provider", "kind": "external", "description": "OpenAI-compatible / Ollama / Azure" },
+    { "id": "embedding_provider", "name": "Embedding provider", "kind": "external", "description": "OpenAI-compatible / Ollama" }
+  ],
+  "config_items": [
+    { "path": "HOST", "item": "field", "type": "string", "description": "API bind address", "advanced": true, "status": "known", "source": "env.example" },
+    { "path": "PORT", "item": "field", "type": "number", "description": "API port (default 9621)", "advanced": true, "status": "known", "source": "env.example" },
+    { "path": "WEBUI_TITLE", "item": "field", "type": "string", "description": "title shown in the WebUI", "status": "known", "source": "env.example" },
+    { "path": "SUMMARY_LANGUAGE", "item": "field", "type": "string", "description": "language for generated summaries", "status": "known", "source": "env.example" },
+    { "path": "ENABLE_LLM_CACHE", "item": "field", "type": "boolean", "description": "cache LLM responses", "status": "known", "source": "env.example" },
+    { "path": "MAX_ASYNC", "item": "field", "type": "number", "description": "max concurrent LLM calls", "advanced": true, "status": "known", "source": "env.example" },
+
+    { "path": "LLM_BINDING", "item": "field", "type": "enum", "options": ["openai", "azure_openai", "ollama", "lollms", "aws_bedrock"], "required": true, "description": "which LLM provider drives extraction & query", "component": "llm_provider", "status": "known", "source": "env.example" },
+    { "path": "LLM_MODEL", "item": "field", "type": "string", "required": true, "description": "LLM model id (e.g. gpt-4o)", "component": "llm_provider", "status": "known", "source": "env.example" },
+    { "path": "LLM_BINDING_HOST", "item": "field", "type": "string", "description": "LLM API base URL", "component": "llm_provider", "status": "known", "source": "env.example" },
+    { "path": "LLM_BINDING_API_KEY", "item": "field", "type": "secret-ref", "required": true, "description": "LLM provider API key (credential — stored as a secret)", "component": "llm_provider", "status": "known", "source": "env.example" },
+
+    { "path": "EMBEDDING_BINDING", "item": "field", "type": "enum", "options": ["openai", "azure_openai", "ollama", "lollms", "aws_bedrock"], "required": true, "description": "which embedding provider", "component": "embedding_provider", "status": "known", "source": "env.example" },
+    { "path": "EMBEDDING_MODEL", "item": "field", "type": "string", "required": true, "description": "embedding model id", "component": "embedding_provider", "status": "known", "source": "env.example" },
+    { "path": "EMBEDDING_DIM", "item": "field", "type": "number", "required": true, "description": "embedding vector dimension", "component": "embedding_provider", "status": "known", "source": "env.example" },
+    { "path": "EMBEDDING_BINDING_API_KEY", "item": "field", "type": "secret-ref", "description": "embedding provider API key", "component": "embedding_provider", "status": "known", "source": "env.example" },
+
+    { "path": "RERANK_BINDING", "item": "field", "type": "enum", "options": ["null", "cohere", "jina", "aliyun"], "description": "optional reranker provider", "status": "known", "source": "env.example" },
+    { "path": "RERANK_MODEL", "item": "field", "type": "string", "description": "reranker model — provider-specific; supply when RERANK_BINDING is not null", "status": "needs_input", "source": "code" },
+
+    { "path": "LIGHTRAG_KV_STORAGE", "item": "field", "type": "enum", "options": ["JsonKVStorage", "RedisKVStorage", "PGKVStorage", "MongoKVStorage"], "required": true, "description": "key-value store backend", "component": "kv_store", "status": "known", "source": "code" },
+    { "path": "LIGHTRAG_VECTOR_STORAGE", "item": "field", "type": "enum", "options": ["NanoVectorDBStorage", "PGVectorStorage", "QdrantVectorDBStorage", "MilvusVectorDBStorage", "FaissVectorDBStorage"], "required": true, "description": "vector store backend", "component": "vector_store", "status": "known", "source": "code" },
+    { "path": "LIGHTRAG_GRAPH_STORAGE", "item": "field", "type": "enum", "options": ["NetworkXStorage", "Neo4JStorage", "MemgraphStorage", "PGGraphStorage"], "required": true, "description": "graph store backend", "component": "graph_store", "status": "known", "source": "code" },
+    { "path": "LIGHTRAG_DOC_STATUS_STORAGE", "item": "field", "type": "enum", "options": ["JsonDocStatusStorage", "RedisDocStatusStorage", "PGDocStatusStorage", "MongoDocStatusStorage"], "required": true, "description": "doc-status store backend", "component": "kv_store", "status": "known", "source": "code" },
+
+    { "path": "POSTGRES_VECTOR_INDEX_TYPE", "item": "field", "type": "enum", "options": ["HNSW", "IVFFLAT", "VCHORDRQ"], "description": "pgvector index type (when using Postgres vector store)", "advanced": true, "status": "known", "source": "config.ini.example" },
+    { "path": "LIGHTRAG_API_KEY", "item": "field", "type": "secret-ref", "description": "X-API-Key protecting the server API", "component": "api", "status": "known", "source": "env.example" },
+    { "path": "TOKEN_SECRET", "item": "field", "type": "secret-ref", "description": "JWT signing secret for WebUI login", "component": "api", "status": "known", "source": "env.example" }
+  ],
+  "integration_points": [
+    { "name": "postgres", "kind": "db", "direction": "outbound",
+      "technology": { "dialect": "postgresql", "driver": "asyncpg", "protocol": "python", "extensions": ["pgvector", "AGE"] },
+      "target": { "host_field": "POSTGRES_HOST", "port": 5432, "database_field": "POSTGRES_DATABASE" },
+      "auth": { "secret_ref": "POSTGRES_PASSWORD" },
+      "description": "unified KV + vector + graph + doc-status when Postgres backends are selected",
+      "component": "vector_store", "status": "known", "source": "config.ini.example" },
+    { "name": "neo4j", "kind": "db", "direction": "outbound",
+      "technology": { "protocol": "bolt", "driver": "neo4j-python" },
+      "target": { "uri_field": "NEO4J_URI" }, "auth": { "secret_ref": "neo4j_password" },
+      "description": "graph store when LIGHTRAG_GRAPH_STORAGE=Neo4JStorage", "component": "graph_store", "status": "known", "source": "config.ini.example" },
+    { "name": "redis", "kind": "db", "direction": "outbound",
+      "technology": { "protocol": "redis" }, "target": { "uri_field": "REDIS_URI" },
+      "description": "KV / doc-status store when Redis backends selected", "component": "kv_store", "status": "known", "source": "env.example" },
+    { "name": "qdrant", "kind": "db", "direction": "outbound",
+      "technology": { "protocol": "http" }, "target": { "url_field": "QDRANT_URL" },
+      "description": "vector store when LIGHTRAG_VECTOR_STORAGE=QdrantVectorDBStorage", "component": "vector_store", "status": "known", "source": "env.example" },
+    { "name": "llm_api", "kind": "http", "direction": "outbound",
+      "technology": { "protocol": "http", "api": "openai-compatible" },
+      "target": { "url_field": "LLM_BINDING_HOST" }, "auth": { "secret_ref": "LLM_BINDING_API_KEY", "header": "Authorization" },
+      "description": "chat/completions for extraction and query", "component": "llm_provider", "status": "known", "source": "env.example" },
+    { "name": "embedding_api", "kind": "http", "direction": "outbound",
+      "technology": { "protocol": "http", "api": "openai-compatible" },
+      "target": { "url_field": "EMBEDDING_BINDING_HOST" }, "auth": { "secret_ref": "EMBEDDING_BINDING_API_KEY", "header": "Authorization" },
+      "description": "text embeddings", "component": "embedding_provider", "status": "known", "source": "env.example" }
+  ],
+  "open_questions": [
+    { "about": "RERANK_MODEL", "question": "If reranking is enabled, which provider/model should this deployment use?", "needs_from": "engineering" },
+    { "about": "storage-backends", "question": "Which KV/vector/graph backend combination is deployed for this instance (all-Postgres, Neo4j+Qdrant, or local)?", "needs_from": "admin" }
+  ]
+}
