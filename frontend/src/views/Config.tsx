@@ -97,11 +97,21 @@ export default function ConfigView() {
         if (r.published_schema) setAdminSchema(r.published_schema);
       })
       .catch(() => { /* backend down — seed fallback below */ });
-    // Load the DB config document (source of truth); prefer latest for editing.
+    // Load the DB config document (source of truth) for versioning + dirty
+    // tracking. The DB config is always the baseline, but DON'T clobber an
+    // unsaved local draft: if the browser holds edits that differ from the DB
+    // (e.g. "Apply changes" without "Save", then a tab switch remounted this
+    // view), keep the draft and let the "unsaved" chip prompt a Save — otherwise
+    // navigating away would silently discard in-progress work.
     api<{ config: any; latest_version: number; published_version: number | null }>("GET", "/config/document")
       .then((d) => {
         setDocVersion(d.latest_version); setDocPublished(d.published_version);
-        if (d.config) { preset(d.config); setDocBaseline(JSON.stringify(d.config)); }
+        if (d.config) {
+          setDocBaseline(JSON.stringify(d.config));
+          const local = loadStoredConfig();
+          if (!local || JSON.stringify(local) === JSON.stringify(d.config)) preset(d.config);
+          // else: a divergent local draft exists — leave it in place (dirty vs DB).
+        }
       })
       .catch(() => { /* no document / backend down — localStorage/empty stands */ });
   }, []);
@@ -127,6 +137,16 @@ export default function ConfigView() {
   const load = (v: string) => { try { setCfg(JSON.parse(v)); setErr(""); setLogicalLive(null); } catch (e: any) { setErr(String(e?.message ?? e)); } };
   const preset = (c: any) => { setText(JSON.stringify(c, null, 2)); setCfg(c); setErr(""); setIntro(MCP_INTROSPECTION); setLive(false); setLogicalLive(null); };
   const resetEmpty = () => { try { localStorage.removeItem(cfgStoreKey()); } catch { /* ignore */ } preset(EMPTY_CONFIG); };
+  // Throw away the local draft and reload the last-saved config from the DB.
+  const discardToSaved = async () => {
+    try {
+      const d = await api<{ config: any; latest_version: number; published_version: number | null }>("GET", "/config/document");
+      setDocVersion(d.latest_version); setDocPublished(d.published_version);
+      setDocBaseline(JSON.stringify(d.config ?? EMPTY_CONFIG));
+      preset(d.config ?? EMPTY_CONFIG);
+      setSaveMsg("");
+    } catch (e: any) { setSaveMsg(`Reload failed: ${String(e?.message ?? e)}`); }
+  };
 
   const validate = async () => {
     setBusy2(true);
@@ -196,6 +216,9 @@ export default function ConfigView() {
             <button className="btn ghost sm" onClick={() => preset(EXAMPLE)} title="Load the bundled example (a sanitized real robot config) into this working copy">Load example</button>
             <button className="btn ghost sm" onClick={() => preset(SAMPLE_CONFIG)}>Sample</button>
             <button className="btn ghost sm" onClick={resetEmpty} title="Clear back to an empty config">Reset</button>
+            {docDirty && docVersion > 0 && (
+              <button className="btn ghost sm" onClick={discardToSaved} title="Discard unsaved local changes and reload the last-saved config from the database">Discard changes</button>
+            )}
             <button className="btn ghost sm" onClick={() => saveDocument(false)} disabled={saveBusy || !docDirty} title="Save this config as a new version in the database">Save</button>
             <button className="btn sm primary" onClick={() => saveDocument(true)} disabled={saveBusy || problems > 0} title={problems > 0 ? "Fix errors before publishing" : "Save and mark as the deploy version"}>Save &amp; publish</button>
             <button className="btn sm ghost" onClick={downloadRobot} disabled={renderBusy || problems > 0}

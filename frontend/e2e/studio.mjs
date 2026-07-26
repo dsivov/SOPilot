@@ -127,6 +127,29 @@ await advToggle.click();
 await page.waitForTimeout(200);
 ok("toggle reveals advanced plumbing (rem_ws_host)", (await card.locator("span.mono", { hasText: "rem_ws_host" }).count()) > 0);
 
+// ---- 7. Persistence: an applied edit survives a tab switch (remount) ----
+// Regression: the mount fetch used to clobber the local draft with the DB config,
+// so "Apply changes" (without Save) then navigating away silently lost the edit.
+// The voice=echo edit staged via chat in section 4 is still in the guided draft;
+// commit it to the working config, then leave and re-enter the viewer.
+await applyBtn.click();  // Apply changes → writes voice=echo into cfg (NOT saved to DB)
+await page.waitForTimeout(300);
+const beforeText = await page.locator("textarea.area.mono").first().inputValue();
+ok("edit reaches the working config on Apply", /"voice"\s*:\s*"echo"/.test(beforeText));
+await page.locator("button.navitem", { hasText: "Config admin" }).click();   // leave the viewer (unmounts ConfigView)
+await page.waitForTimeout(500);
+await page.locator("button.navitem", { hasText: "Config viewer" }).click();  // return → remounts ConfigView
+await page.getByText("Guided edit").waitFor({ timeout: 5000 });
+await page.waitForTimeout(700);                       // let the DB /config/document fetch settle
+const afterText = await page.locator("textarea.area.mono").first().inputValue();
+ok("applied edit survives a tab switch (draft not clobbered by DB)", /"voice"\s*:\s*"echo"/.test(afterText));
+// If a saved DB version exists, a divergent draft must be flagged "unsaved" so
+// the user knows to Save; with no saved version there's nothing to be dirty
+// against, so the chip legitimately won't show. Assert the intent either way.
+const hasSavedVersion = (await page.locator(".chead .chip", { hasText: /^v\d/ }).count()) > 0;
+const unsavedShown = (await page.locator(".chip.warn", { hasText: "unsaved" }).count()) > 0;
+ok("unsaved draft flagged when a saved version exists", !hasSavedVersion || unsavedShown);
+
 await browser.close();
 
 // Revoke the harness key so it doesn't accumulate (best-effort).

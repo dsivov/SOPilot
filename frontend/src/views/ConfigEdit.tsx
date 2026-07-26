@@ -76,16 +76,30 @@ export function describeOp(e: EditOp): string {
 
 // Apply ops to a draft; unknown tools/fields/entries are SKIPPED (the LLM must
 // not invent atoms — a skipped op is surfaced, never silently applied).
-export function applyEdits(draft: Config, edits: EditOp[], allowedFields: Set<string>): { next: Config; applied: EditOp[]; skipped: EditOp[] } {
+// allowedTools = the tools the editor offers (schema allowlist, else the config's
+// own). enable_tool may CREATE an entry for an allowed-but-not-yet-present tool,
+// matching what clicking the tool chip does — otherwise the assistant could
+// "enable" a schema tool and silently change nothing.
+export function applyEdits(draft: Config, edits: EditOp[], allowedFields: Set<string>, allowedTools?: Set<string>): { next: Config; applied: EditOp[]; skipped: EditOp[] } {
   let next = draft;
   const applied: EditOp[] = [], skipped: EditOp[] = [];
   const list = (p: string): any[] => (get(next, p) as any[]) ?? [];
   for (const e of edits) {
     switch (e.op) {
-      case "enable_tool": case "disable_tool":
-        if (!next.tools || !(e.tool in next.tools)) { skipped.push(e); continue; }
+      case "enable_tool": case "disable_tool": {
+        const present = !!next.tools && e.tool in next.tools;
+        if (!present) {
+          // Not in the config yet. enable_tool can add it if the editor offers it;
+          // disable_tool on an absent tool is already-off → nothing to do.
+          if (e.op === "enable_tool" && allowedTools?.has(e.tool)) {
+            next = setPath(next, `tools.${e.tool}.enabled`, true);
+            break;
+          }
+          skipped.push(e); continue;
+        }
         next = setPath(next, `tools.${e.tool}.enabled`, e.op === "enable_tool");
         break;
+      }
       case "set_field": case "unset_field":
         if (!allowedFields.has(e.field)) { skipped.push(e); continue; }
         next = setPath(next, e.field, e.op === "set_field" ? e.value : "");
@@ -189,6 +203,9 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
   const schemaTools = schema?.tools?.length ? schema.tools : null;
   const toolDesc = new Map((schemaTools ?? []).map((t) => [t.name, t.description || ""]));
   const toolNames = (schemaTools ? schemaTools.map((t) => t.name) : Object.keys(draft.tools ?? {})).sort();
+  // The tools the assistant is allowed to enable — the same set the chips offer,
+  // so "enable X" from chat behaves exactly like clicking X's chip.
+  const allowedTools = useMemo(() => new Set(toolNames), [toolNames]);
   // Structures the schema allows (else all three known lists).
   const allowedStructures = schema?.structures?.length ? new Set(schema.structures.map((s) => s.key)) : null;
   const showStructure = (key: string) => !allowedStructures || allowedStructures.has(key);
@@ -265,7 +282,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
       let blocking: RuleResult[] = [];
       if (ops.length) {
         // gate: violations the proposal INTRODUCES vs the current draft
-        const { next } = applyEdits(draft, ops, allowedFields);
+        const { next } = applyEdits(draft, ops, allowedFields, allowedTools);
         const before = new Set(evaluateRules(draft, rules).filter((v) => v.state === "violated").map((v) => v.rule.id));
         blocking = evaluateRules(next, rules).filter((v) => v.state === "violated" && v.rule.level === "error" && !before.has(v.rule.id));
       }
@@ -281,7 +298,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
   const applyMessageOps = (idx: number) => {
     const msg = messages[idx];
     if (!msg.ops?.length) return;
-    const { next, applied } = applyEdits(draft, msg.ops, allowedFields);
+    const { next, applied } = applyEdits(draft, msg.ops, allowedFields, allowedTools);
     setDraft(next);
     setMessages((ms) => ms.map((m, i) => (i === idx ? { ...m, appliedDone: true } : m))
       .concat([{ role: "assistant", text: `Applied: ${applied.map(describeOp).join("; ") || "(nothing new)"}. Remember to Apply changes to save.`, system: true }]));
