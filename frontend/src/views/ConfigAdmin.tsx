@@ -13,7 +13,9 @@ import {
   type Level, type Rule, type RuleResult,
 } from "../config/rules";
 import { schemaFromConfig, foldEnumRulesIntoSchema, KNOWN_STRUCTURES, type ConfigSchema, type SchemaFieldDef, type ToolDef } from "../config/schema";
-import { validateReport, schemaFromAnalysisReport, mergeReportIntoSchema, needsInputPaths, type AnalysisReport } from "../config/analysisReport";
+import { validateReport, schemaFromAnalysisReport, mergeReportIntoSchema, needsInputPaths, reportToGraph, type AnalysisReport } from "../config/analysisReport";
+import ConfigGraph from "./ConfigGraph";
+import Help from "./Help";
 import type { FieldType } from "../config/configVocab";
 import { api } from "../api";
 
@@ -84,7 +86,7 @@ const FIELD_TYPES: FieldType[] = ["string", "number", "boolean", "enum", "secret
 
 // Declares WHICH config options exist and their type-level shape (the DSL). The
 // user stage draws its fields/widgets from this when published; rules layer on top.
-function SchemaEditor({ schema, cfg, onChange }: { schema: ConfigSchema | null; cfg: Config; onChange: (s: ConfigSchema | null) => void }) {
+function SchemaEditor({ schema, cfg, onChange, onReport }: { schema: ConfigSchema | null; cfg: Config; onChange: (s: ConfigSchema | null) => void; onReport?: (r: AnalysisReport, version: number) => void }) {
   const fields = schema?.fields ?? [];
   const setFields = (fs: SchemaFieldDef[]) => onChange({ ...(schema ?? { fields: [] }), fields: fs });
   const patch = (i: number, k: keyof SchemaFieldDef, v: any) => setFields(fields.map((f, j) => (j === i ? { ...f, [k]: v } : f)));
@@ -122,7 +124,8 @@ function SchemaEditor({ schema, cfg, onChange }: { schema: ConfigSchema | null; 
       try {
         const v = await api<{ version: number }>("PUT", "/config/analysis", { report: r, publish: true });
         saveNote = ` · saved as report v${v.version}`;
-      } catch { saveNote = " · (not persisted — restart backend for /config/analysis)"; }
+        onReport?.(r, v.version);
+      } catch { saveNote = " · (not persisted — restart backend for /config/analysis)"; onReport?.(r, 0); }
       const ni = needsInputPaths(r).length, oq = (r.open_questions ?? []).length;
       if (schema && schema.fields.length) {
         const { schema: merged, summary } = mergeReportIntoSchema(schema, r);
@@ -285,6 +288,10 @@ export default function ConfigAdminView() {
   const [dirty, setDirty] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveErr, setSaveErr] = useState("");
+  // The published Stage-0 analysis report (for the architecture diagram + open
+  // questions). Set on load and on import.
+  const [report, setReport] = useState<AnalysisReport | null>(null);
+  const [reportVersion, setReportVersion] = useState(0);
 
   useEffect(() => {
     api<RulesetInfo>("GET", "/config/ruleset").then((r) => {
@@ -292,6 +299,9 @@ export default function ConfigAdminView() {
       if (r.schema) setSchema(r.schema);
       setVersion(r.latest_version); setPublishedVersion(r.published_version);
     }).catch(() => { /* backend down / pre-migration — stay on the seed */ });
+    api<{ published_report: AnalysisReport | null; published_version: number | null }>("GET", "/config/analysis")
+      .then((a) => { if (a.published_report) { setReport(a.published_report); setReportVersion(a.published_version ?? 0); } })
+      .catch(() => { /* no report yet */ });
   }, []);
 
   const results = useMemo(() => evaluateRules(cfg, rules), [cfg, rules]);
@@ -342,7 +352,7 @@ export default function ConfigAdminView() {
       <div className="eyebrow">Config admin</div>
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="chead">
-          <span>Constraint rules</span>
+          <span>Constraint rules<Help topic="rules" /></span>
           <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
             <span className="sub">previewed against a sample config</span>
             {violated > 0
@@ -397,14 +407,44 @@ export default function ConfigAdminView() {
       </div>
 
       <div className="card" style={{ marginBottom: 14 }}>
-        <div className="chead"><span>Available options — schema (DSL)</span>
+        <div className="chead"><span>Available options — schema (DSL)<Help topic="schema" /></span>
           <span className="sub" style={{ marginLeft: "auto" }}>
             {schema?.fields?.length ? `${schema.fields.length} fields declared — the user stage uses these` : "not declared — user stage derives fields from the config"}
           </span></div>
         <div className="cbody">
-          <SchemaEditor schema={schema} cfg={cfg} onChange={(s) => { setSchema(s); setDirty(true); }} />
+          <SchemaEditor schema={schema} cfg={cfg} onChange={(s) => { setSchema(s); setDirty(true); }}
+            onReport={(r, v) => { setReport(r); setReportVersion(v); }} />
         </div>
       </div>
+
+      {report && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="chead"><span>System architecture</span>
+            <span className="sub" style={{ marginLeft: "auto" }}>
+              from analysis report{reportVersion ? ` v${reportVersion}` : ""} · {(report.components ?? []).length} components · {(report.integration_points ?? []).length} integrations
+            </span></div>
+          <div className="cbody"><ConfigGraph graph={reportToGraph(report) as any} /></div>
+        </div>
+      )}
+
+      {report && (report.open_questions ?? []).length > 0 && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="chead"><span>Open questions for Engineering</span>
+            <button className="btn ghost sm" style={{ marginLeft: "auto" }} onClick={() => {
+              const blob = new Blob([JSON.stringify({ system: report.system?.name, open_questions: report.open_questions }, null, 2)], { type: "application/json" });
+              const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `open-questions-${report.system?.name ?? "system"}.json` });
+              a.click(); URL.revokeObjectURL(a.href);
+            }}>Export for Engineering</button></div>
+          <div className="cbody" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {(report.open_questions ?? []).map((q, i) => (
+              <div key={i} className="lintline" style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5 }}>
+                <span className="chip warn" style={{ flex: "0 0 auto" }}><span className="cd" />{q.needs_from || "engineering"}</span>
+                <span style={{ flex: 1 }}>{q.question}{q.about ? <span className="mono sub"> · {q.about}</span> : null}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid2">
         <div className="card">

@@ -11,6 +11,7 @@ import ConnectorsView from "./views/Connectors";
 import ConfigView from "./views/Config";
 import ConfigAdminView from "./views/ConfigAdmin";
 import AdminConsole from "./views/AdminConsole";
+import Help from "./views/Help";
 
 type ViewId = "sops" | "blocks" | "config" | "configAdmin" | "dashboard" | "playground" | "sessions" | "traces" | "connectors";
 
@@ -183,6 +184,7 @@ function ProjectTools({ project }: { project: string }) {
 
   return (
     <>
+      <Help topic="subsystems" />
       <select
         className="qinput" title="Which subsystems run for this project's sessions"
         style={{ width: "auto", padding: "5px 8px", fontSize: 12.5 }}

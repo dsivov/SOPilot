@@ -152,6 +152,39 @@ export function mergeReportIntoSchema(
   };
 }
 
+// Render the report's architecture (components + dependencies + integration
+// points) as a dependency Graph for ConfigGraph. Columns: services → datastores
+// → external/integration points.
+export function reportToGraph(r: AnalysisReport): { nodes: any[]; edges: any[] } {
+  const nodes: any[] = [], edges: any[] = [];
+  const seen = new Set<string>();
+  const colFor = (kind?: string) => (kind === "service" ? 0 : kind === "datastore" ? 1 : 2);
+  const gkindFor = (kind?: string) => (kind === "service" ? "agent" : kind === "datastore" ? "backend" : "mcp");
+  for (const c of r.components ?? []) {
+    if (!c.id || seen.has(c.id)) continue;
+    seen.add(c.id);
+    const exposeN = (c.exposes ?? []).length;
+    nodes.push({ id: c.id, label: c.name || c.id, kind: gkindFor(c.kind), col: colFor(c.kind), status: "info",
+      sub: [c.kind, exposeN ? `${exposeN} endpoint${exposeN === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") });
+  }
+  for (const c of r.components ?? []) {
+    for (const dep of c.depends_on ?? []) {
+      if (seen.has(dep)) edges.push({ from: c.id, to: dep, status: "info" });
+    }
+  }
+  for (const ip of r.integration_points ?? []) {
+    const id = `ip:${ip.name}`;
+    if (!seen.has(id)) {
+      seen.add(id);
+      const tech = ip.technology ? Object.values(ip.technology).filter((v) => typeof v === "string").join("/") : "";
+      nodes.push({ id, label: ip.name, kind: ip.kind === "db" ? "backend" : "mcp", col: 2,
+        status: ip.status === "needs_input" ? "warn" : "info", sub: [ip.kind, tech].filter(Boolean).join(" · ") });
+    }
+    if (ip.component && seen.has(ip.component)) edges.push({ from: ip.component, to: id, status: "info" });
+  }
+  return { nodes, edges };
+}
+
 // A tiny bootstrap "report" derived from a loaded config, so the import flow can
 // be demonstrated without a full analysis run. (Real reports come from Stage 0.)
 export function reportFromConfig(cfg: Config): AnalysisReport {

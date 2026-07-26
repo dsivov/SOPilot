@@ -13,6 +13,7 @@ import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings
 import { ruleFindings, seedRules, type Rule } from "../config/rules";
 import type { ConfigSchema } from "../config/schema";
 import GuidedEditor from "./ConfigEdit";
+import Help from "./Help";
 import { api, getCreds } from "../api";
 
 // A fresh project starts from this empty skeleton — NOT the bundled example
@@ -189,7 +190,7 @@ export default function ConfigView() {
       </div>
 
       <div className="card" style={{ marginBottom: 14 }}>
-        <div className="chead"><span>Guided edit</span>
+        <div className="chead"><span>Guided edit<Help topic="write_back" text="Edit the config within the admin's published schema & rules. Changes are staged here; Apply changes writes them to the config. Blocking rule violations can't be applied." /></span>
           <span className="sub" style={{ marginLeft: "auto" }}>edit within the admin's bounds — blocking violations can't be applied</span></div>
         <div className="cbody">
           <GuidedEditor cfg={cfg} rules={effectiveRules} schema={adminSchema}

@@ -28,7 +28,9 @@ export default function ConfigGraph({ graph }: { graph: Graph }) {
   for (let c = 0; c < 3; c++) {
     const inCol = graph.nodes.filter((n) => n.col === c);
     inCol.forEach((n, i) => {
-      const y = c === 0 ? 200 : TOP + i * (NODE_H + GAP_Y); // agent centred-ish
+      // col 0 with a single node (the classic agent view) is centred-ish; with
+      // several (a report's services) it stacks like the other columns.
+      const y = c === 0 && inCol.length === 1 ? 200 : TOP + i * (NODE_H + GAP_Y);
       pos.set(n.id, { x: COL_X[c], y, w: COL_W[c] });
     });
   }
