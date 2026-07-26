@@ -14,7 +14,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_db
-from ..models import ConfigAnalysisReport, ConfigAnalysisReportVersion, ConfigRuleset, ConfigRulesetVersion
+from ..models import (
+    ConfigAnalysisReport, ConfigAnalysisReportVersion,
+    ConfigDocument, ConfigDocumentVersion,
+    ConfigRuleset, ConfigRulesetVersion,
+)
 from ..tenancy import Scope, resolve_scope
 
 router = APIRouter(prefix="/config", tags=["config"])
@@ -326,6 +330,82 @@ async def save_analysis(
         r.published_version = r.latest_version
     await db.commit()
     return {"version": r.latest_version, "published_version": r.published_version}
+
+
+# ---------- Config document: the robot config itself, DB-versioned ----------
+#
+# The config's durable home (replaces the browser working copy). Stage-2 saves
+# create versions; the published version is the deploy config. One "default"
+# per project.
+
+async def _get_document(db: AsyncSession, scope: Scope) -> ConfigDocument | None:
+    return (await db.execute(select(ConfigDocument).where(
+        ConfigDocument.tenant_id == scope.tenant_id,
+        ConfigDocument.project_id == scope.project_id,
+        ConfigDocument.name == "default"))).scalar_one_or_none()
+
+
+async def _document_version(db: AsyncSession, document_id: str, version: int) -> dict | None:
+    row = (await db.execute(select(ConfigDocumentVersion).where(
+        ConfigDocumentVersion.document_id == document_id,
+        ConfigDocumentVersion.version == version))).scalar_one_or_none()
+    return None if row is None else row.config
+
+
+@router.get("/document")
+async def get_document(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)) -> dict:
+    """The project's config document: latest (editing) + published (deploy),
+    plus the version list. exists=False → nothing saved yet."""
+    d = await _get_document(db, scope)
+    if d is None:
+        return {"exists": False, "latest_version": 0, "published_version": None,
+                "config": None, "published_config": None, "versions": []}
+    versions = (await db.execute(select(ConfigDocumentVersion.version, ConfigDocumentVersion.created_at)
+        .where(ConfigDocumentVersion.document_id == d.id)
+        .order_by(ConfigDocumentVersion.version.desc()))).all()
+    return {
+        "exists": True,
+        "latest_version": d.latest_version,
+        "published_version": d.published_version,
+        "config": await _document_version(db, d.id, d.latest_version),
+        "published_config": (await _document_version(db, d.id, d.published_version)) if d.published_version else None,
+        "versions": [{"version": v, "created_at": c.isoformat()} for v, c in versions],
+    }
+
+
+class DocumentSaveRequest(BaseModel):
+    config: dict = {}
+    publish: bool = False
+
+
+@router.put("/document")
+async def save_document(
+    req: DocumentSaveRequest, scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Save the config as a NEW immutable version; optionally publish (deploy)."""
+    if not isinstance(req.config, dict):
+        raise HTTPException(status_code=422, detail="config must be an object")
+    d = await _get_document(db, scope)
+    if d is None:
+        d = ConfigDocument(tenant_id=scope.tenant_id, project_id=scope.project_id, name="default")
+        db.add(d)
+        await db.flush()
+    d.latest_version += 1
+    db.add(ConfigDocumentVersion(document_id=d.id, version=d.latest_version, config=req.config))
+    if req.publish:
+        d.published_version = d.latest_version
+    await db.commit()
+    return {"version": d.latest_version, "published_version": d.published_version}
+
+
+@router.post("/document/publish")
+async def publish_document(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)) -> dict:
+    d = await _get_document(db, scope)
+    if d is None or d.latest_version == 0:
+        raise HTTPException(status_code=404, detail="no saved config to publish")
+    d.published_version = d.latest_version
+    await db.commit()
+    return {"version": d.latest_version, "published_version": d.published_version}
 
 
 class DraftFieldRequest(BaseModel):

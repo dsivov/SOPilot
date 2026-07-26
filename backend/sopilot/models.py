@@ -226,6 +226,35 @@ class ConfigAnalysisReportVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ConfigDocument(Base):
+    """The robot config.json itself, versioned like SOPs. Stage-2 edits create
+    new versions; published_version is the deploy config. One "default" per
+    project — the DB home for the config (replaces the browser working copy)."""
+
+    __tablename__ = "config_documents"
+    __table_args__ = (UniqueConstraint("tenant_id", "project_id", "name"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    project_id: Mapped[str] = mapped_column(String(32), index=True)
+    name: Mapped[str] = mapped_column(String(100), default="default")
+    latest_version: Mapped[int] = mapped_column(Integer, default=0)
+    published_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class ConfigDocumentVersion(Base):
+    __tablename__ = "config_document_versions"
+    __table_args__ = (UniqueConstraint("document_id", "version"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    document_id: Mapped[str] = mapped_column(ForeignKey("config_documents.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    config: Mapped[dict] = mapped_column(JSON)  # the robot config.json
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ConfigRulesetVersion(Base):
     __tablename__ = "config_ruleset_versions"
     __table_args__ = (UniqueConstraint("ruleset_id", "version"),)
