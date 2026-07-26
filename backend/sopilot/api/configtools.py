@@ -470,6 +470,7 @@ class DraftEditRequest(BaseModel):
     tools: list[dict] = []             # [{name, enabled}] — current tool states
     fields: list[dict] = []            # [{field, value, options?}] — editable scalars (+ enum options)
     rules: list[str] = []              # the admin ruleset, described (bounds shown to the LLM)
+    prompt: str = ""                   # the agent's current global prompt
     structures: dict = {}              # current lists: mcp_servers (urls), knowledge_bases, transfer_topics (ids)
 
 
@@ -482,6 +483,8 @@ _DRAFT_EDIT_SYS = (
     "  {\"op\":\"disable_tool\",\"tool\":<name>}\n"
     "  {\"op\":\"set_field\",\"field\":<dot.path>,\"value\":<string>}\n"
     "  {\"op\":\"unset_field\",\"field\":<dot.path>}\n"
+    "  {\"op\":\"set_prompt\",\"value\":<the full new agent prompt>}\n"
+    "  {\"op\":\"append_prompt\",\"value\":<text to add to the agent prompt>}\n"
     "  {\"op\":\"add_mcp_server\",\"url\":<url>,\"authorization\":<optional bearer>}\n"
     "  {\"op\":\"remove_mcp_server\",\"url\":<existing url>}\n"
     "  {\"op\":\"add_kb\",\"knowledge_id\":<id>,\"index_mode\":\"simple\"|\"lightrag\",\"function_tag\":<optional>}\n"
@@ -492,6 +495,9 @@ _DRAFT_EDIT_SYS = (
     "names. Stay within the ADMIN RULES (allowed enum options only; if enabling a tool or adding a structure "
     "requires a field per a rule, include the set_field — placeholder value only when none can be inferred).\n\n"
     "HOW THIS CONFIG WORKS (use to answer 'how do I…' questions):\n"
+    "- The agent PROMPT is the robot's global instructions/persona. To change or extend it, use set_prompt "
+    "(replace the whole prompt) or append_prompt (add to it) — write the actual prompt text. It is the agent's "
+    "behavior when no SOP is bound.\n"
     "- Built-in TOOLS are capabilities toggled on/off (send_email, transfer, show_table, …).\n"
     "- EXTERNAL DATA/KNOWLEDGE (weather, flight status, prices, any live or document data the agent should draw on) "
     "comes through a CONNECTOR — an MCP server, a RAG/HTTP endpoint, or a managed corpus — registered in the "
@@ -533,13 +539,15 @@ async def draft_edit(req: DraftEditRequest, scope: Scope = Depends(resolve_scope
         + "  mcp_servers: " + _json.dumps((req.structures.get("mcp_servers") or [])[:20])
         + "\n  knowledge_bases: " + _json.dumps((req.structures.get("knowledge_bases") or [])[:20])
         + "\n  transfer_topics: " + _json.dumps((req.structures.get("transfer_topics") or [])[:20])
+        + "\n\nCURRENT AGENT PROMPT:\n" + (req.prompt[:2000] or "(empty)")
         + "\n\nCHANGE REQUEST:\n" + req.instruction[:1000]
     )
     try:
         res = await client().chat.completions.create(
             model=get_settings().builder_model,
             messages=[{"role": "system", "content": _DRAFT_EDIT_SYS}, {"role": "user", "content": user}],
-            temperature=0.1, max_tokens=500, response_format={"type": "json_object"},
+            # prompt edits can be long — allow room for a full rewritten prompt
+            temperature=0.1, max_tokens=1500, response_format={"type": "json_object"},
         )
         data = _json.loads(res.choices[0].message.content or "{}")
     except Exception as e:  # LLM/key issue — surface, don't 500
@@ -556,6 +564,8 @@ async def draft_edit(req: DraftEditRequest, scope: Scope = Depends(resolve_scope
             edits.append({"op": op, "field": str(e["field"]), "value": str(e.get("value", ""))})
         elif op == "unset_field" and e.get("field"):
             edits.append({"op": op, "field": str(e["field"])})
+        elif op in ("set_prompt", "append_prompt") and e.get("value"):
+            edits.append({"op": op, "value": str(e["value"])[:8000]})
         elif op in ("add_mcp_server", "remove_mcp_server") and e.get("url"):
             out_e = {"op": op, "url": str(e["url"])}
             if op == "add_mcp_server" and e.get("authorization"):

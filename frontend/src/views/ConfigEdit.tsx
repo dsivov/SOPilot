@@ -38,6 +38,8 @@ export type EditOp =
   | { op: "disable_tool"; tool: string }
   | { op: "set_field"; field: string; value: string }
   | { op: "unset_field"; field: string }
+  | { op: "set_prompt"; value: string }
+  | { op: "append_prompt"; value: string }
   | { op: "add_mcp_server"; url: string; authorization?: string }
   | { op: "remove_mcp_server"; url: string }
   | { op: "add_kb"; knowledge_id: string; index_mode?: string; function_tag?: string }
@@ -51,6 +53,8 @@ export function describeOp(e: EditOp): string {
     case "disable_tool": return `Disable ${e.tool}`;
     case "set_field": return `Set ${e.field} = "${e.value}"`;
     case "unset_field": return `Clear ${e.field}`;
+    case "set_prompt": return `Set the agent prompt (${e.value.length} chars)`;
+    case "append_prompt": return `Append to the agent prompt: "${e.value.slice(0, 60)}${e.value.length > 60 ? "…" : ""}"`;
     case "add_mcp_server": return `Add MCP server ${e.url}`;
     case "remove_mcp_server": return `Remove MCP server ${e.url}`;
     case "add_kb": return `Add knowledge base "${e.knowledge_id}" (${e.index_mode || "simple"})`;
@@ -75,6 +79,12 @@ export function applyEdits(draft: Config, edits: EditOp[], allowedFields: Set<st
       case "set_field": case "unset_field":
         if (!allowedFields.has(e.field)) { skipped.push(e); continue; }
         next = setPath(next, e.field, e.op === "set_field" ? e.value : "");
+        break;
+      case "set_prompt":
+        next = setPath(next, "prompt", e.value);
+        break;
+      case "append_prompt":
+        next = setPath(next, "prompt", [String(next.prompt ?? "").trim(), e.value].filter(Boolean).join("\n\n"));
         break;
       case "add_mcp_server":
         if (!e.url.trim() || list("mcp_servers").some((m) => m.url === e.url)) { skipped.push(e); continue; }
@@ -230,6 +240,7 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
         tools: toolNames.map((t) => ({ name: t, enabled: draft.tools?.[t]?.enabled === true })),
         fields: [...allowedFields].map((f) => ({ field: f, value: get(draft, f) ?? null, options: enumFor(f)?.options })),
         rules: rules.map(describeRule),
+        prompt: String(draft.prompt ?? ""),
         structures: {
           mcp_servers: listOf("mcp_servers").map((m) => String(m.url ?? "")),
           knowledge_bases: listOf("knowledge_base").map((k) => ({ knowledge_id: String(k.knowledge_id ?? ""), index_mode: String(k.index_mode ?? "simple") })),
@@ -359,6 +370,17 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
           </div>
           );
         })()}
+      </div>
+
+      {/* Agent prompt — the robot's global instructions. Central when there's no
+          SOP; edited here directly (free-text, so not a scalar schema field). */}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>
+          Agent prompt <span className="sub" style={{ textTransform: "none", fontWeight: 400 }}>· the robot's global instructions</span>
+        </div>
+        <textarea className="area" rows={5} style={{ width: "100%" }}
+          placeholder="e.g. You are Ava, a friendly front-desk assistant. Keep replies short and factual…"
+          value={String(draft.prompt ?? "")} onChange={(e) => setDraft((d) => setPath(d, "prompt", e.target.value))} />
       </div>
 
       <div className="grid2">
