@@ -312,7 +312,7 @@ export default function App() {
   useEffect(() => {
     if (!connected) return;
     api<{ tenant_slug: string }>("GET", "/admin/whoami")
-      .then((w) => setTenantSlug(w.tenant_slug))
+      .then((w) => { setTenantSlug(w.tenant_slug); localStorage.setItem("sopilot-tenant", w.tenant_slug); })
       .catch(() => setTenantSlug(""));
   }, [connected]);
 

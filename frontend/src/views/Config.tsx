@@ -15,12 +15,20 @@ import type { ConfigSchema } from "../config/schema";
 import GuidedEditor from "./ConfigEdit";
 import { api, getCreds } from "../api";
 
-// The working config is persisted per project in this browser, so edits survive
-// navigating away and reloads (previously it reset to the example on every mount
-// — edits looked "saved" on the graph but were lost on tab switch). Export /
-// "Download robot config" is the durable, cross-device artifact; this is the
-// local working copy.
-const cfgStoreKey = () => `sopilot-config:${getCreds().project || "default"}`;
+// A fresh project starts from this empty skeleton — NOT the bundled example
+// (which is a real, sanitized robot config; showing it by default made every
+// new tenant look like it "already had" that customer's config). The example
+// stays available behind an explicit "Load example" button.
+const EMPTY_CONFIG: Record<string, any> = {
+  display_name: "", voice: "", default_language_iso: "",
+  tools: {}, mcp_servers: [], knowledge_base: [], transfer_topics: [],
+};
+
+// The working config is persisted per TENANT+project in this browser (keyed by
+// the tenant so two tenants that both have a "main" project can't share a
+// working copy). Export / "Download robot config" is the durable artifact.
+const tenantTag = () => (localStorage.getItem("sopilot-tenant") || "t").slice(0, 24);
+const cfgStoreKey = () => `sopilot-config:${tenantTag()}:${getCreds().project || "default"}`;
 function loadStoredConfig(): Record<string, any> | null {
   try { const s = localStorage.getItem(cfgStoreKey()); return s ? JSON.parse(s) : null; } catch { return null; }
 }
@@ -43,7 +51,7 @@ function Findings({ items }: { items: Finding[] }) {
 }
 
 export default function ConfigView() {
-  const initial = loadStoredConfig() ?? (EXAMPLE as Record<string, any>);
+  const initial = loadStoredConfig() ?? EMPTY_CONFIG;
   const [text, setText] = useState(JSON.stringify(initial, null, 2));
   const [cfg, setCfg] = useState<Record<string, any>>(initial);
   const [err, setErr] = useState("");
@@ -90,7 +98,7 @@ export default function ConfigView() {
 
   const load = (v: string) => { try { setCfg(JSON.parse(v)); setErr(""); setLogicalLive(null); } catch (e: any) { setErr(String(e?.message ?? e)); } };
   const preset = (c: any) => { setText(JSON.stringify(c, null, 2)); setCfg(c); setErr(""); setIntro(MCP_INTROSPECTION); setLive(false); setLogicalLive(null); };
-  const resetToExample = () => { try { localStorage.removeItem(cfgStoreKey()); } catch { /* ignore */ } preset(EXAMPLE); };
+  const resetEmpty = () => { try { localStorage.removeItem(cfgStoreKey()); } catch { /* ignore */ } preset(EMPTY_CONFIG); };
 
   const validate = async () => {
     setBusy2(true);
@@ -149,8 +157,9 @@ export default function ConfigView() {
           <span>Robot config.json</span>
           <span className="sub" style={{ fontSize: 11 }}>· saved in this browser</span>
           <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            <button className="btn ghost sm" onClick={resetToExample} title="Discard the locally-saved working config and reload the example">Reset to example</button>
+            <button className="btn ghost sm" onClick={() => preset(EXAMPLE)} title="Load the bundled example (a sanitized real robot config) into this working copy">Load example</button>
             <button className="btn ghost sm" onClick={() => preset(SAMPLE_CONFIG)}>Sample</button>
+            <button className="btn ghost sm" onClick={resetEmpty} title="Clear the locally-saved working config back to an empty config">Reset</button>
             {problems > 0 && <span className="chip crit"><span className="cd" />{problems} problem{problems === 1 ? "" : "s"}</span>}
             <button className="btn sm ghost" onClick={downloadRobot} disabled={renderBusy || problems > 0}
               title={problems > 0 ? "Fix the errors first — a config with problems can't be deployed" : "Resolve connector/secret references server-side and download the deploy-ready config.json"}>
