@@ -24,11 +24,6 @@ class IngestRequest(BaseModel):
     source_filename: str = ""
 
 
-class BuildTurnRequest(BaseModel):
-    history: list[dict]  # [{"role": "user"|"assistant", "content": str}]
-    current_definition: dict
-
-
 class LintDefinitionRequest(BaseModel):
     definition: dict
 
@@ -109,26 +104,6 @@ async def ingest_file(
     return await ingest(
         IngestRequest(text=text, name_hint=name_hint, source_filename=file.filename or ""), scope, db
     )
-
-
-@router.post("/build-turn")
-async def build_turn_route(req: BuildTurnRequest, scope: Scope = Depends(resolve_scope)) -> dict:
-    """One conversational refinement turn. Stateless: the Studio holds the working
-    definition and saves explicitly (PUT) when the author is happy."""
-    from ..builder import build_turn
-
-    try:
-        message, updated, is_complete = await build_turn(req.history, req.current_definition)
-    except Exception as e:  # noqa: BLE001 — surface patch/schema failures to the editor
-        raise HTTPException(status_code=422, detail=f"builder turn failed: {e}") from e
-    task_def = TaskDefinition.model_validate(updated)
-    problems = SOPGraph(task_def).lint()
-    return {
-        "assistant_message": message,
-        "definition": task_def.model_dump(),
-        "is_complete": is_complete,
-        "lint": {"problems": problems, "publishable": not problems},
-    }
 
 
 async def _get_sop(db: AsyncSession, scope: Scope, sop_id: str) -> Sop:

@@ -31,11 +31,6 @@ class ConnectorTestRequest(BaseModel):
     query: str = "connectivity test — say hello"
 
 
-class ConnectorSuggestRequest(BaseModel):
-    instruction: str = ""              # e.g. "http://host:9621 — I need current weather by city"
-    history: list[dict] = []           # prior chat turns [{role, content}] — conversational memory
-
-
 # ---- discovery: given a base URL, find its API surface (MCP tools or OpenAPI) ----
 
 _URL_RE = None
@@ -131,31 +126,6 @@ async def _probe_openapi(url: str) -> dict | None:
                 return {"kind": "openapi", "base_url": api_base.rstrip("/"),
                         "title": info.get("title", ""), "count": len(items), "items": items}
     return None
-
-
-_SUGGEST_SYS = (
-    "You help an operator configure a DATA CONNECTOR for a voice-agent platform. You are given (a) a discovered API "
-    "surface — either MCP tools or OpenAPI/FastAPI endpoints found at a URL — and (b) the functionality the operator "
-    "wants. Pick the SINGLE most relevant tool/endpoint for that functionality and propose a connector config. If "
-    "several fit, pick the best and mention alternatives in the reply. NEVER invent a tool, endpoint, or path that is "
-    "not in the discovered list.\n\n"
-    "Connector kinds and their config shape:\n"
-    "  MCP  → kind:\"mcp\",  config:{ \"server\":<the base_url>, \"tool\":<discovered tool name>, "
-    "\"query_arg\":<the tool arg that takes the search/query text, if any>, \"auth_header\":<e.g. X-API-Key, only if "
-    "auth is needed>, \"auth_secret\":<a snake_case NAME for the tenant secret to hold the key, only if auth is needed> }\n"
-    "  HTTP → kind:\"http\", config:{ \"url\":<base_url + the chosen path>, \"method\":<GET|POST>, "
-    "\"query_field\":<the request field/param that receives the query text, if any>, \"result_path\":<dot-path into the "
-    "response JSON to the useful payload, if obvious>, \"auth_header\":<only if needed>, \"auth_secret\":<secret NAME, "
-    "only if needed> }\n"
-    "Never put a real credential in the config — only the secret NAME the operator will create. Suggest a short "
-    "snake_case connector name.\n\n"
-    "Return ONLY JSON: {\"reply\":\"<a short, helpful explanation of what you picked and why, and any auth the operator "
-    "must set up>\", \"suggestion\":{ \"kind\":..., \"name\":..., \"description\":..., \"config\":{...} }, "
-    "\"relevant\":[ {\"id\":<the exact discovered tool name, or \"METHOD /path\">, \"why\":<one short phrase>} ] }. "
-    "In \"relevant\", list EVERY discovered item that could plausibly serve the request, most relevant first (up to 6), "
-    "so the operator can compare — even ones you didn't pick as the primary suggestion. If nothing in the surface fits, "
-    "return the reply explaining that, an empty \"relevant\", and omit \"suggestion\" (or set it null)."
-)
 
 
 async def _get(db: AsyncSession, scope: Scope, name: str) -> Connector:
@@ -300,75 +270,6 @@ async def delete_connector(
     await db.delete(row)
     await db.commit()
     return {"deleted": name}
-
-
-@router.post("/suggest")
-async def suggest_connector(req: ConnectorSuggestRequest, scope: Scope = Depends(resolve_scope)) -> dict:
-    """AI-assisted connector discovery: given an API URL and a desired capability,
-    probe the URL (MCP list_tools, else an OpenAPI/FastAPI spec), then have the LLM
-    pick the relevant tool/endpoint and propose a connector config the operator can
-    apply. Fetches an operator-supplied URL server-side — Studio (admin) surface."""
-    import json as _json
-
-    from ..bench.llm import client
-    from ..config import get_settings
-
-    if not req.instruction.strip():
-        return {"error": "empty instruction"}
-    urls = _extract_urls(req.instruction, *[str(h.get("content", "")) for h in reversed(req.history)])
-    if not urls:
-        return {"reply": "Give me the API base URL (e.g. https://host:9621) and what you want it to do — "
-                         "I'll probe it for MCP tools or an OpenAPI spec and suggest a connector.", "suggestion": None}
-    probed = urls[0]
-    discovered = await _probe_mcp(probed) or await _probe_openapi(probed)
-    if not discovered:
-        return {"probed_url": probed, "discovered": {"kind": "none", "count": 0, "items": []},
-                "reply": f"I couldn't discover an API surface at {probed}. It didn't respond as an MCP server "
-                         f"(list_tools) and I found no OpenAPI spec at /openapi.json. Check the URL/port is reachable "
-                         f"from the SOPilot backend, or paste the exact MCP or /openapi.json URL.", "suggestion": None}
-
-    if discovered["kind"] == "mcp":
-        surface = "DISCOVERED MCP TOOLS (base_url " + discovered["base_url"] + "):\n" + "\n".join(
-            f"  - {it['name']}({', '.join(it['args'])}) — {it['description']}" for it in discovered["items"])
-    else:
-        surface = (f"DISCOVERED OPENAPI ENDPOINTS (title {discovered.get('title','')!r}, base_url "
-                   + discovered["base_url"] + "):\n" + "\n".join(
-                       f"  - {it['method']} {it['path']} — {it['summary']} {it['description']}".rstrip()
-                       for it in discovered["items"]))
-    user = surface + "\n\nWHAT THE OPERATOR WANTS:\n" + req.instruction[:1000]
-    hist_msgs = [
-        {"role": "assistant" if h.get("role") == "assistant" else "user", "content": str(h.get("content", ""))[:1500]}
-        for h in req.history[-10:] if h.get("content")
-    ]
-    try:
-        res = await client().chat.completions.create(
-            model=get_settings().builder_model,
-            messages=[{"role": "system", "content": _SUGGEST_SYS}, *hist_msgs, {"role": "user", "content": user}],
-            temperature=0.1, max_tokens=900, response_format={"type": "json_object"},
-        )
-        data = _json.loads(res.choices[0].message.content or "{}")
-    except Exception as e:  # LLM/key issue — still return what we discovered
-        return {"probed_url": probed, "discovered": discovered,
-                "reply": f"Discovered {discovered['count']} {discovered['kind']} item(s) at {discovered['base_url']}, "
-                         f"but suggestion drafting is unavailable ({type(e).__name__}).", "suggestion": None}
-
-    sug = data.get("suggestion") if isinstance(data, dict) else None
-    suggestion = None
-    if isinstance(sug, dict) and sug.get("kind") in CONNECTOR_KINDS and isinstance(sug.get("config"), dict):
-        # never nest a connector ref; drop null/empty values the model left as placeholders
-        cfg = {k: v for k, v in sug["config"].items() if k != "connector" and v not in (None, "")}
-        suggestion = {"kind": sug["kind"], "name": str(sug.get("name") or "").strip(),
-                      "description": str(sug.get("description") or "")[:200], "config": cfg}
-    # "why is this useful" notes, keyed to the discovered items so the UI can annotate them
-    why: dict[str, str] = {}
-    for r in (data.get("relevant") if isinstance(data, dict) else None) or []:
-        if isinstance(r, dict) and r.get("id"):
-            why[str(r["id"]).strip()] = str(r.get("why") or "")[:160]
-    return {"probed_url": probed,
-            "discovered": {"kind": discovered["kind"], "base_url": discovered["base_url"],
-                           "count": discovered["count"], "items": discovered["items"][:40]},
-            "relevant": why,
-            "reply": str((data or {}).get("reply") or ""), "suggestion": suggestion}
 
 
 @router.post("/{name}/test")
