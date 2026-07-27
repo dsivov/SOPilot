@@ -11,7 +11,20 @@ import { api } from "./api";
 import { useCopilotBridge, type CopilotProposal } from "./copilot/bridge";
 
 type Warning = { level: "warn" | "error"; msg: string };
-type Msg = { role: "user" | "assistant"; content: string; tab?: string; warnings?: Warning[]; remembered?: string[]; proposal?: CopilotProposal | null; applied?: boolean; system?: boolean };
+type DiscItem = { name?: string; description?: string; args?: string[]; method?: string; path?: string; summary?: string };
+type Discovered = { kind: string; base_url?: string; count: number; items?: DiscItem[] };
+type Msg = { role: "user" | "assistant"; content: string; tab?: string; warnings?: Warning[]; remembered?: string[]; proposal?: CopilotProposal | null; discovered?: Discovered | null; showAll?: boolean; applied?: boolean; system?: boolean };
+
+// Build a connector proposal from a discovered item — so the operator can pick
+// ANY tool/endpoint, not just the copilot's recommendation.
+function connectorFromItem(d: Discovered, it: DiscItem): CopilotProposal {
+  if (d.kind === "mcp") {
+    const qa = (it.args ?? []).find((a) => /^(query|question|text|prompt|q|search)$/i.test(a)) ?? (it.args ?? [])[0];
+    return { kind: "connector", summary: `Use ${it.name}`, payload: { kind: "mcp", name: it.name, description: it.description ?? "", config: { url: d.base_url ?? "", tool: it.name, ...(qa ? { query_arg: qa } : {}) } } };
+  }
+  const leaf = (it.path ?? "").split("/").filter(Boolean).pop() ?? "endpoint";
+  return { kind: "connector", summary: `Use ${it.method} ${it.path}`, payload: { kind: "http", name: leaf.replace(/[^a-z0-9_]+/gi, "_").toLowerCase(), description: it.summary ?? "", config: { url: (d.base_url ?? "") + (it.path ?? ""), method: it.method ?? "GET" } } };
+}
 type Mem = { id: string; kind: string; title: string; content: string; source: string; tenant_wide: boolean; updated_at: string };
 
 // view id → the label the copilot shows as "you're on …"
@@ -34,10 +47,10 @@ export default function CopilotPanel({ view, project }: { view: string; project:
 
   const loadThread = useCallback(() => {
     api<{ messages: Msg[] }>("GET", "/copilot/thread")
-      .then((r) => setMsgs((r.messages || []).map((m) => ({
-        role: m.role, content: m.content, tab: m.tab,
-        warnings: (m as { meta?: { warnings?: Warning[] } }).meta?.warnings,
-      }))))
+      .then((r) => setMsgs((r.messages || []).map((m) => {
+        const meta = (m as { meta?: { warnings?: Warning[]; discovered?: Discovered; proposal?: CopilotProposal } }).meta;
+        return { role: m.role, content: m.content, tab: m.tab, warnings: meta?.warnings, discovered: meta?.discovered, proposal: meta?.proposal };
+      })))
       .catch(() => { /* offline / not migrated — start empty */ });
   }, []);
   const loadMemory = useCallback(() => {
@@ -56,11 +69,11 @@ export default function CopilotPanel({ view, project }: { view: string; project:
     setBusy(true);
     try {
       const snapshot = (bridge?.getSnapshot() as Record<string, unknown>) ?? {};
-      const r = await api<{ reply?: string; warnings?: Warning[]; remembered?: string[]; role?: string; proposal?: CopilotProposal | null; error?: string }>(
+      const r = await api<{ reply?: string; warnings?: Warning[]; remembered?: string[]; role?: string; proposal?: CopilotProposal | null; discovered?: Discovered | null; error?: string }>(
         "POST", "/copilot/assist", { tab: view, instruction: q, snapshot });
       if (r.error) { setMsgs((m) => [...m, { role: "assistant", content: r.error!, warnings: [{ level: "error", msg: r.error! }] }]); return; }
       if (r.role) setRole(r.role);
-      setMsgs((m) => [...m, { role: "assistant", content: r.reply || "", warnings: r.warnings, remembered: r.remembered, proposal: r.proposal }]);
+      setMsgs((m) => [...m, { role: "assistant", content: r.reply || "", warnings: r.warnings, remembered: r.remembered, proposal: r.proposal, discovered: r.discovered }]);
       if (r.remembered && r.remembered.length) loadMemory();
     } catch (e: unknown) {
       const msg = String((e as { message?: string })?.message ?? e);
@@ -95,6 +108,14 @@ export default function CopilotPanel({ view, project }: { view: string; project:
     setMsgs((m) => m.map((x, i) => (i === idx ? { ...x, applied: true } : x))
       .concat([{ role: "assistant", system: true, content: note || "Applied to the editor — review and save." }]));
   };
+
+  const applyItem = (d: Discovered, it: DiscItem) => {
+    const p = connectorFromItem(d, it);
+    const fn = bridge?.getApply();
+    const note = fn ? fn(p) : null;
+    setMsgs((m) => m.concat([{ role: "assistant", system: true, content: note || `Open the Connectors tab to apply "${p.summary}".` }]));
+  };
+  const toggleShowAll = (idx: number) => setMsgs((m) => m.map((x, i) => (i === idx ? { ...x, showAll: !x.showAll } : x)));
 
   const wchip = (w: Warning, i: number) => (
     <div key={i} style={{ fontSize: 11.5, marginTop: 3, color: w.level === "error" ? "var(--crit)" : "var(--warn)" }}>
@@ -167,12 +188,39 @@ export default function CopilotPanel({ view, project }: { view: string; project:
             {(m.warnings ?? []).map(wchip)}
             {m.proposal && (
               <div style={{ marginTop: 8, border: "1px solid var(--accent, #3b6ef5)", borderRadius: 8, padding: "7px 9px", background: "var(--surface)" }}>
-                <div style={{ fontSize: 11.5, marginBottom: 5 }}><b>Proposed:</b> {m.proposal.summary || m.proposal.kind}</div>
+                <div style={{ fontSize: 11.5, marginBottom: 5 }}><b>{m.proposal.kind === "connector" ? "★ Recommended:" : "Proposed:"}</b> {m.proposal.summary || m.proposal.kind}</div>
                 {m.applied
                   ? <span className="sub" style={{ fontSize: 11 }}>applied ✓</span>
                   : <button className="btn sm primary" onClick={() => applyProposal(i)}>Apply to editor</button>}
               </div>
             )}
+            {m.discovered && m.discovered.kind !== "none" && (() => {
+              const d = m.discovered!; const items = d.items ?? [];
+              const shown = m.showAll ? items : items.slice(0, 4);
+              return (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 5, flexWrap: "wrap" }}>
+                    <span className="chip good" style={{ fontSize: 11 }}><span className="cd" />{d.count} {d.kind} item{d.count === 1 ? "" : "s"} found</span>
+                    {items.length > 4 && <button className="btn ghost sm" onClick={() => toggleShowAll(i)}>{m.showAll ? "Show fewer" : `Browse all ${d.count}`}</button>}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    {shown.map((it, j) => {
+                      const label = d.kind === "mcp" ? it.name : `${it.method} ${it.path}`;
+                      const desc = d.kind === "mcp" ? it.description : it.summary;
+                      return (
+                        <div key={j} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: "6px 8px", background: "var(--surface)" }}>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <b className="mono" style={{ fontSize: 11.5, wordBreak: "break-all" }}>{label}</b>
+                            <button className="btn ghost sm" style={{ marginLeft: "auto" }} onClick={() => applyItem(d, it)}>Use this</button>
+                          </div>
+                          {desc && <div className="sub" style={{ fontSize: 11, marginTop: 2, lineHeight: 1.4 }}>{desc}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
             {(m.remembered?.length ?? 0) > 0 && <div className="sub" style={{ fontSize: 11, marginTop: 4 }}>🧠 remembered: {m.remembered!.join(", ")}</div>}
           </div>
         ))}

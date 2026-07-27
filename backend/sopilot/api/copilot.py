@@ -258,6 +258,7 @@ async def assist(req: AssistRequest, scope: Scope = Depends(resolve_scope),
     # or an OpenAPI spec) so the copilot can propose a real connector — the
     # discovery capability folded in from the old standalone connector assistant.
     discovery_block = ""
+    disc = None
     if req.tab == "connectors":
         from .connectors import _extract_urls, _probe_mcp, _probe_openapi
         urls = _extract_urls(req.instruction, *[str(h.get("content", "")) for h in reversed(hist_msgs)])
@@ -302,6 +303,12 @@ async def assist(req: AssistRequest, scope: Scope = Depends(resolve_scope),
     if isinstance(prop, dict) and isinstance(prop.get("kind"), str) and isinstance(prop.get("payload"), dict):
         proposal = {"kind": prop["kind"][:40], "summary": str(prop.get("summary") or "")[:200], "payload": prop["payload"]}
 
+    # Surface what a connector-tab probe discovered, so the panel can show the full
+    # tool/endpoint list and let the operator browse and pick any of them.
+    discovered = None
+    if disc:
+        discovered = {"kind": disc["kind"], "base_url": disc["base_url"], "count": disc["count"], "items": disc["items"][:40]}
+
     # Persist durable memory the assistant chose to keep (dedupe by title, tenant-wide).
     remembered: list[str] = []
     for r in ((data.get("remember") if isinstance(data, dict) else None) or [])[:6]:
@@ -320,12 +327,13 @@ async def assist(req: AssistRequest, scope: Scope = Depends(resolve_scope),
 
     # Persist the conversation turns.
     db.add(CopilotMessage(thread_id=thread.id, role="user", tab=req.tab, content=req.instruction[:4000]))
-    a_meta = {k: v for k, v in {"warnings": warnings, "remembered": remembered, "proposal": proposal}.items() if v}
+    a_meta = {k: v for k, v in {"warnings": warnings, "remembered": remembered, "proposal": proposal, "discovered": discovered}.items() if v}
     db.add(CopilotMessage(thread_id=thread.id, role="assistant", tab=req.tab, content=reply[:8000],
                           meta=a_meta or None))
     await db.commit()
 
-    return {"reply": reply, "warnings": warnings, "remembered": remembered, "proposal": proposal, "role": role}
+    return {"reply": reply, "warnings": warnings, "remembered": remembered, "proposal": proposal,
+            "discovered": discovered, "role": role}
 
 
 # ---------- conversation ----------
