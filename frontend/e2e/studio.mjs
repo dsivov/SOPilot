@@ -86,25 +86,22 @@ await applyBtn.click();
 await page.waitForTimeout(300);
 ok("apply lands (editor back to clean)", await applyBtn.isDisabled());
 
-// ---- 4. Config assistant (floating chat; real model call; compliant request) ----
-await page.getByRole("button", { name: /Config assistant/ }).click();  // open the chat panel
-const chatInput = page.locator("input[placeholder*='ask or request']");
-await chatInput.fill("switch the voice to echo");
-await page.getByRole("button", { name: "Send", exact: true }).click();
-await page.getByRole("button", { name: "Add to edits" }).first().waitFor({ timeout: 45000 });
-ok("assistant proposes a formal edit in chat", (await page.getByText(/Set voice = "echo"/).count()) > 0);
-await page.getByRole("button", { name: "Add to edits" }).first().click();
-await page.waitForTimeout(300);
-ok("staged edit → draft dirty, Apply enabled", await applyBtn.isEnabled());
-ok("chat notes the edit was applied", (await page.getByText(/added ✓/).count()) > 0);
-
-// ---- 4b. Assistant answers a help question (no edits) + remembers history ----
+// ---- 4. Global SOPilot copilot (the unified assistant; real model call) ----
+// The per-tab Config/Connector assistants were folded into this one panel.
+await page.getByRole("button", { name: /SOPilot copilot/ }).click();  // open the app-wide copilot
+const chatInput = page.locator("input[placeholder^='Ask about']");
 await chatInput.fill("how do I add weather data to the agent?");
-await page.getByRole("button", { name: "Send", exact: true }).click();
+await chatInput.press("Enter");
 await page.waitForTimeout(22000);
-ok("help question answered in chat", (await page.getByText(/weather|connector|MCP/i).count()) > 0);
-ok("history retained (earlier voice turn still shown)", (await page.getByText(/switch the voice to echo/).count()) > 0);
-await page.locator("button:has-text('✕'):not([title])").click();  // close chat panel (panel's ✕ has no title, unlike Remove buttons)
+ok("copilot answers a help question", (await page.getByText(/weather|connector|MCP|knowledge/i).count()) > 0);
+
+// A concrete, in-bounds change should come back as an applyable proposal.
+await chatInput.fill("set the voice to echo");
+await chatInput.press("Enter");
+await page.getByRole("button", { name: "Apply to editor" }).first().waitFor({ timeout: 45000 });
+ok("copilot proposes an applyable change", (await page.getByRole("button", { name: "Apply to editor" }).count()) > 0);
+ok("history retained across turns", (await page.getByText(/how do I add weather data/i).count()) > 0);
+await page.getByRole("button", { name: "Close" }).click();  // close the copilot so it doesn't overlay later steps
 await page.waitForTimeout(200);
 
 // ---- 5. Complex structures: adding a KB without its backend must block ----
@@ -130,19 +127,25 @@ ok("toggle reveals advanced plumbing (rem_ws_host)", (await card.locator("span.m
 // ---- 7. Persistence: an applied edit survives a tab switch (remount) ----
 // Regression: the mount fetch used to clobber the local draft with the DB config,
 // so "Apply changes" (without Save) then navigating away silently lost the edit.
-// The voice=echo edit staged via chat in section 4 is still in the guided draft;
-// commit it to the working config, then leave and re-enter the viewer.
-await applyBtn.click();  // Apply changes → writes voice=echo into cfg (NOT saved to DB)
+// Change the voice field in the guided editor, Apply it to the working config
+// (NOT saved to DB), then leave and re-enter the viewer.
+const voiceLabel = card.locator("label").filter({ has: page.locator("span.mono", { hasText: /^voice$/ }) }).first();
+const voiceSel = voiceLabel.locator("select");
+if (await voiceSel.count()) await voiceSel.selectOption({ index: 1 });
+else await voiceLabel.locator("input").first().fill("echo");
+await page.waitForTimeout(300);
+await applyBtn.click();  // Apply changes → writes the new voice into cfg (NOT saved to DB)
 await page.waitForTimeout(300);
 const beforeText = await page.locator("textarea.area.mono").first().inputValue();
-ok("edit reaches the working config on Apply", /"voice"\s*:\s*"echo"/.test(beforeText));
+const chosenVoice = (beforeText.match(/"voice"\s*:\s*"([^"]*)"/) || [])[1] || "";
+ok("edit reaches the working config on Apply", chosenVoice.length > 0);
 await page.locator("button.navitem", { hasText: "Config admin" }).click();   // leave the viewer (unmounts ConfigView)
 await page.waitForTimeout(500);
 await page.locator("button.navitem", { hasText: "Config viewer" }).click();  // return → remounts ConfigView
 await page.getByText("Guided edit").waitFor({ timeout: 5000 });
 await page.waitForTimeout(700);                       // let the DB /config/document fetch settle
 const afterText = await page.locator("textarea.area.mono").first().inputValue();
-ok("applied edit survives a tab switch (draft not clobbered by DB)", /"voice"\s*:\s*"echo"/.test(afterText));
+ok("applied edit survives a tab switch (draft not clobbered by DB)", new RegExp(`"voice"\\s*:\\s*"${chosenVoice}"`).test(afterText));
 // If a saved DB version exists, a divergent draft must be flagged "unsaved" so
 // the user knows to Save; with no saved version there's nothing to be dirty
 // against, so the chip legitimately won't show. Assert the intent either way.

@@ -1,39 +1,10 @@
 // Connector registry (D-10): configure, monitor, and live-test the retrieval
 // systems behind background prefetch. Connection details live here; SOP stages
 // bind by name via data_dependencies[].config.connector.
-import { KeyRound, Plug, Save, Sparkles, Send, Trash2, X, Zap } from "lucide-react";
+import { KeyRound, Plug, Save, Trash2, Zap } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import { useCopilotApply, useCopilotSnapshot } from "../copilot/bridge";
-
-type Suggestion = { kind: string; name: string; description: string; config: Record<string, unknown> };
-type DiscItem = { name?: string; description?: string; args?: string[]; method?: string; path?: string; summary?: string };
-type Discovered = { kind: string; base_url?: string; count: number; items?: DiscItem[] };
-type ChatMsg = {
-  role: "user" | "assistant"; text: string;
-  suggestion?: Suggestion | null;
-  discovered?: Discovered | null;
-  relevant?: Record<string, string>;   // item id ("tool" or "METHOD /path") → why it's relevant
-  showAll?: boolean;                    // UI: browse-all expanded
-  error?: boolean; system?: boolean;
-};
-
-// Stable id for a discovered item — matches what the LLM keys "relevant" on.
-const itemId = (d: Discovered, it: DiscItem): string =>
-  d.kind === "mcp" ? (it.name ?? "") : `${it.method ?? ""} ${it.path ?? ""}`.trim();
-
-// Build a connector config from a single discovered item — no extra LLM call, so
-// the operator can pick ANY item, not just the assistant's top suggestion.
-const configForItem = (d: Discovered, it: DiscItem): Suggestion => {
-  if (d.kind === "mcp") {
-    const qa = (it.args ?? []).find((a) => /^(query|question|text|prompt|q|search)$/i.test(a)) ?? (it.args ?? [])[0];
-    return { kind: "mcp", name: it.name ?? "mcp_tool", description: it.description ?? "",
-      config: { server: d.base_url ?? "", tool: it.name ?? "", ...(qa ? { query_arg: qa } : {}) } };
-  }
-  const leaf = (it.path ?? "").split("/").filter(Boolean).pop() ?? "endpoint";
-  return { kind: "http", name: leaf.replace(/[^a-z0-9_]+/gi, "_").toLowerCase(), description: it.summary ?? "",
-    config: { url: (d.base_url ?? "") + (it.path ?? ""), method: it.method ?? "GET" } };
-};
 
 type ConnectorRow = {
   name: string; kind: string; description: string; config: Record<string, unknown>;
@@ -65,45 +36,8 @@ export default function ConnectorsView() {
   const [secretName, setSecretName] = useState("");
   const [secretValue, setSecretValue] = useState("");
 
-  // ---- Connector assistant: discover an API and suggest a connector (chat + history) ----
-  const [chatOpen, setChatOpen] = useState(false);
-  const [ask, setAsk] = useState("");
-  const [askBusy, setAskBusy] = useState(false);
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-
-  const sendMessage = async () => {
-    const q = ask.trim();
-    if (!q || askBusy) return;
-    setAsk("");
-    const history = messages.filter((m) => !m.system).map((m) => ({ role: m.role, content: m.text }));
-    setMessages((ms) => [...ms, { role: "user", text: q }]);
-    setAskBusy(true);
-    try {
-      const r = await api<{ reply?: string; suggestion?: Suggestion | null; discovered?: Discovered; relevant?: Record<string, string>; error?: string }>(
-        "POST", "/connectors/suggest", { instruction: q, history });
-      if (r.error) { setMessages((ms) => [...ms, { role: "assistant", text: r.error!, error: true }]); return; }
-      setMessages((ms) => [...ms, { role: "assistant", text: r.reply || "", suggestion: r.suggestion, discovered: r.discovered, relevant: r.relevant }]);
-    } catch (e: unknown) {
-      const m = String((e as { message?: string })?.message ?? e);
-      setMessages((ms) => [...ms, { role: "assistant", text: m.includes("Not Found") ? "Assistant endpoint not found — restart the backend." : `Assistant failed: ${m}`, error: true }]);
-    } finally { setAskBusy(false); }
-  };
-
-  const applyConfig = (s: Suggestion) => {
-    if (s.name) setName(s.name);
-    setKind(s.kind);
-    setDescription(s.description || "");
-    setConfigText(JSON.stringify(s.config, null, 2));
-    setEnabled(true);
-    setTestResult(null);
-    const secret = (s.config as { auth_secret?: string }).auth_secret;
-    setNote(`Loaded “${s.name}” into the editor from the assistant — review, then Save.`
-      + (secret ? ` It references secret “${secret}” — add its value under Tenant secrets first.` : ""));
-    setMessages((ms) => ms.concat([{ role: "assistant", system: true, text: `Loaded “${s.name}” into the editor — review and Save.` }]));
-  };
-  const applySuggestion = (idx: number) => { const s = messages[idx]?.suggestion; if (s) applyConfig(s); };
-
-  // Global copilot: publish the connector being edited, and apply a connector it proposes.
+  // Connector discovery + suggestion now lives in the global SOPilot copilot:
+  // publish the connector being edited, and apply a connector the copilot proposes.
   useCopilotSnapshot({ name, kind, description, config: configText });
   useCopilotApply((p) => {
     if (p.kind !== "connector") return null;
@@ -114,12 +48,11 @@ export default function ConnectorsView() {
     setDescription(pl.description || "");
     setConfigText(JSON.stringify(pl.config, null, 2));
     setEnabled(true);
+    setTestResult(null);
     const secret = (pl.config as { auth_secret?: string }).auth_secret;
     setNote(`Loaded “${pl.name}” into the editor from the copilot — review, then Save.` + (secret ? ` Add secret “${secret}” under Tenant secrets first.` : ""));
     return `Loaded connector “${pl.name || "?"}” into the editor.`;
   });
-  const toggleShowAll = (idx: number) =>
-    setMessages((ms) => ms.map((m, i) => (i === idx ? { ...m, showAll: !m.showAll } : m)));
 
   const refresh = useCallback(async () => {
     setRows(await api<ConnectorRow[]>("GET", "/connectors"));
@@ -339,113 +272,6 @@ export default function ConnectorsView() {
           </div>
         </div>
       </div>
-
-      {/* ---- Connector assistant: floating, persistent, discovers an API and suggests a connector ---- */}
-      {!chatOpen && (
-        <button className="btn" onClick={() => setChatOpen(true)}
-          style={{ position: "fixed", right: 210, bottom: 20, zIndex: 50, borderRadius: 999, boxShadow: "0 6px 24px rgba(0,0,0,.35)", background: "#7c5cff", color: "#fff", border: "none" }}>
-          <Sparkles size={15} /> Connector assistant{messages.filter((m) => m.role === "user").length ? ` (${messages.filter((m) => m.role === "user").length})` : ""}
-        </button>
-      )}
-      {chatOpen && (
-        <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 70, width: 420, maxWidth: "calc(100vw - 40px)",
-          height: "min(600px, 82vh)", display: "flex", flexDirection: "column",
-          background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 10px 40px rgba(0,0,0,.3)" }}>
-          <div className="chead" style={{ borderBottom: "1px solid var(--line)", padding: "10px 12px", display: "flex", alignItems: "center" }}>
-            <Sparkles size={15} style={{ marginRight: 6 }} /><span>Connector assistant</span>
-            <span className="sub" style={{ marginLeft: 6, fontSize: 11 }}>· finds the right API endpoint</span>
-            <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-              {messages.length > 0 && <button className="btn ghost sm" title="Clear the conversation" onClick={() => setMessages([])}>Clear</button>}
-              <button className="btn ghost sm" onClick={() => setChatOpen(false)}><X size={14} /></button>
-            </span>
-          </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-            {messages.length === 0 && (
-              <div className="sub" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-                Paste an API URL and say what you need — I'll probe it for <b>MCP tools</b> or an <b>OpenAPI/FastAPI</b> spec
-                and suggest a connector. E.g.:<br />
-                <span className="mono" style={{ fontSize: 11.5 }}>“http://10.0.0.80:9621 — query our knowledge base for relevant passages”</span>
-              </div>
-            )}
-            {messages.map((m, i) => {
-              if (m.role === "user") return (
-                <div key={i} style={{ alignSelf: "flex-end", maxWidth: "88%", background: "var(--accent-soft, rgba(59,110,245,.12))",
-                  borderRadius: "10px 10px 2px 10px", padding: "7px 10px", fontSize: 12.5, wordBreak: "break-word" }}>{m.text}</div>
-              );
-              if (m.system) return (
-                <div key={i} className="sub" style={{ alignSelf: "flex-start", fontSize: 11.5, color: "var(--muted)", padding: "2px 4px" }}>✓ {m.text}</div>
-              );
-              return (
-                <div key={i} style={{ alignSelf: "flex-start", maxWidth: "92%",
-                  background: m.error ? "var(--crit-dim, rgba(209,52,56,.1))" : "var(--panel2, rgba(127,127,127,.1))",
-                  borderRadius: "10px 10px 10px 2px", padding: "8px 10px", fontSize: 12.5,
-                  color: m.error ? "var(--crit)" : "var(--text2)", lineHeight: 1.45, wordBreak: "break-word" }}>
-                  <span>{m.text}</span>
-                  {m.suggestion && (
-                    <div style={{ marginTop: 8, border: "1px solid var(--accent, #3b6ef5)", borderRadius: 8, padding: "8px 10px", background: "var(--surface)" }}>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
-                        <span className="chip good" style={{ fontSize: 10.5 }}>★ recommended</span>
-                        <span className="chip accent" style={{ fontSize: 11 }}>{m.suggestion.kind}</span>
-                        <b className="mono" style={{ fontSize: 12 }}>{m.suggestion.name}</b>
-                      </div>
-                      <pre className="mono" style={{ margin: "0 0 6px", fontSize: 11, whiteSpace: "pre-wrap", color: "var(--text2)", maxHeight: 150, overflow: "auto" }}>{JSON.stringify(m.suggestion.config, null, 2)}</pre>
-                      <button className="btn sm primary" onClick={() => applySuggestion(i)}>Apply to editor</button>
-                    </div>
-                  )}
-                  {m.discovered && m.discovered.kind !== "none" && (() => {
-                    const d = m.discovered!; const rel = m.relevant ?? {}; const items = d.items ?? [];
-                    const relItems = items.filter((it) => itemId(d, it) in rel);
-                    const shown = m.showAll ? items : relItems;
-                    return (
-                      <div style={{ marginTop: 8 }}>
-                        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
-                          <span className="chip good" style={{ fontSize: 11 }}><span className="cd" />{d.count} {d.kind} item{d.count === 1 ? "" : "s"} found</span>
-                          {items.length > 0 && items.length !== shown.length && (
-                            <button className="btn ghost sm" onClick={() => toggleShowAll(i)}>Browse all {d.count}</button>
-                          )}
-                          {m.showAll && relItems.length > 0 && (
-                            <button className="btn ghost sm" onClick={() => toggleShowAll(i)}>Show relevant only</button>
-                          )}
-                        </div>
-                        {shown.length === 0 && (
-                          <div className="sub" style={{ fontSize: 11.5 }}>
-                            {relItems.length === 0 ? "None flagged as clearly relevant — " : ""}Browse all {d.count} to compare every tool.
-                          </div>
-                        )}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {shown.map((it, j) => {
-                            const id = itemId(d, it); const why = rel[id];
-                            const label = d.kind === "mcp" ? it.name : `${it.method} ${it.path}`;
-                            const desc = d.kind === "mcp" ? it.description : it.summary;
-                            return (
-                              <div key={j} style={{ border: "1px solid var(--line)", borderLeft: why ? "2px solid var(--warn)" : "1px solid var(--line)", borderRadius: 8, padding: "7px 9px", background: "var(--surface)" }}>
-                                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                                  {why && <span title="flagged relevant to your request" style={{ color: "var(--warn)" }}>★</span>}
-                                  <b className="mono" style={{ fontSize: 11.5, wordBreak: "break-all" }}>{label}</b>
-                                  {d.kind === "mcp" && (it.args?.length ?? 0) > 0 && <span className="sub mono" style={{ fontSize: 10.5 }}>({it.args!.join(", ")})</span>}
-                                  <button className="btn ghost sm" style={{ marginLeft: "auto" }} onClick={() => applyConfig(configForItem(d, it))}>Use this</button>
-                                </div>
-                                {why && <div style={{ fontSize: 11.5, color: "var(--warn)", marginTop: 2 }}>→ {why}</div>}
-                                {desc && <div className="sub" style={{ fontSize: 11.5, marginTop: 2, lineHeight: 1.4 }}>{desc}</div>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              );
-            })}
-            {askBusy && <div className="sub" style={{ fontSize: 12 }}>Probing &amp; drafting…</div>}
-          </div>
-          <div style={{ display: "flex", gap: 6, padding: "10px 12px", borderTop: "1px solid var(--line)" }}>
-            <input className="qinput" style={{ flex: 1 }} placeholder="API URL + what you need it to do…" value={ask}
-              onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendMessage()} />
-            <button className="btn sm primary" onClick={sendMessage} disabled={askBusy || !ask.trim()}><Send size={14} /></button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
