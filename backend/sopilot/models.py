@@ -461,3 +461,54 @@ class PoolPickAudit(Base):
     rationale: Mapped[str] = mapped_column(String(300), default="")
     pick_duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# ---------- Copilot: cross-tab assistant conversation + durable per-tenant memory ----------
+
+
+class CopilotThread(Base):
+    """One rolling assistant conversation per tenant+project. The unified copilot
+    persists here so history survives reloads and tab switches (P5)."""
+
+    __tablename__ = "copilot_threads"
+    __table_args__ = (UniqueConstraint("tenant_id", "project_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    project_id: Mapped[str] = mapped_column(String(32), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class CopilotMessage(Base):
+    """A single turn in the copilot conversation. meta carries the structured
+    proposal/warnings so the panel can re-render an assistant turn on reload."""
+
+    __tablename__ = "copilot_messages"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    thread_id: Mapped[str] = mapped_column(ForeignKey("copilot_threads.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(16))               # user | assistant
+    tab: Mapped[str] = mapped_column(String(40), default="")    # which view it was sent from
+    content: Mapped[str] = mapped_column(Text, default="")
+    meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {proposal, warnings, ...}
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class CopilotMemory(Base):
+    """Durable, per-TENANT copilot memory — the gathered information the assistant
+    accumulates (discovered APIs, decisions, established facts) so it isn't lost
+    between sessions/projects. project_id nullable = tenant-wide. Deletable from
+    the UI when stale context causes problems."""
+
+    __tablename__ = "copilot_memories"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(String(32), index=True)
+    project_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)  # null = tenant-wide
+    kind: Mapped[str] = mapped_column(String(40), default="fact")   # fact | discovery | decision | preference
+    title: Mapped[str] = mapped_column(String(200), default="")
+    content: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str] = mapped_column(String(80), default="")     # tab/endpoint that produced it
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
