@@ -170,6 +170,8 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
 }) {
   const [draft, setDraft] = useState<Config>(() => structuredClone(cfg));
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [newKey, setNewKey] = useState("");
+  const [newVal, setNewVal] = useState("");
   useEffect(() => { setDraft(structuredClone(cfg)); }, [cfg]);
 
   const results = useMemo(() => evaluateRules(draft, rules), [draft, rules]);
@@ -189,8 +191,22 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
     }
     return s;
   }, [fields, rules]);
-  const visibleFields = fields.filter((f) => showAdvanced || !f.advanced);
-  const advancedCount = fields.filter((f) => f.advanced).length;
+  // Fields a rule REFERENCES but the schema/config doesn't declare (e.g. a
+  // requires-rule's needed field, or an enum rule's field) must still be
+  // editable — otherwise a violation like "send_email requires
+  // notification_service_url" has no widget to resolve it. Surface them here.
+  const allFields = useMemo(() => {
+    const have = new Set(fields.map((f) => f.path));
+    const extra: DerivedField[] = [];
+    for (const p of allowedFields) {
+      if (have.has(p)) continue;
+      const er = rules.find((r): r is Extract<Rule, { kind: "enum" }> => r.kind === "enum" && r.field === p);
+      extra.push({ path: p, type: er ? "enum" : "string", value: get(draft, p), advanced: false, options: er?.options });
+    }
+    return [...fields, ...extra];
+  }, [fields, allowedFields, draft, rules]);
+  const visibleFields = allFields.filter((f) => showAdvanced || !f.advanced);
+  const advancedCount = allFields.filter((f) => f.advanced).length;
 
   // Enum rules drive their field's widget: the admin's options ARE the choices.
   const enumFor = (field: string) => rules.find((r): r is Extract<Rule, { kind: "enum" }> => r.kind === "enum" && r.field === field);
@@ -454,6 +470,59 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
           </div>
         </div>
       </div>
+
+      {/* Generic key/value settings: every scalar config item not already shown as
+          a field above, editable here — plus add any new key = value. Lets the user
+          set config keys the schema doesn't declare (e.g. a rule-needed field, or
+          deployment-specific settings). */}
+      {(() => {
+        const shown = new Set(allFields.map((f) => f.path));
+        const STRUCT = new Set(["tools", "mcp_servers", "knowledge_base", "transfer_topics", "prompt"]);
+        const walk = (o: any, pre: string): string[] => {
+          const out: string[] = [];
+          for (const [k, val] of Object.entries(o ?? {})) {
+            if (pre === "" && STRUCT.has(k)) continue;
+            const p = pre ? `${pre}.${k}` : k;
+            if (val && typeof val === "object" && !Array.isArray(val)) out.push(...walk(val, p));
+            else if (!Array.isArray(val)) out.push(p);
+          }
+          return out;
+        };
+        const extra = walk(draft, "").filter((p) => !shown.has(p));
+        const addKv = () => {
+          const k = newKey.trim();
+          if (!k) return;
+          setDraft(setPath(draft, k, newVal));
+          setNewKey(""); setNewVal("");
+        };
+        return (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>
+              Other settings (key = value){extra.length ? ` · ${extra.length}` : ""}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {extra.map((p) => {
+                const v = get(draft, p);
+                return (
+                  <div key={p} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span className="mono" style={{ flex: "0 0 200px", color: "var(--muted)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis" }} title={p}>{p}</span>
+                    <input className="area mono" style={{ flex: 1, padding: "4px 8px" }} value={v == null ? "" : String(v)} placeholder="(unset)"
+                      onChange={(e) => setDraft(setPath(draft, p, e.target.value))} />
+                    <button className="btn ghost sm" title="Remove this setting" onClick={() => setDraft(setPath(draft, p, ""))}>✕</button>
+                  </div>
+                );
+              })}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input className="area mono" style={{ flex: "0 0 200px", padding: "4px 8px" }} placeholder="key, e.g. notification_service_url"
+                  value={newKey} onChange={(e) => setNewKey(e.target.value)} />
+                <input className="area mono" style={{ flex: 1, padding: "4px 8px" }} placeholder="value"
+                  value={newVal} onChange={(e) => setNewVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addKv()} />
+                <button className="btn ghost sm" disabled={!newKey.trim()} onClick={addKv}>+ Add</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* complex structures — each edit re-evaluates the ruleset live (kb index_mode
           drives kb_mode:* rules; the topic list drives field:transfer_topics) */}
