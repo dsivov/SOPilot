@@ -623,13 +623,13 @@ export default function GuidedEditor({ cfg, rules, rulesetLabel, schema, onApply
 
       {/* ---- floating config assistant: persistent chat, fixed while scrolling ---- */}
       {!chatOpen && (
-        <button className="btn primary" onClick={() => setChatOpen(true)}
-          style={{ position: "fixed", right: 20, bottom: 20, zIndex: 50, borderRadius: 22, padding: "10px 16px", boxShadow: "0 6px 24px rgba(0,0,0,.25)" }}>
+        <button className="btn" onClick={() => setChatOpen(true)}
+          style={{ position: "fixed", right: 210, bottom: 20, zIndex: 50, borderRadius: 22, padding: "10px 16px", boxShadow: "0 6px 24px rgba(0,0,0,.25)", background: "#7c5cff", color: "#fff", border: "none" }}>
           💬 Config assistant{messages.length ? ` (${messages.filter((m) => m.role === "user").length})` : ""}
         </button>
       )}
       {chatOpen && (
-        <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 50, width: 400, maxWidth: "calc(100vw - 40px)",
+        <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 70, width: 400, maxWidth: "calc(100vw - 40px)",
           height: "min(560px, 80vh)", display: "flex", flexDirection: "column",
           background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 10px 40px rgba(0,0,0,.3)" }}>
           <div className="chead" style={{ borderBottom: "1px solid var(--line)", padding: "10px 12px" }}>

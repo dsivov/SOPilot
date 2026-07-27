@@ -342,13 +342,13 @@ export default function ConnectorsView() {
 
       {/* ---- Connector assistant: floating, persistent, discovers an API and suggests a connector ---- */}
       {!chatOpen && (
-        <button className="btn primary" onClick={() => setChatOpen(true)}
-          style={{ position: "fixed", right: 20, bottom: 20, zIndex: 50, borderRadius: 999, boxShadow: "0 6px 24px rgba(0,0,0,.35)" }}>
+        <button className="btn" onClick={() => setChatOpen(true)}
+          style={{ position: "fixed", right: 210, bottom: 20, zIndex: 50, borderRadius: 999, boxShadow: "0 6px 24px rgba(0,0,0,.35)", background: "#7c5cff", color: "#fff", border: "none" }}>
           <Sparkles size={15} /> Connector assistant{messages.filter((m) => m.role === "user").length ? ` (${messages.filter((m) => m.role === "user").length})` : ""}
         </button>
       )}
       {chatOpen && (
-        <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 50, width: 420, maxWidth: "calc(100vw - 40px)",
+        <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 70, width: 420, maxWidth: "calc(100vw - 40px)",
           height: "min(600px, 82vh)", display: "flex", flexDirection: "column",
           background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 10px 40px rgba(0,0,0,.3)" }}>
           <div className="chead" style={{ borderBottom: "1px solid var(--line)", padding: "10px 12px", display: "flex", alignItems: "center" }}>

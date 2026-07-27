@@ -126,14 +126,14 @@ export default function CopilotPanel({ view, project }: { view: string; project:
   if (!open) {
     return (
       <button className="btn primary" onClick={() => setOpen(true)}
-        style={{ position: "fixed", right: 20, bottom: 76, zIndex: 60, borderRadius: 999, boxShadow: "0 6px 24px rgba(0,0,0,.35)" }}>
+        style={{ position: "fixed", right: 20, bottom: 20, zIndex: 60, borderRadius: 999, boxShadow: "0 6px 24px rgba(0,0,0,.35)" }}>
         <Sparkles size={15} /> SOPilot copilot{msgs.filter((m) => m.role === "user").length ? ` (${msgs.filter((m) => m.role === "user").length})` : ""}
       </button>
     );
   }
 
   return (
-    <div style={{ position: "fixed", right: 20, bottom: 76, zIndex: 60, width: 430, maxWidth: "calc(100vw - 40px)",
+    <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 60, width: 430, maxWidth: "calc(100vw - 40px)",
       height: "min(640px, 86vh)", display: "flex", flexDirection: "column",
       background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 12px 44px rgba(0,0,0,.4)" }}>
       <div className="chead" style={{ borderBottom: "1px solid var(--line)", padding: "10px 12px", display: "flex", alignItems: "center", gap: 6 }}>
