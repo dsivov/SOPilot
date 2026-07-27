@@ -1,0 +1,163 @@
+// The unified SOPilot copilot — ONE assistant across every Studio tab.
+//
+// Mounted once in App (a sibling of the view-switch), so it stays mounted and its
+// conversation persists across tab switches. History and memory are DB-backed
+// (per tenant/project), so they also survive reloads. It is state-aware,
+// role-aware, and enforces the bounding chain (Stage 1 ⊂ Stage 0, Stage 2 ⊂
+// Stage 1) — all in the backend brain (/copilot/*).
+import { Brain, Eraser, Send, Sparkles, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api } from "./api";
+
+type Warning = { level: "warn" | "error"; msg: string };
+type Msg = { role: "user" | "assistant"; content: string; tab?: string; warnings?: Warning[]; remembered?: string[] };
+type Mem = { id: string; kind: string; title: string; content: string; source: string; tenant_wide: boolean; updated_at: string };
+
+// view id → the label the copilot shows as "you're on …"
+const TAB_LABEL: Record<string, string> = {
+  sops: "SOPs", blocks: "Prompt blocks", connectors: "Connectors",
+  configAdmin: "Config admin (Stage 1)", config: "Config viewer (Stage 2)",
+  dashboard: "Dashboard", playground: "Playground", sessions: "Sessions", traces: "Traces",
+};
+
+export default function CopilotPanel({ view, project }: { view: string; project: string }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState("");
+  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [memory, setMemory] = useState<Mem[]>([]);
+  const [memOpen, setMemOpen] = useState(false);
+  const [role, setRole] = useState<string>("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const loadThread = useCallback(() => {
+    api<{ messages: Msg[] }>("GET", "/copilot/thread")
+      .then((r) => setMsgs((r.messages || []).map((m) => ({
+        role: m.role, content: m.content, tab: m.tab,
+        warnings: (m as { meta?: { warnings?: Warning[] } }).meta?.warnings,
+      }))))
+      .catch(() => { /* offline / not migrated — start empty */ });
+  }, []);
+  const loadMemory = useCallback(() => {
+    api<{ memories: Mem[] }>("GET", "/copilot/memory").then((r) => setMemory(r.memories || [])).catch(() => {});
+  }, []);
+
+  // Load (and reload when the project changes) — history + memory are per project/tenant.
+  useEffect(() => { loadThread(); loadMemory(); }, [project, loadThread, loadMemory]);
+  useEffect(() => { if (open && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [msgs, busy, open]);
+
+  const send = async () => {
+    const q = ask.trim();
+    if (!q || busy) return;
+    setAsk("");
+    setMsgs((m) => [...m, { role: "user", content: q, tab: view }]);
+    setBusy(true);
+    try {
+      const r = await api<{ reply?: string; warnings?: Warning[]; remembered?: string[]; role?: string; error?: string }>(
+        "POST", "/copilot/assist", { tab: view, instruction: q, snapshot: {} });
+      if (r.error) { setMsgs((m) => [...m, { role: "assistant", content: r.error!, warnings: [{ level: "error", msg: r.error! }] }]); return; }
+      if (r.role) setRole(r.role);
+      setMsgs((m) => [...m, { role: "assistant", content: r.reply || "", warnings: r.warnings, remembered: r.remembered }]);
+      if (r.remembered && r.remembered.length) loadMemory();
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message ?? e);
+      setMsgs((m) => [...m, { role: "assistant", content: msg.includes("Not Found") ? "Copilot endpoint not found — restart the backend." : `Copilot failed: ${msg}`, warnings: [{ level: "error", msg }] }]);
+    } finally { setBusy(false); }
+  };
+
+  const clearThread = async () => {
+    if (!window.confirm("Clear this conversation? Gathered memory is kept.")) return;
+    await api("DELETE", "/copilot/thread").catch(() => {});
+    setMsgs([]);
+  };
+  const deleteMemory = async (id: string) => {
+    await api("DELETE", `/copilot/memory/${id}`).catch(() => {});
+    setMemory((m) => m.filter((x) => x.id !== id));
+  };
+  const resetMemory = async () => {
+    if (!window.confirm("Delete ALL gathered copilot memory for this tenant? Use this if stale context is causing problems. This can't be undone.")) return;
+    await api("DELETE", "/copilot/memory").catch(() => {});
+    setMemory([]);
+  };
+
+  const wchip = (w: Warning, i: number) => (
+    <div key={i} style={{ fontSize: 11.5, marginTop: 3, color: w.level === "error" ? "var(--crit)" : "var(--warn)" }}>
+      {w.level === "error" ? "✖" : "⚠"} {w.msg}
+    </div>
+  );
+
+  if (!open) {
+    return (
+      <button className="btn primary" onClick={() => setOpen(true)}
+        style={{ position: "fixed", right: 20, bottom: 76, zIndex: 60, borderRadius: 999, boxShadow: "0 6px 24px rgba(0,0,0,.35)" }}>
+        <Sparkles size={15} /> SOPilot copilot{msgs.filter((m) => m.role === "user").length ? ` (${msgs.filter((m) => m.role === "user").length})` : ""}
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ position: "fixed", right: 20, bottom: 76, zIndex: 60, width: 430, maxWidth: "calc(100vw - 40px)",
+      height: "min(640px, 86vh)", display: "flex", flexDirection: "column",
+      background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 12px 44px rgba(0,0,0,.4)" }}>
+      <div className="chead" style={{ borderBottom: "1px solid var(--line)", padding: "10px 12px", display: "flex", alignItems: "center", gap: 6 }}>
+        <Sparkles size={16} /><span style={{ fontWeight: 600 }}>SOPilot copilot</span>
+        {role && <span className="chip" style={{ fontSize: 10.5 }}>{role}</span>}
+        <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          <button className="btn ghost sm" title="Gathered memory" onClick={() => setMemOpen((v) => !v)}><Brain size={14} />{memory.length ? ` ${memory.length}` : ""}</button>
+          {msgs.length > 0 && <button className="btn ghost sm" title="Clear conversation (keeps memory)" onClick={clearThread}><Eraser size={14} /></button>}
+          <button className="btn ghost sm" title="Close" onClick={() => setOpen(false)}><X size={14} /></button>
+        </span>
+      </div>
+      <div style={{ padding: "5px 12px", borderBottom: "1px solid var(--line)", fontSize: 11.5, color: "var(--muted)" }}>
+        on <b style={{ color: "var(--text2)" }}>{TAB_LABEL[view] ?? view}</b> · knows your published config, rules &amp; discovery · remembers this tenant
+      </div>
+
+      {memOpen && (
+        <div style={{ borderBottom: "1px solid var(--line)", maxHeight: 200, overflowY: "auto", padding: "8px 12px", background: "var(--panel2, rgba(127,127,127,.06))" }}>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+            <b style={{ fontSize: 12 }}>Gathered memory ({memory.length})</b>
+            {memory.length > 0 && <button className="btn ghost sm" style={{ marginLeft: "auto", color: "var(--crit)" }} onClick={resetMemory}>Reset all</button>}
+          </div>
+          {memory.length === 0 && <div className="sub" style={{ fontSize: 11.5 }}>Nothing remembered yet — the copilot saves durable facts (discoveries, decisions, preferences) here as you work.</div>}
+          {memory.map((m) => (
+            <div key={m.id} style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "4px 0", borderTop: "1px solid var(--line)" }}>
+              <span className="chip" style={{ fontSize: 10 }}>{m.kind}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>{m.title}</div>
+                <div className="sub" style={{ fontSize: 11.5 }}>{m.content}</div>
+              </div>
+              <button className="btn ghost sm" title="Forget this" onClick={() => deleteMemory(m.id)}><Trash2 size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {msgs.length === 0 && (
+          <div className="sub" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+            Ask me anything about building on this platform — how a feature works, what options you have here, or to check
+            what you've configured. I stay within your role's bounds and warn about problems.
+          </div>
+        )}
+        {msgs.map((m, i) => m.role === "user" ? (
+          <div key={i} style={{ alignSelf: "flex-end", maxWidth: "88%", background: "var(--accent-soft, rgba(59,110,245,.12))",
+            borderRadius: "10px 10px 2px 10px", padding: "7px 10px", fontSize: 12.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</div>
+        ) : (
+          <div key={i} style={{ alignSelf: "flex-start", maxWidth: "92%", background: "var(--panel2, rgba(127,127,127,.1))",
+            borderRadius: "10px 10px 10px 2px", padding: "8px 10px", fontSize: 12.5, color: "var(--text2)", lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {m.content}
+            {(m.warnings ?? []).map(wchip)}
+            {(m.remembered?.length ?? 0) > 0 && <div className="sub" style={{ fontSize: 11, marginTop: 4 }}>🧠 remembered: {m.remembered!.join(", ")}</div>}
+          </div>
+        ))}
+        {busy && <div className="sub" style={{ fontSize: 12 }}>Thinking…</div>}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, padding: "10px 12px", borderTop: "1px solid var(--line)" }}>
+        <input className="qinput" style={{ flex: 1 }} placeholder={`Ask about ${TAB_LABEL[view] ?? view}…`} value={ask}
+          onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} />
+        <button className="btn sm primary" onClick={send} disabled={busy || !ask.trim()}><Send size={14} /></button>
+      </div>
+    </div>
+  );
+}

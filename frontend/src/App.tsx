@@ -9,6 +9,7 @@ import DashboardView from "./views/Dashboard";
 import TracesView from "./views/Traces";
 import ConnectorsView from "./views/Connectors";
 import ConfigView from "./views/Config";
+import CopilotPanel from "./CopilotPanel";
 import ConfigAdminView from "./views/ConfigAdmin";
 import AdminConsole from "./views/AdminConsole";
 import Help from "./views/Help";
@@ -452,6 +453,7 @@ export default function App() {
             {view === "configAdmin" && <ConfigAdminView />}
             {view === "config" && <ConfigView />}
           </div>
+          <CopilotPanel view={view} project={project} />
         </div>
       </div>
     </div>
