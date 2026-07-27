@@ -12,8 +12,10 @@ import { MCP_INTROSPECTION } from "../config/mcpIntrospection";
 import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, availableToolNames, type Finding, type Introspection } from "../config/configModel";
 import { ruleFindings, seedRules, type Rule } from "../config/rules";
 import type { ConfigSchema } from "../config/schema";
-import GuidedEditor from "./ConfigEdit";
+import GuidedEditor, { applyEdits, type EditOp } from "./ConfigEdit";
 import Help from "./Help";
+import { editorFields } from "../config/schema";
+import { useCopilotApply, useCopilotSnapshot } from "../copilot/bridge";
 import { api, getCreds } from "../api";
 
 // A fresh project starts from this empty skeleton — NOT the bundled example
@@ -122,6 +124,25 @@ export default function ConfigView() {
   }, [cfg]);
 
   const docDirty = JSON.stringify(cfg) !== docBaseline;
+
+  // Copilot (Stage 2): publish the working config + bounds, and apply config_edits
+  // the copilot proposes — re-gated by the same allow-sets the guided editor uses.
+  useCopilotSnapshot({ config: cfg, published_version: docPublished, dirty: docDirty, has_schema: !!adminSchema });
+  useCopilotApply((p) => {
+    if (p.kind !== "config_edits") return null;
+    const edits = (p.payload as { edits?: EditOp[] })?.edits;
+    if (!Array.isArray(edits) || edits.length === 0) return null;
+    const fields = editorFields(cfg as any, adminSchema);
+    const allowedFields = new Set(fields.map((f) => f.path));
+    const allowedTools = new Set(adminSchema?.tools?.length ? adminSchema.tools.map((t) => t.name) : Object.keys((cfg.tools as object) ?? {}));
+    const { next, applied, skipped } = applyEdits(cfg as any, edits, allowedFields, allowedTools);
+    setCfg(next as Record<string, any>);
+    setText(JSON.stringify(next, null, 2));
+    setLogicalLive(null);
+    return `Applied ${applied.length} change(s) to the working config`
+      + (skipped.length ? `, skipped ${skipped.length} out-of-schema` : "")
+      + ". Review, then Save.";
+  });
   const saveDocument = async (publish: boolean) => {
     setSaveBusy(true); setSaveMsg("");
     try {

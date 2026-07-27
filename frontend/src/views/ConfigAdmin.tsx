@@ -6,6 +6,7 @@
 // evaluated live against a real config so the admin sees each rule fire as they
 // write it. Rule drafting is LLM-assisted; the engine stays formal.
 import { useEffect, useMemo, useState } from "react";
+import { useCopilotApply, useCopilotSnapshot } from "../copilot/bridge";
 import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import type { Config } from "../config/configModel";
 import {
@@ -315,6 +316,25 @@ export default function ConfigAdminView() {
 
   const remove = (id: string) => { setRules((rs) => rs.filter((r) => r.id !== id)); setDirty(true); };
   const add = (r: Rule) => { setRules((rs) => [...rs, r]); setDirty(true); };
+
+  // Global copilot (Stage 1): publish schema+rules, and apply a drafted field/rule.
+  useCopilotSnapshot({ schema, rules });
+  useCopilotApply((p) => {
+    if (p.kind === "schema_field") {
+      const f = (p.payload as { field?: SchemaFieldDef }).field;
+      if (!f?.path) return null;
+      setSchema((s) => ({ ...(s ?? { fields: [] }), fields: [...(s?.fields ?? []), f] }));
+      setDirty(true);
+      return `Added field “${f.path}” to the schema — review and Save & publish.`;
+    }
+    if (p.kind === "rule") {
+      const r = (p.payload as { rule?: Rule }).rule;
+      if (!r?.kind) return null;
+      add({ ...r, id: newId(r.kind) });
+      return `Added a ${r.kind} rule — review and Save & publish.`;
+    }
+    return null;
+  });
 
   const save = async (publish: boolean) => {
     setSaveBusy(true); setSaveErr("");

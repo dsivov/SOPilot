@@ -1,6 +1,7 @@
-import { BadgeCheck, Check, Save, Sparkles, Trash2, X } from "lucide-react";
+import { BadgeCheck, Save, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
+import { useCopilotApply, useCopilotSnapshot } from "../copilot/bridge";
 
 type BlockMeta = { name: string; kind: string; latest_version: number; latest_status: string; updated_at: string };
 
@@ -13,21 +14,18 @@ export default function BlocksView() {
   const [content, setContent] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
-  const [aiInstr, setAiInstr] = useState("");
-  const [aiBusy, setAiBusy] = useState(false);
-  const [proposal, setProposal] = useState<{ content: string; notes: string } | null>(null);
 
-  const rewrite = async () => {
-    setAiBusy(true);
-    setNote("");
-    try {
-      setProposal(await api<{ content: string; notes: string }>("POST", "/prompt-blocks/rewrite", { content, instruction: aiInstr, kind }));
-    } catch (e) {
-      setNote(String(e));
-    } finally {
-      setAiBusy(false);
-    }
-  };
+  // The copilot rewrites blocks now (Rewrite-with-AI folded into it): publish the
+  // block being edited, and apply a rewrite it proposes.
+  useCopilotSnapshot({ name, kind, content });
+  useCopilotApply((p) => {
+    if (p.kind !== "prompt_block") return null;
+    const c = (p.payload as { content?: unknown })?.content;
+    if (typeof c !== "string") return null;
+    setContent(c);
+    setNote("Copilot rewrote the block text into the editor — review and Save.");
+    return "Loaded the rewritten text into the block editor.";
+  });
 
   const refresh = useCallback(async () => setBlocks(await api<BlockMeta[]>("GET", "/prompt-blocks")), []);
   useEffect(() => {
@@ -125,45 +123,9 @@ export default function BlocksView() {
               <option value="escalation">escalation</option>
             </select>
             <textarea className="area" rows={9} placeholder="The exact wording the agent must carry for this block…" value={content} onChange={(e) => setContent(e.target.value)} />
-
-            <div style={{ display: "flex", gap: 6 }}>
-              <input
-                className="qinput"
-                placeholder="rewrite instruction, e.g. “shorter, warmer, keep the mandated sentence”"
-                value={aiInstr}
-                onChange={(e) => setAiInstr(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && content && !aiBusy && rewrite()}
-              />
-              <button className="btn" disabled={aiBusy || !content} onClick={rewrite} title="Rewrite with the builder model — preview first, nothing saved">
-                <Sparkles /> {aiBusy ? "Rewriting…" : "Rewrite with AI"}
-              </button>
-            </div>
-            {proposal && (
-              <div className="card" style={{ border: "1px solid var(--accent)" }}>
-                <div className="chead">
-                  <h3>AI proposal</h3>
-                  <span className="sub">{proposal.notes || "review, then accept into the editor"}</span>
-                </div>
-                <div className="cbody" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55 }}>{proposal.content}</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      className="btn primary sm"
-                      onClick={() => {
-                        setContent(proposal.content);
-                        setProposal(null);
-                        setNote("proposal accepted into the editor — review and Save draft / publish when ready");
-                      }}
-                    >
-                      <Check /> Use this text
-                    </button>
-                    <button className="btn ghost sm" onClick={() => setProposal(null)}>
-                      <X /> Discard
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+            <p style={{ margin: "0 0 2px", fontSize: 11.5, color: "var(--muted)" }}>
+              Need a rewrite? Ask the <b>SOPilot copilot</b> (bottom-right) — e.g. “make this block shorter and warmer, keep the mandated sentence”.
+            </p>
 
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn" disabled={busy || !name || !content} onClick={() => save(false)}>

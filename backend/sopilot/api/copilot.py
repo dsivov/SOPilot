@@ -180,21 +180,22 @@ _SYS = (
     "YOU ARE STATE-AWARE. The user message includes CURRENT STATE (what's already defined & configured) and MEMORY "
     "(durable facts gathered earlier). Use them: don't re-ask what's known; reference existing connectors/tools/rules by "
     "name; build on prior decisions.\n\n"
-    "THE BOUNDING CHAIN — enforce it strictly. Each role/stage is limited by the previous one:\n"
-    "- STAGE 0 (discovery) defines the functionality that actually EXISTS — see state.stage0_discovered "
-    "(fields/tools/structures/integration_points/components).\n"
-    "- STAGE 1 (ADMIN) is bounded BY Stage 0: an admin may only declare schema fields/tools/structures that Stage-0 "
-    "discovered. If an admin asks to add functionality NOT in stage0_discovered, do NOT invent it — warn that it isn't in "
-    "the discovered system surface and tell them to raise it as an open question to Engineering (Stage 0) so the system is "
-    "analysed/extended first. If no Stage-0 report exists yet, say discovery must run first.\n"
-    "- STAGE 2 (USER) is bounded BY Stage 1: a user may only choose within the admin's published SCHEMA (allowed fields, "
-    "enum options, offerable tools, available structures) and must satisfy the RULES. If a user asks for something outside "
-    "those bounds, do NOT propose it — explain it isn't permitted by the admin's configuration and that they should "
-    "request the admin add/allow it.\n\n"
-    "ROLE CAPABILITIES — stay in lane:\n"
-    "- ADMIN: works in Stage 0/1 (analysis, schema, rules) and may inspect Stage 2. Bounded by Stage 0.\n"
-    "- USER: works in Stage 2 only (authoring the config within bounds). If a USER asks to change the schema or rules "
-    "(an admin action), decline and direct them to their admin — do not help a user widen their own bounds.\n\n"
+    "THE BOUNDING CHAIN — the bound depends on the CURRENT TAB (which stage the user is editing), NOT on their role. "
+    "Apply ONLY the current tab's bound:\n"
+    "- CONFIG VIEWER tab = STAGE 2. Bounded by the admin's published SCHEMA in state.config_schema (allowed tools, fields "
+    "and their enum options, available structures) and the RULES. A tool/field/value IS ALLOWED if it appears in "
+    "config_schema (tool in config_schema.tools; field in config_schema.fields with the value within that field's options). "
+    "Then PROPOSE the config_edits. Only refuse when a schema EXISTS and does not include it, or a rule forbids it — then "
+    "say it's outside the admin's allowed options and to ask the admin. If NO schema is published, the config is open — "
+    "propose sensible edits. NEVER cite Stage-0 for a config-tab request.\n"
+    "- CONFIG ADMIN tab = STAGE 1. Bounded by Stage 0 (state.stage0_discovered). An admin may only declare "
+    "fields/tools/structures Stage-0 discovered. If they ask for something NOT in stage0_discovered, do NOT invent it — "
+    "warn it isn't in the discovered surface and to raise it to Engineering (Stage 0); if no Stage-0 report exists, say "
+    "discovery must run first.\n"
+    "- Other tabs (SOPs, connectors, blocks): no stage bound — help and propose freely within what exists.\n\n"
+    "ROLE gates WHO may do admin work: only an ADMIN may change the SCHEMA or RULES (Stage 1). If a USER (role=user) asks "
+    "to change schema/rules, decline and direct them to their admin. Role does NOT change the config-tab (Stage 2) bound — "
+    "anyone on the config tab is bounded by the schema, never by Stage 0.\n\n"
     "RAISE WARNINGS for logical problems or wrong usage: a prompt promising a capability the config lacks; enabling a "
     "tool whose required field is unset; referencing a connector/tool/SOP that doesn't exist; a config value outside the "
     "admin's allowed options; an admin declaring an option with no Stage-0 backing.\n\n"
@@ -205,9 +206,26 @@ _SYS = (
     "analysis_needs_input fields still awaiting definition; and flag anything they ask for that Stage 0 didn't surface.\n\n"
     "REMEMBER durable facts worth keeping for later (a discovered API and its useful endpoints, a decision the user made, "
     "a stated preference) in the 'remember' array — these persist per tenant and must not be trivial or transient.\n\n"
+    "DEFAULT TO ACTING, not just explaining. If the user asks to change / add / set / enable / disable / rename / "
+    "configure / rewrite something and it is WITHIN BOUNDS for the CURRENT TAB, you MUST return a 'proposal' that makes "
+    "the change — do not merely describe how to do it by hand. Only omit the proposal when they asked a question, when it "
+    "is out of bounds (explain why + what to ask their admin/engineering), or when you genuinely need one missing detail "
+    "(ask for exactly that). A reply that says 'you can do X in the editor' WITHOUT a proposal, when X was requested and "
+    "is allowed, is wrong.\n"
+    "PROPOSE A CONCRETE CHANGE — include a 'proposal' the UI applies in one click. Shape by tab (kind → payload):\n"
+    "- config (Stage 2): {\"kind\":\"config_edits\",\"summary\":\"<short>\",\"payload\":{\"edits\":[ops]}} where each op is one of "
+    "{op:'enable_tool'|'disable_tool',tool}, {op:'set_field'|'unset_field',field,value?}, {op:'set_prompt'|'append_prompt',value}, "
+    "{op:'add_mcp_server',url,authorization?}, {op:'add_kb',knowledge_id,index_mode?}, {op:'add_transfer_topic',topic_id,prompt?}. "
+    "Only tools/fields the schema allows, values within enum options.\n"
+    "- connectors: {\"kind\":\"connector\",\"summary\":..,\"payload\":{\"kind\":\"mcp\"|\"http\",\"name\":..,\"description\":..,\"config\":{..}}}.\n"
+    "- blocks: {\"kind\":\"prompt_block\",\"summary\":..,\"payload\":{\"content\":\"<the rewritten block text>\"}}.\n"
+    "- configAdmin (Stage 1, ADMIN only, and ONLY for Stage-0-backed items): {\"kind\":\"schema_field\",\"payload\":{\"field\":"
+    "{path,type,options?,required?,description?}}} OR {\"kind\":\"rule\",\"payload\":{\"rule\":{kind:'enum'|'requires'|'conflicts',...}}}.\n"
+    "Omit proposal (or null) when only answering/guiding, or when the request is out of bounds (explain instead).\n\n"
     "Return ONLY JSON: {\"reply\": \"<your helpful, specific answer — always present>\", "
     "\"warnings\": [{\"level\": \"warn\"|\"error\", \"msg\": \"<one concrete sentence>\"}], "
-    "\"remember\": [{\"title\": \"<short>\", \"content\": \"<the fact>\", \"kind\": \"fact|discovery|decision|preference\"}]}. "
+    "\"remember\": [{\"title\": \"<short>\", \"content\": \"<the fact>\", \"kind\": \"fact|discovery|decision|preference\"}], "
+    "\"proposal\": <the object above, or null>}. "
     "warnings and remember may be empty arrays. Keep the reply concise and actionable."
 )
 
@@ -235,11 +253,31 @@ async def assist(req: AssistRequest, scope: Scope = Depends(resolve_scope),
 
     state = await _assemble_state(db, scope)
     mems = await _load_memory(db, scope)
+
+    # On the connectors tab, if the message names a URL, probe it live (MCP tools
+    # or an OpenAPI spec) so the copilot can propose a real connector — the
+    # discovery capability folded in from the old standalone connector assistant.
+    discovery_block = ""
+    if req.tab == "connectors":
+        from .connectors import _extract_urls, _probe_mcp, _probe_openapi
+        urls = _extract_urls(req.instruction, *[str(h.get("content", "")) for h in reversed(hist_msgs)])
+        if urls:
+            disc = await _probe_mcp(urls[0]) or await _probe_openapi(urls[0])
+            if disc and disc["kind"] == "mcp":
+                discovery_block = (f"\n\nDISCOVERED MCP TOOLS at {disc['base_url']} — propose a connector using one:\n"
+                                   + "\n".join(f"  - {it['name']}({', '.join(it.get('args', []))}) — {it.get('description','')}" for it in disc["items"]))
+            elif disc:
+                discovery_block = (f"\n\nDISCOVERED OPENAPI ENDPOINTS at {disc['base_url']} — propose a connector using one:\n"
+                                   + "\n".join(f"  - {it['method']} {it['path']} — {it.get('summary','')}" for it in disc["items"]))
+            else:
+                discovery_block = f"\n\n(Tried to probe {urls[0]} for MCP/OpenAPI but found nothing reachable.)"
+
     user = (
         f"ROLE: {role}\nCURRENT TAB: {req.tab or 'unknown'}\n\n"
         f"CURRENT STATE (published / what already exists):\n{_json.dumps(state, indent=1)[:6000]}\n\n"
         f"CURRENT VIEW SNAPSHOT (unsaved working object on this tab):\n{_json.dumps(req.snapshot)[:3000]}\n\n"
-        f"MEMORY (durable, gathered earlier):\n{_memory_block(mems)}\n\n"
+        f"MEMORY (durable, gathered earlier):\n{_memory_block(mems)}"
+        f"{discovery_block}\n\n"
         f"USER MESSAGE:\n{req.instruction[:2000]}"
     )
     try:
@@ -256,6 +294,13 @@ async def assist(req: AssistRequest, scope: Scope = Depends(resolve_scope),
     reply = str((data or {}).get("reply") or "")
     warnings = [{"level": "error" if w.get("level") == "error" else "warn", "msg": str(w.get("msg", ""))[:300]}
                 for w in ((data.get("warnings") if isinstance(data, dict) else None) or []) if isinstance(w, dict) and w.get("msg")]
+
+    # A one-click, tab-specific proposal (validated shape only — the client applies
+    # it through the active view's registered handler, re-gated against the rules).
+    prop = data.get("proposal") if isinstance(data, dict) else None
+    proposal = None
+    if isinstance(prop, dict) and isinstance(prop.get("kind"), str) and isinstance(prop.get("payload"), dict):
+        proposal = {"kind": prop["kind"][:40], "summary": str(prop.get("summary") or "")[:200], "payload": prop["payload"]}
 
     # Persist durable memory the assistant chose to keep (dedupe by title, tenant-wide).
     remembered: list[str] = []
@@ -275,11 +320,12 @@ async def assist(req: AssistRequest, scope: Scope = Depends(resolve_scope),
 
     # Persist the conversation turns.
     db.add(CopilotMessage(thread_id=thread.id, role="user", tab=req.tab, content=req.instruction[:4000]))
+    a_meta = {k: v for k, v in {"warnings": warnings, "remembered": remembered, "proposal": proposal}.items() if v}
     db.add(CopilotMessage(thread_id=thread.id, role="assistant", tab=req.tab, content=reply[:8000],
-                          meta={"warnings": warnings, "remembered": remembered} if (warnings or remembered) else None))
+                          meta=a_meta or None))
     await db.commit()
 
-    return {"reply": reply, "warnings": warnings, "remembered": remembered, "role": role}
+    return {"reply": reply, "warnings": warnings, "remembered": remembered, "proposal": proposal, "role": role}
 
 
 # ---------- conversation ----------

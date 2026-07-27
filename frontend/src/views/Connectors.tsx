@@ -4,6 +4,7 @@
 import { KeyRound, Plug, Save, Sparkles, Send, Trash2, X, Zap } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
+import { useCopilotApply, useCopilotSnapshot } from "../copilot/bridge";
 
 type Suggestion = { kind: string; name: string; description: string; config: Record<string, unknown> };
 type DiscItem = { name?: string; description?: string; args?: string[]; method?: string; path?: string; summary?: string };
@@ -101,6 +102,22 @@ export default function ConnectorsView() {
     setMessages((ms) => ms.concat([{ role: "assistant", system: true, text: `Loaded “${s.name}” into the editor — review and Save.` }]));
   };
   const applySuggestion = (idx: number) => { const s = messages[idx]?.suggestion; if (s) applyConfig(s); };
+
+  // Global copilot: publish the connector being edited, and apply a connector it proposes.
+  useCopilotSnapshot({ name, kind, description, config: configText });
+  useCopilotApply((p) => {
+    if (p.kind !== "connector") return null;
+    const pl = p.payload as { kind?: string; name?: string; description?: string; config?: Record<string, unknown> };
+    if (!pl?.config) return null;
+    if (pl.name) setName(pl.name);
+    if (pl.kind) setKind(pl.kind);
+    setDescription(pl.description || "");
+    setConfigText(JSON.stringify(pl.config, null, 2));
+    setEnabled(true);
+    const secret = (pl.config as { auth_secret?: string }).auth_secret;
+    setNote(`Loaded “${pl.name}” into the editor from the copilot — review, then Save.` + (secret ? ` Add secret “${secret}” under Tenant secrets first.` : ""));
+    return `Loaded connector “${pl.name || "?"}” into the editor.`;
+  });
   const toggleShowAll = (idx: number) =>
     setMessages((ms) => ms.map((m, i) => (i === idx ? { ...m, showAll: !m.showAll } : m)));
 

@@ -8,9 +8,10 @@
 import { Brain, Eraser, Send, Sparkles, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { useCopilotBridge, type CopilotProposal } from "./copilot/bridge";
 
 type Warning = { level: "warn" | "error"; msg: string };
-type Msg = { role: "user" | "assistant"; content: string; tab?: string; warnings?: Warning[]; remembered?: string[] };
+type Msg = { role: "user" | "assistant"; content: string; tab?: string; warnings?: Warning[]; remembered?: string[]; proposal?: CopilotProposal | null; applied?: boolean; system?: boolean };
 type Mem = { id: string; kind: string; title: string; content: string; source: string; tenant_wide: boolean; updated_at: string };
 
 // view id → the label the copilot shows as "you're on …"
@@ -29,6 +30,7 @@ export default function CopilotPanel({ view, project }: { view: string; project:
   const [memOpen, setMemOpen] = useState(false);
   const [role, setRole] = useState<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bridge = useCopilotBridge();
 
   const loadThread = useCallback(() => {
     api<{ messages: Msg[] }>("GET", "/copilot/thread")
@@ -53,11 +55,12 @@ export default function CopilotPanel({ view, project }: { view: string; project:
     setMsgs((m) => [...m, { role: "user", content: q, tab: view }]);
     setBusy(true);
     try {
-      const r = await api<{ reply?: string; warnings?: Warning[]; remembered?: string[]; role?: string; error?: string }>(
-        "POST", "/copilot/assist", { tab: view, instruction: q, snapshot: {} });
+      const snapshot = (bridge?.getSnapshot() as Record<string, unknown>) ?? {};
+      const r = await api<{ reply?: string; warnings?: Warning[]; remembered?: string[]; role?: string; proposal?: CopilotProposal | null; error?: string }>(
+        "POST", "/copilot/assist", { tab: view, instruction: q, snapshot });
       if (r.error) { setMsgs((m) => [...m, { role: "assistant", content: r.error!, warnings: [{ level: "error", msg: r.error! }] }]); return; }
       if (r.role) setRole(r.role);
-      setMsgs((m) => [...m, { role: "assistant", content: r.reply || "", warnings: r.warnings, remembered: r.remembered }]);
+      setMsgs((m) => [...m, { role: "assistant", content: r.reply || "", warnings: r.warnings, remembered: r.remembered, proposal: r.proposal }]);
       if (r.remembered && r.remembered.length) loadMemory();
     } catch (e: unknown) {
       const msg = String((e as { message?: string })?.message ?? e);
@@ -78,6 +81,19 @@ export default function CopilotPanel({ view, project }: { view: string; project:
     if (!window.confirm("Delete ALL gathered copilot memory for this tenant? Use this if stale context is causing problems. This can't be undone.")) return;
     await api("DELETE", "/copilot/memory").catch(() => {});
     setMemory([]);
+  };
+
+  const applyProposal = (idx: number) => {
+    const p = msgs[idx]?.proposal;
+    if (!p) return;
+    const fn = bridge?.getApply();
+    if (!fn) {
+      setMsgs((m) => m.concat([{ role: "assistant", system: true, content: `Open the relevant tab to apply this (${p.summary || p.kind}).` }]));
+      return;
+    }
+    const note = fn(p);
+    setMsgs((m) => m.map((x, i) => (i === idx ? { ...x, applied: true } : x))
+      .concat([{ role: "assistant", system: true, content: note || "Applied to the editor — review and save." }]));
   };
 
   const wchip = (w: Warning, i: number) => (
@@ -142,11 +158,21 @@ export default function CopilotPanel({ view, project }: { view: string; project:
         {msgs.map((m, i) => m.role === "user" ? (
           <div key={i} style={{ alignSelf: "flex-end", maxWidth: "88%", background: "var(--accent-soft, rgba(59,110,245,.12))",
             borderRadius: "10px 10px 2px 10px", padding: "7px 10px", fontSize: 12.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</div>
+        ) : m.system ? (
+          <div key={i} className="sub" style={{ alignSelf: "flex-start", fontSize: 11.5, color: "var(--muted)", padding: "2px 4px" }}>✓ {m.content}</div>
         ) : (
           <div key={i} style={{ alignSelf: "flex-start", maxWidth: "92%", background: "var(--panel2, rgba(127,127,127,.1))",
             borderRadius: "10px 10px 10px 2px", padding: "8px 10px", fontSize: 12.5, color: "var(--text2)", lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
             {m.content}
             {(m.warnings ?? []).map(wchip)}
+            {m.proposal && (
+              <div style={{ marginTop: 8, border: "1px solid var(--accent, #3b6ef5)", borderRadius: 8, padding: "7px 9px", background: "var(--surface)" }}>
+                <div style={{ fontSize: 11.5, marginBottom: 5 }}><b>Proposed:</b> {m.proposal.summary || m.proposal.kind}</div>
+                {m.applied
+                  ? <span className="sub" style={{ fontSize: 11 }}>applied ✓</span>
+                  : <button className="btn sm primary" onClick={() => applyProposal(i)}>Apply to editor</button>}
+              </div>
+            )}
             {(m.remembered?.length ?? 0) > 0 && <div className="sub" style={{ fontSize: 11, marginTop: 4 }}>🧠 remembered: {m.remembered!.join(", ")}</div>}
           </div>
         ))}

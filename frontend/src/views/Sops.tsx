@@ -1,6 +1,7 @@
 import { CheckCircle2, FileUp, Save, Send, ShieldCheck, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, apiUpload } from "../api";
+import { useCopilotSnapshot } from "../copilot/bridge";
 import GraphView from "./GraphView";
 
 type SopMeta = { id: string; name: string; latest_version: number; updated_at: string };
@@ -25,6 +26,10 @@ export default function SopsView() {
   const [blockLib, setBlockLib] = useState<string[]>([]);
   const [source, setSource] = useState<{ text: string; filename: string | null } | null>(null);
   const lintTimer = useRef<number | undefined>(undefined);
+
+  // Publish the SOP being edited to the copilot (it guides on SOPs; definition
+  // edits stay in the SOP editor's own refine chat for now).
+  useCopilotSnapshot({ selected: selected?.name ?? null, definition: text.slice(0, 4000), lint });
 
   const parsedDef = useMemo(() => {
     try {

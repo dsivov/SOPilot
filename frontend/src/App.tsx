@@ -10,6 +10,7 @@ import TracesView from "./views/Traces";
 import ConnectorsView from "./views/Connectors";
 import ConfigView from "./views/Config";
 import CopilotPanel from "./CopilotPanel";
+import { CopilotBridge } from "./copilot/bridge";
 import ConfigAdminView from "./views/ConfigAdmin";
 import AdminConsole from "./views/AdminConsole";
 import Help from "./views/Help";
@@ -368,6 +369,7 @@ export default function App() {
   ];
 
   return (
+    <CopilotBridge>
     <div className="sopilot">
       <div className="app">
         <aside className="side">
@@ -457,5 +459,6 @@ export default function App() {
         </div>
       </div>
     </div>
+    </CopilotBridge>
   );
 }
