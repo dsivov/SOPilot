@@ -10,7 +10,7 @@ import { useCopilotApply, useCopilotSnapshot } from "../copilot/bridge";
 import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import type { Config } from "../config/configModel";
 import {
-  describeRule, evaluateRules, ruleVocabulary, seedRules,
+  describeRule, evaluateRules, seedRules,
   type Level, type Rule, type RuleResult,
 } from "../config/rules";
 import { schemaFromConfig, foldEnumRulesIntoSchema, KNOWN_STRUCTURES, type ConfigSchema, type SchemaFieldDef, type ToolDef } from "../config/schema";
@@ -91,26 +91,6 @@ function SchemaEditor({ schema, cfg, onChange, onReport }: { schema: ConfigSchem
   const fields = schema?.fields ?? [];
   const setFields = (fs: SchemaFieldDef[]) => onChange({ ...(schema ?? { fields: [] }), fields: fs });
   const patch = (i: number, k: keyof SchemaFieldDef, v: any) => setFields(fields.map((f, j) => (j === i ? { ...f, [k]: v } : f)));
-  // LLM-assisted field authoring: plain English → one SchemaFieldDef.
-  const [ask, setAsk] = useState("");
-  const [askBusy, setAskBusy] = useState(false);
-  const [askErr, setAskErr] = useState("");
-  const draftField = async () => {
-    if (!ask.trim()) return;
-    setAskBusy(true); setAskErr("");
-    try {
-      const r = await api<{ field?: SchemaFieldDef; error?: string }>("POST", "/config/draft-field", {
-        instruction: ask,
-        existing_fields: fields.map((f) => f.path),
-        known_paths: Object.keys(cfg).concat(Object.keys(cfg.custom_config ?? {}).map((k) => `custom_config.${k}`)),
-      });
-      if (r.field?.path) { setFields([...fields, r.field]); setAsk(""); }
-      else setAskErr(r.error || "The model did not return a valid field.");
-    } catch (e: any) {
-      const m = String(e?.message ?? e);
-      setAskErr(m.includes("Not Found") ? "Draft endpoint not found — restart the backend for /config/draft-field." : `Drafting failed: ${m}`);
-    } finally { setAskBusy(false); }
-  };
   // Stage-0: import a System Analysis report (JSON). It's persisted (DB-versioned
   // via /config/analysis) AND used to seed a new schema — or MERGE into the
   // existing one, preserving the admin's curation (re-analysis).
@@ -143,16 +123,15 @@ function SchemaEditor({ schema, cfg, onChange, onReport }: { schema: ConfigSchem
   const drafter = (
     <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--line)" }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <input className="area" style={{ flex: 1, minWidth: 200 }} placeholder='describe a field — e.g. "a weather provider, enum of openweather / tomorrow.io, required"'
-          value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !askBusy && draftField()} />
-        <button className="btn sm primary" onClick={draftField} disabled={askBusy || !ask.trim()}>{askBusy ? "Drafting…" : "Draft field"}</button>
+        <span className="sub" style={{ flex: 1, minWidth: 200, fontSize: 12 }}>
+          Add fields manually below, or seed from Stage-0. To draft a field in plain English, ask the <b>SOPilot copilot</b>.
+        </span>
         <label className="btn ghost sm" style={{ cursor: "pointer" }} title="Seed the schema from a Stage-0 System Analysis report (JSON)">
           Import analysis report…
           <input type="file" accept="application/json,.json" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) importReport(f); e.target.value = ""; }} />
         </label>
       </div>
-      {askErr && <div className="lintline" style={{ color: "var(--crit)", marginTop: 6 }}>{askErr}</div>}
       {importMsg && <div className="lintline" style={{ color: importMsg.startsWith("Imported") ? "var(--good)" : "var(--crit)", marginTop: 6, whiteSpace: "normal" }}>{importMsg}</div>}
     </div>
   );
@@ -275,9 +254,6 @@ export default function ConfigAdminView() {
   // Rules are previewed against a generic sample config so the admin sees each
   // rule fire — no customer's real config is shown here.
   const [cfg] = useState<Config>(SAMPLE_CONFIG as Config);
-  const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [draftErr, setDraftErr] = useState("");
   const [showJson, setShowJson] = useState(false);
   // The Stage-1 SCHEMA (DSL): null until authored. When set, it (not the loaded
   // config) is the field vocabulary the user stage and rule authoring use.
@@ -306,12 +282,6 @@ export default function ConfigAdminView() {
   }, []);
 
   const results = useMemo(() => evaluateRules(cfg, rules), [cfg, rules]);
-  // Rule authoring references the SCHEMA's field paths when a schema exists,
-  // else the config-derived vocabulary.
-  const vocab = useMemo(() => {
-    const base = ruleVocabulary(cfg);
-    return schema?.fields?.length ? { ...base, fields: schema.fields.map((f) => f.path) } : base;
-  }, [cfg, schema]);
   const violated = results.filter((r) => r.state === "violated").length;
 
   const remove = (id: string) => { setRules((rs) => rs.filter((r) => r.id !== id)); setDirty(true); };
@@ -350,21 +320,6 @@ export default function ConfigAdminView() {
       const m = String(e?.message ?? e);
       setSaveErr(m.includes("Not Found") ? "Ruleset endpoint not found — restart the backend for /config/ruleset." : `Save failed: ${m}`);
     } finally { setSaveBusy(false); }
-  };
-
-  const draftRule = async () => {
-    if (!draft.trim()) return;
-    setBusy(true); setDraftErr("");
-    try {
-      const r = await api<{ rule?: Rule; error?: string }>("POST", "/config/draft-rule", {
-        instruction: draft, tools: vocab.tools, fields: vocab.fields,
-      });
-      if (r.rule && r.rule.kind) { add({ ...r.rule, id: newId(r.rule.kind) }); setDraft(""); }
-      else setDraftErr(r.error || "The model did not return a valid rule.");
-    } catch (e: any) {
-      const m = String(e?.message ?? e);
-      setDraftErr(m.includes("Not Found") ? "Draft endpoint not found — restart the backend for /config/draft-rule." : `Drafting failed: ${m}`);
-    } finally { setBusy(false); }
   };
 
   return (
@@ -466,24 +421,10 @@ export default function ConfigAdminView() {
         </div>
       )}
 
-      <div className="grid2">
-        <div className="card">
-          <div className="chead"><span>Author a rule</span></div>
-          <div className="cbody"><AddRule onAdd={add} /></div>
-        </div>
-        <div className="card">
-          <div className="chead"><span>Draft with the LLM</span>
-            <span className="sub" style={{ marginLeft: "auto" }}>plain English → one structured rule</span></div>
-          <div className="cbody" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <textarea className="area" rows={3} placeholder='e.g. "if the agent can send email it must have a notification service configured"'
-              value={draft} onChange={(e) => setDraft(e.target.value)} />
-            {draftErr && <div className="lintline" style={{ color: "var(--crit)" }}>{draftErr}</div>}
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span className="sub" style={{ flex: 1 }}>{vocab.tools.length} tools · {vocab.fields.length} fields in scope</span>
-              <button className="btn sm primary" onClick={draftRule} disabled={busy || !draft.trim()}>{busy ? "Drafting…" : "Draft rule"}</button>
-            </div>
-          </div>
-        </div>
+      <div className="card">
+        <div className="chead"><span>Author a rule</span>
+          <span className="sub" style={{ marginLeft: "auto" }}>or ask the SOPilot copilot to draft one in plain English</span></div>
+        <div className="cbody"><AddRule onAdd={add} /></div>
       </div>
     </div>
   );

@@ -236,6 +236,36 @@ def _memory_block(mems: list[CopilotMemory]) -> str:
     return "\n".join(f"  - [{m.kind}] {m.title}: {m.content}"[:400] for m in mems)
 
 
+async def _sop_turn(req: AssistRequest, thread: CopilotThread, prior: list, role: str, db: AsyncSession) -> dict:
+    """One SOP refinement turn via the existing builder — folds the old 'Refine in
+    conversation' chat into the copilot."""
+    cur = req.snapshot.get("definition") if isinstance(req.snapshot, dict) else None
+    if not isinstance(cur, dict):
+        msg = "Open an SOP in the SOPs tab (with a valid definition) and I'll help you refine it — describe the change you want."
+        db.add(CopilotMessage(thread_id=thread.id, role="user", tab="sops", content=req.instruction[:4000]))
+        db.add(CopilotMessage(thread_id=thread.id, role="assistant", tab="sops", content=msg))
+        await db.commit()
+        return {"reply": msg, "warnings": [], "remembered": [], "proposal": None, "role": role}
+
+    from ..builder import build_turn
+    bt_hist = [{"role": m.role, "content": m.content} for m in prior if m.tab == "sops"][-12:]
+    bt_hist.append({"role": "user", "content": req.instruction})
+    try:
+        message, updated, _complete = await build_turn(bt_hist, cur)
+    except Exception as e:  # surface builder/schema failures
+        db.add(CopilotMessage(thread_id=thread.id, role="user", tab="sops", content=req.instruction[:4000]))
+        await db.commit()
+        return {"error": f"SOP refine failed ({type(e).__name__}: {str(e)[:150]})"}
+
+    proposal = ({"kind": "sop_definition", "summary": "Update the SOP definition", "payload": {"definition": updated}}
+                if updated != cur else None)
+    db.add(CopilotMessage(thread_id=thread.id, role="user", tab="sops", content=req.instruction[:4000]))
+    db.add(CopilotMessage(thread_id=thread.id, role="assistant", tab="sops", content=message[:8000],
+                          meta={"proposal": proposal} if proposal else None))
+    await db.commit()
+    return {"reply": message, "warnings": [], "remembered": [], "proposal": proposal, "role": role}
+
+
 @router.post("/assist")
 async def assist(req: AssistRequest, scope: Scope = Depends(resolve_scope),
                  role: str = Depends(resolve_role), db: AsyncSession = Depends(get_db)) -> dict:
@@ -250,6 +280,12 @@ async def assist(req: AssistRequest, scope: Scope = Depends(resolve_scope),
              .order_by(CopilotMessage.created_at.desc()).limit(_HISTORY_TURNS))).scalars().all()
     prior = list(reversed(prior))
     hist_msgs = [{"role": m.role if m.role in ("user", "assistant") else "user", "content": m.content[:2000]} for m in prior]
+
+    # SOPs tab: delegate to the tuned SOP builder (build_turn) — it IS the SOP
+    # refinement assistant. Returns a message + the (possibly) updated definition,
+    # surfaced as a one-click sop_definition proposal.
+    if req.tab == "sops":
+        return await _sop_turn(req, thread, prior, role, db)
 
     state = await _assemble_state(db, scope)
     mems = await _load_memory(db, scope)

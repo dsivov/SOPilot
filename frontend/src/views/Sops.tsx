@@ -1,12 +1,11 @@
-import { CheckCircle2, FileUp, Save, Send, ShieldCheck, Trash2 } from "lucide-react";
+import { CheckCircle2, FileUp, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, apiUpload } from "../api";
-import { useCopilotSnapshot } from "../copilot/bridge";
+import { useCopilotApply, useCopilotSnapshot } from "../copilot/bridge";
 import GraphView from "./GraphView";
 
 type SopMeta = { id: string; name: string; latest_version: number; updated_at: string };
 type Lint = { problems: string[]; publishable: boolean };
-type ChatMsg = { role: "user" | "assistant"; content: string };
 
 export default function SopsView() {
   const [sops, setSops] = useState<SopMeta[]>([]);
@@ -19,17 +18,11 @@ export default function SopsView() {
   const [doc, setDoc] = useState("");
   const [docName, setDocName] = useState("");
   const [docFile, setDocFile] = useState<File | null>(null);
-  const [chat, setChat] = useState<ChatMsg[]>([]);
-  const [chatInput, setChatInput] = useState("");
   const [tab, setTab] = useState<"graph" | "json" | "source">("graph");
   const [selectedNode, setSelectedNode] = useState<{ name: string; kind: "action" | "state" } | null>(null);
   const [blockLib, setBlockLib] = useState<string[]>([]);
   const [source, setSource] = useState<{ text: string; filename: string | null } | null>(null);
   const lintTimer = useRef<number | undefined>(undefined);
-
-  // Publish the SOP being edited to the copilot (it guides on SOPs; definition
-  // edits stay in the SOP editor's own refine chat for now).
-  useCopilotSnapshot({ selected: selected?.name ?? null, definition: text.slice(0, 4000), lint });
 
   const parsedDef = useMemo(() => {
     try {
@@ -53,7 +46,6 @@ export default function SopsView() {
     const full = await api("GET", `/sops/${meta.id}`);
     setSelected(meta);
     setStatus(full.status);
-    setChat([]);
     setSource(full.source_document ? { text: full.source_document, filename: full.source_filename } : null);
     setSelectedNode(null);
     setText(JSON.stringify(full.definition, null, 2));
@@ -76,6 +68,18 @@ export default function SopsView() {
     setText(v);
     runLint(v);
   };
+
+  // SOP refinement is folded into the global copilot: publish the current SOP +
+  // its definition, and apply the updated definition the copilot's builder returns.
+  useCopilotSnapshot({ selected: selected?.name ?? null, definition: parsedDef, lint });
+  useCopilotApply((p) => {
+    if (p.kind !== "sop_definition") return null;
+    const def = (p.payload as { definition?: unknown }).definition;
+    if (!def || typeof def !== "object") return null;
+    const raw = JSON.stringify(def, null, 2);
+    setText(raw); runLint(raw); setSelectedNode(null);
+    return "Loaded the updated SOP into the editor — review the graph and Save.";
+  });
 
   const save = async () => {
     if (!selected) return;
@@ -124,28 +128,8 @@ export default function SopsView() {
       setText(JSON.stringify(r.definition, null, 2));
       setLint(r.lint);
       setSource(docFile ? { text: "(uploaded — reopen the SOP to view extracted text)", filename: docFile.name } : { text: doc, filename: null });
-      setChat([{ role: "assistant", content: "Draft created from your document. Tell me what to adjust — stages, wording, triggers, data lookups." }]);
     } catch (e) {
       alert(String(e));
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const sendChat = async () => {
-    if (!chatInput.trim() || !text) return;
-    const history = [...chat, { role: "user" as const, content: chatInput }];
-    setChat(history);
-    setChatInput("");
-    setBusy("chat");
-    try {
-      const definition = JSON.parse(text);
-      const r = await api("POST", "/sops/build-turn", { history, current_definition: definition });
-      setChat([...history, { role: "assistant", content: r.assistant_message }]);
-      setText(JSON.stringify(r.definition, null, 2));
-      setLint(r.lint);
-    } catch (e) {
-      setChat([...history, { role: "assistant", content: `That change failed: ${e}` }]);
     } finally {
       setBusy("");
     }
@@ -403,29 +387,13 @@ export default function SopsView() {
 
           <div className="card" style={{ flex: 1 }}>
             <div className="chead">
-              <h3>Refine in conversation</h3>
-              <span className="sub">smallest change per turn</span>
+              <h3>Refine with the copilot</h3>
+              <span className="sub">SOP editing moved to the SOPilot copilot</span>
             </div>
-            <div className="cbody" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div className="chatlog">
-                {chat.length === 0 && <div className="empty">e.g. “Identity must be verified before any account details” or “add a PriceShopper cohort”.</div>}
-                {chat.map((m, i) => (
-                  <div key={i} className={"msg " + m.role}>{m.content}</div>
-                ))}
-                {busy === "chat" && <div className="spin" />}
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  className="qinput"
-                  placeholder={selected ? "Describe a change…" : "Select an SOP first"}
-                  disabled={!selected || busy === "chat"}
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendChat()}
-                />
-                <button className="btn primary" disabled={!selected || busy === "chat" || !chatInput.trim()} onClick={sendChat}>
-                  <Send />
-                </button>
+            <div className="cbody">
+              <div className="empty" style={{ padding: "8px 0" }}>
+                Open the <b>SOPilot copilot</b> (bottom-right) and describe a change — e.g. “identity must be verified
+                before any account details” or “add a PriceShopper cohort”. It edits this SOP and you Apply + Save here.
               </div>
             </div>
           </div>

@@ -9,7 +9,7 @@ import ConfigGraph from "./ConfigGraph";
 import EXAMPLE from "../config/exampleConfig.json";
 import { SAMPLE_CONFIG } from "../config/sampleConfig";
 import { MCP_INTROSPECTION } from "../config/mcpIntrospection";
-import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, availableToolNames, type Finding, type Introspection } from "../config/configModel";
+import { configToGraph, validateConfig, promptMcpFindings, logicalPromptFindings, enabledTools, type Finding, type Introspection } from "../config/configModel";
 import { ruleFindings, seedRules, type Rule } from "../config/rules";
 import type { ConfigSchema } from "../config/schema";
 import GuidedEditor, { applyEdits, type EditOp } from "./ConfigEdit";
@@ -62,8 +62,6 @@ export default function ConfigView() {
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [introMsg, setIntroMsg] = useState("");
-  const [logicalLive, setLogicalLive] = useState<Finding[] | null>(null);
-  const [busy2, setBusy2] = useState(false);
   // Admin-published constraint rules (stage-1 → user-stage handoff). null until
   // fetched; falls back to the built-in seed when nothing is published yet.
   const [adminRules, setAdminRules] = useState<Rule[] | null>(null);
@@ -138,7 +136,6 @@ export default function ConfigView() {
     const { next, applied, skipped } = applyEdits(cfg as any, edits, allowedFields, allowedTools);
     setCfg(next as Record<string, any>);
     setText(JSON.stringify(next, null, 2));
-    setLogicalLive(null);
     return `Applied ${applied.length} change(s) to the working config`
       + (skipped.length ? `, skipped ${skipped.length} out-of-schema` : "")
       + ". Review, then Save.";
@@ -155,8 +152,8 @@ export default function ConfigView() {
     } finally { setSaveBusy(false); }
   };
 
-  const load = (v: string) => { try { setCfg(JSON.parse(v)); setErr(""); setLogicalLive(null); } catch (e: any) { setErr(String(e?.message ?? e)); } };
-  const preset = (c: any) => { setText(JSON.stringify(c, null, 2)); setCfg(c); setErr(""); setIntro(MCP_INTROSPECTION); setLive(false); setLogicalLive(null); };
+  const load = (v: string) => { try { setCfg(JSON.parse(v)); setErr(""); } catch (e: any) { setErr(String(e?.message ?? e)); } };
+  const preset = (c: any) => { setText(JSON.stringify(c, null, 2)); setCfg(c); setErr(""); setIntro(MCP_INTROSPECTION); setLive(false); };
   const resetEmpty = () => { try { localStorage.removeItem(cfgStoreKey()); } catch { /* ignore */ } preset(EMPTY_CONFIG); };
   // Throw away the local draft and reload the last-saved config from the DB.
   const discardToSaved = async () => {
@@ -169,21 +166,6 @@ export default function ConfigView() {
     } catch (e: any) { setSaveMsg(`Reload failed: ${String(e?.message ?? e)}`); }
   };
 
-  const validate = async () => {
-    setBusy2(true);
-    try {
-      const r = await api<{ findings: Finding[] }>("POST", "/config/validate-prompt", {
-        prompt: cfg.prompt ?? "",
-        available_tools: availableToolNames(cfg, intro),
-        transfer_topics: (cfg.transfer_topics ?? []).map((t: any) => t.function_tag ?? t.topic_id),
-        language: cfg.default_language_iso ?? "",
-      });
-      setLogicalLive(r.findings ?? []);
-    } catch (e: any) {
-      const m = String(e?.message ?? e);
-      setLogicalLive([{ level: "warn", msg: m.includes("Not Found") ? "Validation endpoint not found — restart the backend." : `Prompt validation failed: ${m}` }]);
-    } finally { setBusy2(false); }
-  };
 
   const introspect = async () => {
     const servers = (cfg.mcp_servers ?? []).map((m: any) => ({ url: m.url, authorization: m.authorization }));
@@ -273,7 +255,7 @@ export default function ConfigView() {
         <div className="cbody">
           <GuidedEditor cfg={cfg} rules={effectiveRules} schema={adminSchema}
             rulesetLabel={adminRules ? `published ruleset v${adminVersion}` : "the built-in default rules"}
-            onApply={(next) => { setCfg(next); setText(JSON.stringify(next, null, 2)); setLogicalLive(null); }} />
+            onApply={(next) => { setCfg(next); setText(JSON.stringify(next, null, 2)); }} />
         </div>
       </div>
 
@@ -331,10 +313,9 @@ export default function ConfigView() {
       <div className="card">
         <div className="chead"><span>Logical prompt validation</span>
           <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            <span className="sub">{logicalLive ? "checked by the LLM against the config" : "freeform prompt vs config · heuristic preview"}</span>
-            <button className="btn sm ghost" onClick={validate} disabled={busy2}>{busy2 ? "Validating…" : "Validate (LLM)"}</button>
+            <span className="sub">freeform prompt vs config · heuristic preview — ask the copilot for a deeper check</span>
           </span></div>
-        <div className="cbody"><Findings items={logicalLive ?? logical} /></div>
+        <div className="cbody"><Findings items={logical} /></div>
       </div>
     </div>
   );
