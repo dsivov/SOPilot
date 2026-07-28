@@ -5,15 +5,21 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 
 export type CopilotProposal = { kind: string; summary?: string; payload: unknown };
+export type CopilotFinding = { level: "warn" | "error"; msg: string };
 // An apply handler returns a short human note describing what it did (or null if
 // it couldn't apply — e.g. wrong tab).
 export type ApplyFn = (p: CopilotProposal) => string | null;
+// A report handler lets the active view show the copilot's findings (warnings)
+// in its own UI — e.g. the Config viewer's validation card.
+export type ReportFn = (findings: CopilotFinding[]) => void;
 
 type Bridge = {
   getSnapshot: () => unknown;
   setSnapshot: (data: unknown) => void;
   getApply: () => ApplyFn | null;
   setApply: (fn: ApplyFn | null) => void;
+  getReport: () => ReportFn | null;
+  setReport: (fn: ReportFn | null) => void;
 };
 
 const Ctx = createContext<Bridge | null>(null);
@@ -21,11 +27,14 @@ const Ctx = createContext<Bridge | null>(null);
 export function CopilotBridge({ children }: { children: ReactNode }) {
   const snap = useRef<unknown>(null);
   const apply = useRef<ApplyFn | null>(null);
+  const report = useRef<ReportFn | null>(null);
   const value = useRef<Bridge>({
     getSnapshot: () => snap.current,
     setSnapshot: (d) => { snap.current = d; },
     getApply: () => apply.current,
     setApply: (f) => { apply.current = f; },
+    getReport: () => report.current,
+    setReport: (f) => { report.current = f; },
   });
   return <Ctx.Provider value={value.current}>{children}</Ctx.Provider>;
 }
@@ -55,5 +64,17 @@ export function useCopilotApply(fn: ApplyFn | null): void {
     if (!b) return;
     b.setApply((p) => (ref.current ? ref.current(p) : null));
     return () => b.setApply(null);
+  }, [b]);
+}
+
+// A view registers where the copilot's findings (warnings) should be shown.
+export function useCopilotReport(fn: ReportFn | null): void {
+  const b = useContext(Ctx);
+  const ref = useRef(fn);
+  ref.current = fn;
+  useEffect(() => {
+    if (!b) return;
+    b.setReport((f) => ref.current?.(f));
+    return () => b.setReport(null);
   }, [b]);
 }

@@ -15,7 +15,7 @@ import type { ConfigSchema } from "../config/schema";
 import GuidedEditor, { applyEdits, type EditOp } from "./ConfigEdit";
 import Help from "./Help";
 import { editorFields } from "../config/schema";
-import { useCopilotApply, useCopilotSnapshot } from "../copilot/bridge";
+import { useCopilotApply, useCopilotReport, useCopilotSnapshot } from "../copilot/bridge";
 import { api, getCreds } from "../api";
 
 // A fresh project starts from this empty skeleton — NOT the bundled example
@@ -122,6 +122,11 @@ export default function ConfigView() {
   }, [cfg]);
 
   const docDirty = JSON.stringify(cfg) !== docBaseline;
+
+  // Findings the copilot reports (e.g. from "run logical prompt validation") —
+  // shown in the Logical prompt validation card for better visualisation.
+  const [copilotFindings, setCopilotFindings] = useState<Finding[]>([]);
+  useCopilotReport((fs) => setCopilotFindings(fs.map((f) => ({ level: f.level, msg: f.msg }))));
 
   // Copilot (Stage 2): publish the working config + bounds, and apply config_edits
   // the copilot proposes — re-gated by the same allow-sets the guided editor uses.
@@ -315,7 +320,18 @@ export default function ConfigView() {
           <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
             <span className="sub">freeform prompt vs config · heuristic preview — ask the copilot for a deeper check</span>
           </span></div>
-        <div className="cbody"><Findings items={logical} /></div>
+        <div className="cbody">
+          <Findings items={logical} />
+          {copilotFindings.length > 0 && (
+            <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--line)" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                <span>✨ From the copilot (LLM check)</span>
+                <button className="btn ghost sm" style={{ marginLeft: "auto" }} onClick={() => setCopilotFindings([])}>Dismiss</button>
+              </div>
+              <Findings items={copilotFindings} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

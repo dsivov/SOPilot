@@ -74,6 +74,7 @@ export default function CopilotPanel({ view, project }: { view: string; project:
       if (r.error) { setMsgs((m) => [...m, { role: "assistant", content: r.error!, warnings: [{ level: "error", msg: r.error! }] }]); return; }
       if (r.role) setRole(r.role);
       setMsgs((m) => [...m, { role: "assistant", content: r.reply || "", warnings: r.warnings, remembered: r.remembered, proposal: r.proposal, discovered: r.discovered }]);
+      if (r.warnings && r.warnings.length) bridge?.getReport()?.(r.warnings);  // surface findings in the active view
       if (r.remembered && r.remembered.length) loadMemory();
     } catch (e: unknown) {
       const msg = String((e as { message?: string })?.message ?? e);
