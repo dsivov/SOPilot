@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PolarTie SmartForm — the five problems, and three ways SOPilot could help</title>
+<style>
+:root{
+  --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
+  --ink:#e7ebf3; --ink-soft:#aab3c5; --ink-faint:#7b8499;
+  --line:#2c3346; --line-soft:#232a3a;
+  --a:#5b8def; --b:#19b89a; --c:#f0a73c; --ctrl:#a974f0; --danger:#ef5b6e; --ok:#3ecf8e;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:14px; --maxw:1140px;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(91,141,239,.11), transparent 60%),
+    radial-gradient(900px 520px at -10% 8%, rgba(25,184,154,.07), transparent 55%),
+    var(--bg);
+  color:var(--ink);font:17px/1.7 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:var(--mono)}svg{max-width:100%;height:auto}
+.hero{padding:70px 22px 34px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(91,141,239,.08),transparent)}
+.hero-inner{max-width:880px;margin:0 auto}
+.eyebrow{letter-spacing:.22em;text-transform:uppercase;font-size:12px;color:var(--ink-faint);font-weight:700}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.05;margin:.3em 0 .25em;background:linear-gradient(92deg,#cfe0ff,#8fd9c9 55%,#cdb1f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2.2vw,21px);color:var(--ink-soft)}
+.byline{margin-top:14px;color:var(--ink-faint);font-size:13.5px}.byline a{color:var(--ink-soft)}
+.hero-tags{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:5px 11px;border-radius:999px;font-size:12.5px}.tag b{color:var(--ink)}
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:240px 1fr;gap:40px;padding:30px 22px 90px}
+nav.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+nav.toc .tl-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:4px 6px 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}nav.toc li{counter-increment:toc}
+nav.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;line-height:1.3}
+nav.toc a::before{content:counter(toc,decimal-leading-zero);color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+nav.toc a:hover{background:var(--panel2);text-decoration:none;color:var(--ink)}nav.toc a.active{background:linear-gradient(90deg,rgba(91,141,239,.2),transparent);color:#fff;border-left:2px solid var(--a)}
+main{min-width:0;max-width:772px}article section{margin:0 0 54px;scroll-margin-top:20px}
+h2{font-size:clamp(23px,3.2vw,31px);margin:0 0 6px;line-height:1.15}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);font-weight:700;margin-bottom:6px}
+h3{font-size:19px;margin:28px 0 8px}p{margin:.7em 0}.lead-p{font-size:19px;color:var(--ink)}.small{font-size:14px;color:var(--ink-faint)}
+.pull{font-size:22px;line-height:1.4;color:#d9e2f2;border-left:3px solid var(--a);padding:6px 0 6px 18px;margin:22px 0;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}.g2,.g3{grid-template-columns:1fr}main{max-width:none}}
+.callout{border-radius:12px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);margin:18px 0}
+.callout .clabel{font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.callout.info{border-color:rgba(91,141,239,.5);background:rgba(91,141,239,.08)}.callout.info .clabel{color:#9cc0ff}
+.callout.ok{border-color:rgba(62,207,142,.5);background:rgba(62,207,142,.08)}.callout.ok .clabel{color:#7ee3b4}
+.callout.caveat{border-color:rgba(240,167,60,.5);background:rgba(240,167,60,.08)}.callout.caveat .clabel{color:#ffce86}
+.callout.key{border-color:rgba(91,141,239,.55);background:rgba(91,141,239,.1)}.callout.key .clabel{color:#9cc0ff}
+.callout.danger{border-color:rgba(239,91,110,.5);background:rgba(239,91,110,.08)}.callout.danger .clabel{color:#f6a2ad}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft)}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.02)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line);white-space:nowrap}
+.pill.a{background:rgba(91,141,239,.14);color:#9cc0ff;border-color:rgba(91,141,239,.4)}
+.pill.b{background:rgba(25,184,154,.14);color:#7fe3cf;border-color:rgba(25,184,154,.4)}
+.pill.c{background:rgba(240,167,60,.14);color:#ffce86;border-color:rgba(240,167,60,.4)}
+.pill.ctrl{background:rgba(169,116,240,.16);color:#cdb1f7;border-color:rgba(169,116,240,.45)}
+.pill.win{background:rgba(62,207,142,.14);color:#7ee3b4;border-color:rgba(62,207,142,.4)}
+.pill.danger{background:rgba(239,91,110,.14);color:#f6a2ad;border-color:rgba(239,91,110,.4)}
+figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
+hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
+.footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
+.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
+b.hl{color:#8fd9c9}
+.filepath{font-family:var(--mono);font-size:12.5px;color:#8fd9c9;background:rgba(25,184,154,.08);border:1px solid rgba(25,184,154,.25);border-radius:6px;padding:1px 6px;white-space:nowrap}
+.pnum{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;font-family:var(--mono);font-weight:800;font-size:13px;flex:0 0 auto}
+.p1{background:rgba(91,141,239,.16);color:#9cc0ff}.p2{background:rgba(25,184,154,.16);color:#7fe3cf}
+.p3{background:rgba(240,167,60,.16);color:#ffce86}.p4{background:rgba(239,91,110,.16);color:#f6a2ad}.p5{background:rgba(169,116,240,.16);color:#cdb1f7}
+.phead{display:flex;gap:12px;align-items:center;margin:0 0 4px}.phead h3{margin:0}
+.lev{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:999px}
+.lev.high{background:rgba(62,207,142,.14);color:#7ee3b4}.lev.mid{background:rgba(240,167,60,.14);color:#ffce86}.lev.top{background:rgba(169,116,240,.16);color:#cdb1f7}
+.deck{display:flex;flex-direction:column;gap:6px;margin:8px 0 2px}
+.deck .row{display:flex;gap:8px;font-size:14px}.deck .k{flex:0 0 116px;color:var(--ink-faint);font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">PolarTie SmartForm · problem analysis · basis for discussion</div>
+    <h1>Filling long forms by voice</h1>
+    <p class="lede">SmartForm is a PolarTie robot that helps a person complete long, conditional medical forms — like a
+      <b>271-field</b> workers‑comp questionnaire — by voice, in any language. This is a read of how it works today and
+      the <b>five problems</b> PolarTie needs solved, mapped to where SOPilot could help and the <b>three ways</b> we
+      could engage.</p>
+    <div class="byline">Source: <a href="https://github.com/PolarTie/pt-forms-management" target="_blank" rel="noopener">pt-forms-management</a>
+      (<span class="mono">mcp/forms_mcp_server.py</span>, <span class="mono">mcp/agent_prompt.md</span>, <span class="mono">FORM_FIELDS.md</span>) · a live example: the QME “Injured Worker Questionnaire”</div>
+    <div class="hero-tags">
+      <span class="tag">1 · <b>navigation</b></span>
+      <span class="tag">2 · <b>answering</b></span>
+      <span class="tag">3 · <b>state / edits</b></span>
+      <span class="tag">4 · <b>dependencies</b></span>
+      <span class="tag">5 · <b>32k context</b></span>
+      <span class="tag">options: <b>A / B / C</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="tl-title">In this doc</div>
+  <ol>
+    <li><a href="#what">What SmartForm is</a></li>
+    <li><a href="#arch">How it works today</a></li>
+    <li><a href="#insight">The one core insight</a></li>
+    <li><a href="#p1">Problem 1 — navigation</a></li>
+    <li><a href="#p2">Problem 2 — answering</a></li>
+    <li><a href="#p34">Problems 3 &amp; 4 — state &amp; sync</a></li>
+    <li><a href="#p5">Problem 5 — 32k context</a></li>
+    <li><a href="#leverage">Where SOPilot helps</a></li>
+    <li><a href="#options">Three ways to engage</a></li>
+    <li><a href="#next">Decider &amp; open questions</a></li>
+  </ol>
+</nav>
+
+<main>
+<article>
+
+<!-- 1 -->
+<section id="what">
+  <div class="kicker">The use case</div>
+  <h2>What SmartForm is</h2>
+  <p class="lead-p">A person needs to fill a long medical form — a QME “Injured Worker Questionnaire” runs to
+  <b>271 fields</b> across ~30 sections. SmartForm does it as a <b>conversation</b>: the robot asks one question, the
+  person answers by voice (in any language), and the answer is translated, validated and written into the form on screen.</p>
+  <p>The form is not a flat list — it's a <b>dependency graph</b>. Whole branches appear or vanish based on earlier
+  answers:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>If the person…</th><th>…then SmartForm</th></tr></thead>
+    <tbody>
+      <tr><td>says they have <b>no attorney</b></td><td>skips “attorney's name”</td></tr>
+      <tr><td>says they were <b>not admitted</b> to hospital</td><td>skips “how long admitted / what was wrong”</td></tr>
+      <tr><td>is <b>4 years old</b></td><td>never asks “how many children”</td></tr>
+      <tr><td>wants to <b>add another</b> doctor / lifted object / symptom</td><td>loops the whole sub‑section again (a “repeater”)</td></tr>
+      <tr><td>later <b>changes their mind</b> on an earlier answer</td><td>…must re-open the right branch — this is where it gets hard</td></tr>
+    </tbody>
+  </table></div>
+  <p>Add to that: relative dates (“the same day I got injured”), transliteration of names, an up-front security check,
+  section/info/signature cards, and doing all of it over a <b>voice model with a 32k context window</b>. Those pressures
+  are the five problems below.</p>
+</section>
+
+<!-- 2 -->
+<section id="arch">
+  <div class="kicker">The lay of the land</div>
+  <h2>How it works today</h2>
+  <p>The design is deliberate and, importantly, <b>the same shape SOPilot uses</b>: a <b>server-authoritative state
+  machine</b> exposes a <b>minimal, one-field-at-a-time</b> interface to a stateless voice agent. The agent's own prompt
+  says it plainly:</p>
+  <p class="pull">“You are a minimal forms agent. The MCP server handles navigation, validation, skip logic… Your job:
+  ask the question, collect the answer, and send it back.”</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 300" role="img" aria-label="SmartForm architecture and one turn">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
+        <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5b8def"/></marker>
+        <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#19b89a"/></marker>
+        <linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(169,116,240,.34)"/><stop offset="1" stop-color="rgba(169,116,240,.14)"/></linearGradient>
+        <linearGradient id="gm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(91,141,239,.34)"/><stop offset="1" stop-color="rgba(91,141,239,.14)"/></linearGradient>
+        <linearGradient id="gs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(25,184,154,.32)"/><stop offset="1" stop-color="rgba(25,184,154,.13)"/></linearGradient>
+      </defs>
+      <style>
+        .bx{rx:10;stroke-width:2}.t{fill:#fff;font:700 12.5px "Segoe UI",sans-serif;text-anchor:middle}
+        .s{fill:#e7ebf3;font:9.5px var(--mono),monospace;text-anchor:middle}
+        .lb{font:700 9.5px "Segoe UI",sans-serif;text-anchor:middle}
+      </style>
+      <rect class="bx" x="18" y="120" width="150" height="66" fill="url(#gv)" stroke="#a974f0"/>
+      <text class="t" x="93" y="146">🎙 Voice agent</text><text class="s" x="93" y="163">minimal · 1 field/turn</text><text class="s" x="93" y="176">(pt_ai_agent_mcp)</text>
+      <rect class="bx" x="300" y="120" width="170" height="66" fill="url(#gm)" stroke="#5b8def"/>
+      <text class="t" x="385" y="146">MCP forms server</text><text class="s" x="385" y="163">nav · skip-logic · state</text><text class="s" x="385" y="176">Python / FastMCP</text>
+      <rect class="bx" x="600" y="52" width="146" height="60" fill="url(#gs)" stroke="#19b89a"/>
+      <text class="t" x="673" y="76">Laravel API</text><text class="s" x="673" y="92">forms · submissions</text><text class="s" x="673" y="104">MySQL</text>
+      <rect class="bx" x="600" y="196" width="146" height="60" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="t" x="673" y="220">Browser form</text><text class="s" x="673" y="236">Vue · live via SSE</text>
+      <!-- flows -->
+      <path d="M168,142 C230,132 250,138 300,146" fill="none" stroke="#a974f0" stroke-width="2.4" marker-end="url(#ar)"/><text class="lb" x="234" y="126" fill="#cdb1f7">forms_navigate / answer</text>
+      <path d="M300,164 C250,176 230,172 168,166" fill="none" stroke="#5b8def" stroke-width="2.4" marker-end="url(#ab)"/><text class="lb" x="234" y="192" fill="#9cc0ff">“Ask the user: …” (one field)</text>
+      <path d="M470,140 C540,120 560,100 600,90" fill="none" stroke="#19b89a" stroke-width="2.2" marker-end="url(#ag)"/><text class="lb" x="548" y="112" fill="#7fe3cf">get-fields / set-fields</text>
+      <path d="M470,168 C540,190 560,210 600,222" fill="none" stroke="#19b89a" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#ag)"/><text class="lb" x="548" y="210" fill="#7fe3cf">Redis → SSE (live)</text>
+    </svg>
+    <figcaption><b>Server owns the brain; the agent stays tiny.</b> Each tool call returns <b>exactly one field</b>; the
+      Laravel API is the store and pushes live updates to the on-screen form over SSE.</figcaption>
+  </div></figure>
+
+  <div class="callout info"><div class="clabel">◆ The dependency logic, concretely</div>
+    Each field can carry a <span class="mono">FieldCondition</span> — a sandboxed boolean expression like
+    <span class="mono">isYes({surgery})</span> or <span class="mono">values[{age}] &gt;= 18</span> — evaluated
+    server-side (<span class="filepath">forms_mcp_server.py:474</span>). A field whose condition is false is
+    <b>skipped and stored as “not applicable”</b>, and the agent is simply never handed it. (There's also a second, fuzzy
+    natural-language <span class="mono">IF/THEN</span> rule layer — two skip engines to keep in mind.)
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="insight">
+  <div class="kicker">Why the five problems exist</div>
+  <h2>The one core insight</h2>
+  <p class="lead-p">All five problems are consequences of a single fact:</p>
+  <p class="pull">A form is a <b>stateful dependency graph</b> that is far too big for a <b>32k voice model</b> to hold —
+  so the state must live in an engine, and the agent must stay small.</p>
+  <p>PolarTie already made the right structural move (server-authoritative state + minimal agent). That disposes of the
+  naïve version of each problem. What remains is the <b>hard residual</b> in each — and that residual is exactly where a
+  formal constraint-graph + supervisor (what SOPilot is) has something to add.</p>
+</section>
+
+<hr class="soft">
+
+<!-- P1 -->
+<section id="p1">
+  <div class="phead"><span class="pnum p1">1</span><h3>Navigation</h3><span class="lev high">SOPilot leverage: high</span><span class="pill a" style="margin-left:auto">solve first</span></div>
+  <p class="small" style="margin-top:0">Move to any field by meaning or position, in any language — “fix my age”, “back to my address”, “two back”, “next unanswered”, “question 5”.</p>
+  <div class="deck">
+    <div class="row"><div class="k">Today</div><div><span class="mono">forms_navigate(request, current_field_id)</span> → the server <b>matches on question text</b> (<span class="filepath">_resolve_field_id_by_question :342</span>) and steps over skipped fields.</div></div>
+    <div class="row"><div class="k">Hard residual</div><div>paraphrase / <b>multilingual</b> matching; “where I said <i>Ryanair</i>” (match by <b>answer content</b>); <b>near-duplicate</b> ambiguity (~20× “hours per day you X”; “doctor's name” in 3 sections + a repeater); <b>repeater-instance</b> jumps (“the 2nd object's weight”); relative moves over a <b>sparse/looping</b> graph + <b>display-number vs internal-id</b> confusion; ~1s latency + voice-friendly one-question disambiguation.</div></div>
+    <div class="row"><div class="k">SOPilot fit</div><div>a <b>built analog</b>: the intake/switch <b>router</b> (semantic intent→graph node, multilingual, ASR-robust, per-turn) is a better resolver; a <b>semantic field index</b> (question + alt-name + current value, confidence-scored) improves precision + disambiguation.</div></div>
+  </div>
+</section>
+
+<!-- P2 -->
+<section id="p2">
+  <div class="phead"><span class="pnum p2">2</span><h3>Question answering</h3><span class="lev mid">SOPilot leverage: moderate</span></div>
+  <p class="small" style="margin-top:0">Turn messy voice/ASR input into the field's validated value.</p>
+  <div class="deck">
+    <div class="row"><div class="k">Today</div><div>the LLM agent does it, guided per-field by an <span class="mono">Answer format:</span> line + prompt rules — date normalisation (incl. relative &amp; “same day as the injury”), transliteration, option-matching, <span class="mono">unknown</span>/<span class="mono">not applicable</span>; the server re-asks on validation error; <span class="mono">#alert</span> for alert conditions.</div></div>
+    <div class="row"><div class="k">Hard residual</div><div>robustness under ASR noise; cross-field derivations; <b>alert recognition</b> is fragile in a “minimal” agent; long free-text read-back/confirm.</div></div>
+    <div class="row"><div class="k">SOPilot fit</div><div>per-turn steering could inject stronger per-field validation + <b>precedent</b> (“how prior callers answered this field”); advisory mode fits the voice latency budget.</div></div>
+  </div>
+</section>
+
+<!-- P3/4 -->
+<section id="p34">
+  <div class="phead"><span class="pnum p4">3·4</span><h3>State &amp; sync — remember, edit, propagate</h3><span class="lev top">SOPilot leverage: highest</span></div>
+  <p class="small" style="margin-top:0">Remembering answers, letting the person <b>change their mind</b>, and keeping the dependency graph consistent. These two are really <b>one</b> problem.</p>
+  <p>Forward skip-logic (“don't ask children if age = 4”) the server already does. The genuinely hard part is <b>backward
+  propagation when an earlier answer changes</b>:</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 230" role="img" aria-label="Edit propagation on a changed answer">
+      <defs>
+        <marker id="e1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#f0a73c"/></marker>
+        <marker id="e2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ef5b6e"/></marker>
+        <marker id="e3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#3ecf8e"/></marker>
+      </defs>
+      <style>.n{rx:9;stroke-width:2}.nt{fill:#fff;font:700 11.5px "Segoe UI",sans-serif;text-anchor:middle}.ns{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}.el{font:700 9.5px "Segoe UI",sans-serif;text-anchor:middle}</style>
+      <rect class="n" x="20" y="92" width="176" height="52" fill="rgba(240,167,60,.18)" stroke="#f0a73c"/>
+      <text class="nt" x="108" y="113">✎ answer changes</text><text class="ns" x="108" y="130">attorney: Yes → No</text>
+      <rect class="n" x="256" y="92" width="176" height="52" fill="rgba(91,141,239,.18)" stroke="#5b8def"/>
+      <text class="nt" x="344" y="113">re-evaluate graph</text><text class="ns" x="344" y="130">which fields are visible now?</text>
+      <rect class="n" x="500" y="20" width="240" height="46" fill="rgba(239,91,110,.16)" stroke="#ef5b6e"/>
+      <text class="nt" x="620" y="39" fill="#f6c0c7">invalidate now-moot answers</text><text class="ns" x="620" y="55">“attorney's name” → not applicable</text>
+      <rect class="n" x="500" y="92" width="240" height="46" fill="rgba(62,207,142,.14)" stroke="#3ecf8e"/>
+      <text class="nt" x="620" y="111" fill="#a8f0cf">re-surface newly-required</text><text class="ns" x="620" y="127">a branch that was skipped is now asked</text>
+      <rect class="n" x="500" y="164" width="240" height="46" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="nt" x="620" y="183">detect contradictions</text><text class="ns" x="620" y="199">alert / conflict across answers</text>
+      <line x1="196" y1="118" x2="255" y2="118" stroke="#f0a73c" stroke-width="2.4" marker-end="url(#e1)"/>
+      <path d="M432,110 C466,96 470,60 500,46" fill="none" stroke="#ef5b6e" stroke-width="2.2" marker-end="url(#e2)"/>
+      <line x1="432" y1="118" x2="499" y2="115" stroke="#3ecf8e" stroke-width="2.2" marker-end="url(#e3)"/>
+      <path d="M432,126 C466,140 470,176 500,187" fill="none" stroke="#8a93a8" stroke-width="2" marker-end="url(#e1)"/>
+    </svg>
+    <figcaption><b>The crux.</b> A single late edit can invalidate collected answers, re-open skipped branches, and create
+      contradictions. Doing this <b>principledly</b> — not ad-hoc — is exactly what a formal constraint graph is for.</figcaption>
+  </div></figure>
+  <div class="deck">
+    <div class="row"><div class="k">Today</div><div>the server stores answers (<span class="mono">submissions.data</span>), resumes from a saved-answers block, and supports a requested-changes revision walk. Skip-logic appears to run <b>forward</b>.</div></div>
+    <div class="row"><div class="k">Open question</div><div>does the server already do <b>backward</b> edit-propagation (invalidate + re-surface), or only forward? This decides how big #3/#4 really is.</div></div>
+    <div class="row"><div class="k">SOPilot fit</div><div><b>this is SOPilot.</b> The constraint-graph engine (requires / conflicts / enum, evaluated over state) does forward + backward + conflicts, <b>plus authoring &amp; verification tooling</b> for the dependency graph — a real pain for 271-field forms with two overlapping skip engines.</div></div>
+  </div>
+</section>
+
+<!-- P5 -->
+<section id="p5">
+  <div class="phead"><span class="pnum p5">5</span><h3>Realtime voice context — the 32k wall</h3><span class="lev high">SOPilot leverage: high</span></div>
+  <p class="small" style="margin-top:0">The voice model has a ~32k token window. A 271-field form and a 30–60 minute call don't fit.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 190" role="img" aria-label="The 32k context problem: solved half and open half">
+      <style>.bb{rx:9;stroke-width:2}.bt{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}.bs{fill:#e7ebf3;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}</style>
+      <rect class="bb" x="20" y="30" width="350" height="130" fill="rgba(62,207,142,.10)" stroke="rgba(62,207,142,.5)"/>
+      <text class="bt" x="195" y="52" fill="#a8f0cf">(a) form too big for the prompt</text>
+      <text class="bs" x="195" y="74">✔ already solved</text>
+      <text class="bs" x="195" y="94">one field at a time · server holds all 271</text>
+      <text class="bs" x="195" y="112">the agent never sees the whole form</text>
+      <rect class="bb" x="90" y="126" width="210" height="22" fill="rgba(62,207,142,.14)" stroke="rgba(62,207,142,.5)"/>
+      <text class="bs" x="195" y="141" fill="#a8f0cf">context stays tiny &amp; flat ▁▁▁▁▁</text>
+      <rect class="bb" x="390" y="30" width="350" height="130" fill="rgba(239,91,110,.09)" stroke="rgba(239,91,110,.5)"/>
+      <text class="bt" x="565" y="52" fill="#f6c0c7">(b) long call's transcript grows</text>
+      <text class="bs" x="565" y="74">✖ still open</text>
+      <text class="bs" x="565" y="94">turns accumulate over a 30–60 min call</text>
+      <text class="bs" x="565" y="112">until the window blows — even 1 field/turn</text>
+      <path d="M410,146 L430,140 L450,144 L470,134 L490,138 L510,126 L530,132 L550,118 L570,124 L590,108 L610,116 L630,98 L650,104 L670,86 L690,92 L710,72" fill="none" stroke="#ef5b6e" stroke-width="2"/>
+    </svg>
+    <figcaption><b>Two halves.</b> The “form too big” half is already handled by one-field-at-a-time; the open half is a
+      long call's <b>growing transcript</b>.</figcaption>
+  </div></figure>
+  <div class="deck">
+    <div class="row"><div class="k">The fix</div><div>because the <b>server is the source of truth</b>, the voice model's history is <b>disposable</b>: aggressive sliding-window / compaction, periodic session re-init that reloads only <span class="mono">guidelines + current field + a compact answers-so-far summary</span>, and a lean, stable system prompt.</div></div>
+    <div class="row"><div class="k">SOPilot fit</div><div>SOPilot's whole thesis — <b>hold state in the engine, keep the responder context minimal, assemble only what this turn needs</b> — is precisely this mitigation; it could own the per-turn context block + the answers-so-far summary + compaction triggers.</div></div>
+  </div>
+</section>
+
+<hr class="soft">
+
+<!-- leverage -->
+<section id="leverage">
+  <div class="kicker">At a glance</div>
+  <h2>Where SOPilot helps most</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>Problem</th><th>Handled today</th><th>Hard residual</th><th>SOPilot leverage</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pnum p1" style="width:20px;height:20px;font-size:11px">1</span></td><td>Navigation</td><td>server text-match + skip-stepping</td><td>precision · repeater/relative · multilingual · latency</td><td><span class="lev high">high</span> router + field index</td></tr>
+      <tr><td><span class="pnum p2" style="width:20px;height:20px;font-size:11px">2</span></td><td>Answer quality</td><td>LLM agent + <span class="mono">Answer format:</span></td><td>robustness · alerts · derivations</td><td><span class="lev mid">moderate</span> steering + precedent</td></tr>
+      <tr><td><span class="pnum p4" style="width:20px;height:20px;font-size:11px">3·4</span></td><td>State + dependencies</td><td>2 forward skip engines</td><td><b>backward edit-propagation</b> · conflicts · authoring</td><td><span class="lev top">highest</span> this is SOPilot</td></tr>
+      <tr><td><span class="pnum p5" style="width:20px;height:20px;font-size:11px">5</span></td><td>32k context</td><td>one field at a time (a)</td><td>long-call compaction (b)</td><td><span class="lev high">high</span> minimal-context thesis</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Read: <b>1 &amp; 2</b> are “their server does it — tune quality.” <b>3 &amp; 4</b> are the core, and map directly onto SOPilot's constraint graph. <b>5(b)</b> is a real, separate engineering job that the server-authoritative + minimal-context pattern is built to solve.</p>
+</section>
+
+<!-- options -->
+<section id="options">
+  <div class="kicker">The engagement decision</div>
+  <h2>Three ways SOPilot could plug in</h2>
+  <p>Orthogonal to <i>which problem we fix first</i>, this decides <b>who runs the code</b>. All three are on the table.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 250" role="img" aria-label="Three engagement options: where SOPilot sits">
+      <style>
+        .ob{rx:9;stroke-width:2}.ot{fill:#fff;font:700 11.5px "Segoe UI",sans-serif;text-anchor:middle}
+        .os{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}.oh{font:800 11px "Segoe UI",sans-serif;text-anchor:middle}
+        .ln{stroke:#8a93a8;stroke-width:1.8;fill:none}
+      </style>
+      <!-- Option A -->
+      <text class="oh" x="128" y="24" fill="#cdb1f7">A · SOPilot owns it</text>
+      <rect class="ob" x="30" y="36" width="196" height="30" fill="rgba(169,116,240,.10)" stroke="#39425a"/><text class="os" x="128" y="55" style="font-size:10px;fill:#aab3c5">voice agent</text>
+      <rect class="ob" x="30" y="76" width="196" height="52" fill="rgba(169,116,240,.30)" stroke="#a974f0"/><text class="ot" x="128" y="97">SOPilot engine</text><text class="os" x="128" y="113">nav · graph · state · context</text>
+      <rect class="ob" x="30" y="138" width="196" height="30" fill="rgba(25,184,154,.14)" stroke="#39425a"/><text class="os" x="128" y="157" style="font-size:10px;fill:#aab3c5">pt-forms: store · PDF · SSE</text>
+      <line class="ln" x1="128" y1="66" x2="128" y2="76"/><line class="ln" x1="128" y1="128" x2="128" y2="138"/>
+      <!-- Option B -->
+      <text class="oh" x="380" y="24" fill="#7fe3cf">B · advisory</text>
+      <rect class="ob" x="282" y="36" width="196" height="30" fill="rgba(25,184,154,.10)" stroke="#39425a"/><text class="os" x="380" y="55" style="font-size:10px;fill:#aab3c5">voice agent</text>
+      <rect class="ob" x="282" y="76" width="196" height="52" fill="rgba(25,184,154,.22)" stroke="#19b89a"/><text class="ot" x="380" y="97">pt-forms server</text><text class="os" x="380" y="113">they build our ideas in</text>
+      <rect class="ob" x="282" y="138" width="196" height="30" fill="#1b1f2a" stroke="#39425a"/><text class="os" x="380" y="157" style="font-size:10px;fill:#aab3c5">store · PDF · SSE</text>
+      <line class="ln" x1="380" y1="66" x2="380" y2="76"/><line class="ln" x1="380" y1="128" x2="380" y2="138"/>
+      <rect class="ob" x="300" y="188" width="160" height="30" fill="rgba(91,141,239,.10)" stroke="#5b8def" stroke-dasharray="5 3"/><text class="os" x="380" y="207" style="fill:#9cc0ff">SOPilot: design only</text>
+      <path class="ln" d="M380,188 L380,168" stroke="#5b8def" stroke-dasharray="5 3"/>
+      <!-- Option C -->
+      <text class="oh" x="632" y="24" fill="#9cc0ff">C · hybrid ★</text>
+      <rect class="ob" x="534" y="36" width="196" height="30" fill="rgba(91,141,239,.10)" stroke="#39425a"/><text class="os" x="632" y="55" style="font-size:10px;fill:#aab3c5">voice agent</text>
+      <rect class="ob" x="534" y="76" width="94" height="52" fill="rgba(91,141,239,.28)" stroke="#5b8def"/><text class="ot" x="581" y="95" style="font-size:10.5px">SOPilot</text><text class="os" x="581" y="111" style="font-size:8px">router · graph</text>
+      <rect class="ob" x="636" y="76" width="94" height="52" fill="rgba(25,184,154,.22)" stroke="#19b89a"/><text class="ot" x="683" y="95" style="font-size:10.5px">pt-forms</text><text class="os" x="683" y="111" style="font-size:8px">store · PDF</text>
+      <rect class="ob" x="534" y="138" width="196" height="30" fill="#1b1f2a" stroke="#39425a"/><text class="os" x="632" y="157" style="font-size:10px;fill:#aab3c5">shared answer store</text>
+      <line class="ln" x1="632" y1="66" x2="632" y2="76"/><line class="ln" x1="581" y1="128" x2="620" y2="138"/><line class="ln" x1="683" y1="128" x2="644" y2="138"/>
+      <line class="ln" x1="628" y1="102" x2="636" y2="102" stroke="#8a93a8"/>
+    </svg>
+    <figcaption><b>Where the brain lives.</b> A = SOPilot is the engine · B = we hand over designs, PolarTie builds them ·
+      C = SOPilot plugs in where it's strongest, pt-forms keeps what already works.</figcaption>
+  </div></figure>
+
+  <div class="grid g3" style="margin:16px 0">
+    <div class="card"><span class="pill ctrl">A · SOPilot owns it</span>
+      <p class="small" style="margin:8px 0 6px;color:var(--ink)">SOPilot is the brain behind the robot.</p>
+      <p class="small" style="margin:0"><b>+</b> cleanest fit for 1/3/4/5; one engine; PolarTie gains a reusable platform.<br><b>–</b> biggest lift; must port the whole form model &amp; interop with a large working system; PolarTie cedes the core loop.</p></div>
+    <div class="card"><span class="pill b">B · advisory</span>
+      <p class="small" style="margin:8px 0 6px;color:var(--ink)">We give the designs; they build them in pt-forms.</p>
+      <p class="small" style="margin:0"><b>+</b> lowest lift/risk; PolarTie keeps full control; fast for self-contained fixes.<br><b>–</b> no SOPilot footprint; ideas may land partially; harder to reuse across their robots.</p></div>
+    <div class="card"><span class="pill a">C · hybrid ★</span>
+      <p class="small" style="margin:8px 0 6px;color:var(--ink)">SOPilot where it's strongest; pt-forms keeps the rest.</p>
+      <p class="small" style="margin:0"><b>+</b> best value/risk; keep the working 80%, insert SOPilot for #1/#3/#4/#5; incremental, testable.<br><b>–</b> two systems to integrate — needs crisp contracts &amp; one source of truth for answers.</p></div>
+  </div>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Problem</th><th>A — SOPilot all</th><th>B — advisory</th><th>C — hybrid</th></tr></thead>
+    <tbody>
+      <tr><td>1 Navigation</td><td>SOPilot router is the resolver</td><td>give them the field-index design</td><td><b>router beside <span class="mono">forms_navigate</span></b></td></tr>
+      <tr><td>2 Answer quality</td><td>SOPilot steers every turn</td><td>validation guidance</td><td>optional per-field steering</td></tr>
+      <tr><td>3·4 State + deps</td><td>SOPilot graph owns state</td><td>the recompute algorithm</td><td><b>graph called on edits</b></td></tr>
+      <tr><td>5 32k context</td><td>SOPilot assembles all context</td><td>the compaction scheme</td><td>SOPilot owns the context block</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- next -->
+<section id="next">
+  <div class="kicker">How we decide</div>
+  <h2>Navigation-first is also the decider</h2>
+  <p>The <b>way</b> we ship the first navigation fix effectively picks the engagement model — so the first deliverable
+  doubles as the pilot that tests it:</p>
+  <ul>
+    <li><span class="pill a">C</span> a SOPilot <b>router service beside <span class="mono">forms_navigate</span></b>, or</li>
+    <li><span class="pill b">B</span> a <b>design + field-index spec</b> PolarTie builds, or</li>
+    <li><span class="pill ctrl">A</span> SOPilot <b>owning resolution end-to-end</b>.</li>
+  </ul>
+  <div class="callout key"><div class="clabel">◆ What we need from PolarTie to go further</div>
+    <b>(1)</b> Which navigation failure actually bites in production (matcher / near-duplicate / repeater / relative /
+    latency)? Point us at live cases on the example form. <b>(2)</b> Does the server already do <b>backward</b>
+    edit-propagation, or only forward? <b>(3)</b> How does the voice loop manage the 32k window on long calls today?
+    <b>(4)</b> Access to the <span class="mono">pt_ai_agent_mcp</span> submodule — the outer LLM/voice loop isn't in the
+    checkout.
+  </div>
+  <p class="small">This document is a basis for discussion, not a committed plan. Every “today” claim is read from the
+  repository as it stands; the live example form (<span class="mono">/fill/25863473</span>) is a runtime instance, not a
+  fixture, so its exact conditions are inferred from the equivalent forms in the repo.</p>
+</section>
+
+</article>
+</main>
+</div>
+
+<footer class="footer">
+  PolarTie SmartForm — problem analysis for the SOPilot engagement. Sources: <span class="mono">pt-forms-management</span>
+  (<span class="mono">mcp/forms_mcp_server.py</span>, <span class="mono">mcp/agent_prompt.md</span>,
+  <span class="mono">FORM_FIELDS.md</span>) and the QME “Injured Worker Questionnaire”. Companion register:
+  <span class="mono">docs/POLARTIE_SMARTFORM_PROBLEMS.md</span>. No patient data appears in this document.
+</footer>
+<a href="#" class="backtotop" id="btt">↑ Top</a>
+<script>
+(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
+</script>
+</body>
+</html>
