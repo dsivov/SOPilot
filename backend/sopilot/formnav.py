@@ -182,13 +182,14 @@ def _eval_condition(expr: str, values: dict[str, Any], raw: dict[str, Any]) -> b
 
 @dataclass
 class NavResult:
-    kind: str                    # field | edge | complete | none | needs_semantic
+    kind: str                    # field | edge | complete | none | ambiguous | needs_semantic
     field_id: int | None = None
     field_name: str | None = None
     label: str | None = None
     message: str = ""
     request: str = ""            # echoed for precedent logging
-    candidates: list[int] = dc_field(default_factory=list)  # for future disambiguation
+    confidence: float = 0.0      # semantic match score (0..1) when applicable
+    candidates: list[int] = dc_field(default_factory=list)  # ambiguous shortlist / eligible set
 
 
 _WORD_NUM = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "a": 1, "an": 1}
@@ -286,6 +287,78 @@ def resolve_navigation(graph: FormGraph, current_field_id: int | None,
         return NavResult(kind="none", message=f"There is no question number {n} in this form.", request=request)
 
     return NavResult(kind="needs_semantic", request=request)  # unreachable, defensive
+
+
+# ---------------------------------------------------------------------------
+# Semantic / content match — resolve a request by MEANING against the eligible
+# fields. Field embeddings are computed from STABLE text (label + section) and
+# cached by the caller (they don't change turn to turn); only the request is
+# embedded per call.
+# ---------------------------------------------------------------------------
+
+def match_text(f: Field) -> str:
+    """Stable, cacheable text for the semantic index (independent of answers)."""
+    return f"{f.label} [{f.section}]" if f.section else f.label
+
+
+def form_fingerprint(graph: FormGraph) -> str:
+    import hashlib
+    h = hashlib.sha1("\n".join(f"{f.id}:{match_text(f)}" for f in graph.fields).encode()).hexdigest()
+    return h[:16]
+
+
+def _unit(v):
+    import numpy as np
+    n = float(np.linalg.norm(v))
+    return v / n if n else v
+
+
+async def semantic_match(embedder, graph: FormGraph, answers: dict[str, Any], request: str,
+                         *, embed_cache: dict[int, Any], top_k: int = 5,
+                         high: float = 0.52, margin: float = 0.05, low: float = 0.28) -> NavResult:
+    """Rank the currently-eligible fields against the request by cosine similarity.
+
+    Returns kind=field (confident), ambiguous (a shortlist for one clarifying
+    question), or none (nothing close enough). `embed_cache` maps field_id → unit
+    embedding and is filled lazily; pass the same dict across calls to avoid
+    re-embedding the form.
+    """
+    import numpy as np
+    eligible = graph.navigable(answers or {})
+    if not eligible:
+        return NavResult(kind="none", message="No eligible questions to search.", request=request)
+
+    missing = [f for f in eligible if f.id not in embed_cache]
+    if missing:
+        vecs = await embedder.embed_many([match_text(f) for f in missing])
+        for f, v in zip(missing, vecs):
+            embed_cache[f.id] = _unit(np.asarray(v, dtype=np.float32))
+    q = _unit(np.asarray(await embedder.embed(request), dtype=np.float32))
+
+    scored = sorted(((float(q @ embed_cache[f.id]), f) for f in eligible), key=lambda x: -x[0])
+    s1, best = scored[0]
+    s2 = scored[1][0] if len(scored) > 1 else -1.0
+
+    if s1 >= high and (s1 - s2) >= margin:
+        return NavResult(kind="field", field_id=best.id, field_name=best.name, label=best.label,
+                         confidence=round(s1, 3), request=request)
+    near = [f for sc, f in scored if sc >= low][:top_k]
+    if near:
+        return NavResult(kind="ambiguous", confidence=round(s1, 3), request=request,
+                         candidates=[f.id for f in near],
+                         message="Several questions could match — ask one clarifying question.",
+                         field_id=near[0].id, field_name=near[0].name, label=near[0].label)
+    return NavResult(kind="none", confidence=round(s1, 3), request=request,
+                     message="No question closely matches that request.")
+
+
+async def resolve_full(embedder, graph: FormGraph, current_field_id: int | None,
+                       answers: dict[str, Any], request: str, *, embed_cache: dict[int, Any]) -> NavResult:
+    """Relative grammar first; fall back to the semantic matcher for by-meaning requests."""
+    r = resolve_navigation(graph, current_field_id, answers, request)
+    if r.kind != "needs_semantic":
+        return r
+    return await semantic_match(embedder, graph, answers, request, embed_cache=embed_cache)
 
 
 # ---------------------------------------------------------------------------

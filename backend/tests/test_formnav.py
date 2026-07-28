@@ -1,10 +1,13 @@
 """Form-navigation pilot — resolver + eligibility tests (PolarTie SmartForm #1)."""
+import asyncio
 import json
 import os
+import re
 
+import numpy as np
 import pytest
 
-from sopilot.formnav import FormGraph, resolve_navigation
+from sopilot.formnav import FormGraph, match_text, resolve_navigation, semantic_match
 
 # A small synthetic form exercising: sections, a Yes/No gate, a numeric gate,
 # a choice-value gate, and a repeater "add another?".
@@ -108,6 +111,51 @@ def test_non_relative_defers_to_semantic():
     g = graph()
     r = resolve_navigation(g, None, {"age": "40"}, "fix my attorney's name")
     assert r.kind == "needs_semantic" and r.candidates      # index handed to the semantic seam
+
+
+class _KeywordEmbedder:
+    """Deterministic bag-of-words embedder so semantic ranking is testable offline."""
+
+    def __init__(self, vocab):
+        self.vocab = vocab
+
+    def _vec(self, text):
+        words = set(re.findall(r"[a-z']+", text.lower()))
+        return np.array([1.0 if w in words else 0.0 for w in self.vocab], dtype=np.float32)
+
+    async def embed(self, text):
+        return self._vec(text)
+
+    async def embed_many(self, texts):
+        return [self._vec(t) for t in texts]
+
+
+def _vocab_for(g):
+    words = set()
+    for f in g.fields:
+        words |= set(re.findall(r"[a-z']+", match_text(f).lower()))
+    words |= {"attorney", "name", "children", "period"}
+    return sorted(words)
+
+
+def test_semantic_match_by_meaning():
+    g = graph()
+    emb = _KeywordEmbedder(_vocab_for(g))
+    answers = {"attorney": "Yes", "age": "40"}   # attorney_name is eligible
+    cache = {}
+    r = asyncio.run(semantic_match(emb, g, answers, "what is my attorney's name",
+                                   embed_cache=cache, high=0.5, low=0.2))
+    assert r.field_id == g.by_name["attorney_name"].id      # ranked the attorney field top
+    assert r.confidence > 0
+    assert len(cache) == len(g.navigable(answers))          # embeddings cached once
+
+
+def test_semantic_match_none_for_nonsense():
+    g = graph()
+    emb = _KeywordEmbedder(_vocab_for(g))
+    r = asyncio.run(semantic_match(emb, g, {"age": "40"}, "zzz qqq nonsense",
+                                   embed_cache={}, high=0.6, low=0.3))
+    assert r.kind == "none"
 
 
 @pytest.mark.skipif(
