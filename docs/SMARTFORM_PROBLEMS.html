@@ -876,13 +876,15 @@ b.hl{color:#8fd9c9}
   </div></figure>
 
   <div class="tablewrap"><table>
-    <thead><tr><th>Setup</th><th>Who decides the next question</th><th>End-to-end completion accuracy</th><th>Reached “done”</th><th>Skip violations</th></tr></thead>
+    <thead><tr><th>Setup</th><th>Who decides the next question</th><th>End-to-end completion accuracy</th><th>Decision latency / turn</th><th>Reached “done”</th><th>Skip violations</th></tr></thead>
     <tbody>
-      <tr><td>Weak model decides <span class="small">(naive)</span></td><td>gpt-4o-mini</td><td><b style="color:#e0574f">~56%</b> <span class="small">(skip-logic)</span></td><td>—</td><td>many</td></tr>
-      <tr><td>🅐 Original pt-forms</td><td>server (<span class="mono">_compute_next_field</span>)</td><td><b style="color:#19b89a">100%</b></td><td>✓</td><td>0</td></tr>
-      <tr><td>🅑 SOPilot (live)</td><td>supervisor (<span class="mono">constraints.py</span>)</td><td><b style="color:#19b89a">100%</b></td><td>✓</td><td>0</td></tr>
+      <tr><td>Weak model decides <span class="small">(naive)</span></td><td>gpt-4o-mini</td><td><b style="color:#e0574f">~56%</b> <span class="small">(skip-logic)</span></td><td>~0.9 s <span class="small">(model)</span></td><td>—</td><td>many</td></tr>
+      <tr><td>🅐 Original pt-forms</td><td>server (<span class="mono">_compute_next_field</span>)</td><td><b style="color:#19b89a">100%</b></td><td>&lt;1 ms <span class="small">(deterministic)</span></td><td>✓</td><td>0</td></tr>
+      <tr><td>🅑 SOPilot (live)</td><td>supervisor (<span class="mono">constraints.py</span>)</td><td><b style="color:#19b89a">100%</b></td><td><b>~19 ms</b> <span class="small">(incl. live get-fields)</span></td><td>✓</td><td>0</td></tr>
     </tbody>
   </table></div>
+  <p class="small">Latency is the per-turn <b>decision</b> cost. Full 126-turn walkthrough wall-clock through the live SOPilot
+  endpoint: <b>~2.8 s</b> total. (Neither real system puts the model on the navigation decision, so both are ms-scale.)</p>
   <p class="small">The 32k cap never binds here — the whole-form catalog is only ~4.7k tokens — so the naive model’s errors are
   <b>reasoning</b>, not context overflow. The lesson holds regardless: keep the weak model off the navigation decision.
   Reproduce: <span class="mono">scripts/smartform_bench/completion_ab.py</span>.</p>
@@ -927,9 +929,17 @@ b.hl{color:#8fd9c9}
     </tbody>
   </table></div>
 
+  <div class="tablewrap"><table>
+    <thead><tr><th>Setup</th><th>Interpreter</th><th>Answer-capture accuracy</th><th>Latency p50</th></tr></thead>
+    <tbody>
+      <tr><td>🅐 Original pt-forms <span class="small">(weak + rules)</span></td><td>gpt-4o-mini → pt-forms normalize</td><td><b style="color:#19b89a">100%</b> <span class="small">(31/31)</span></td><td>~0.99 s</td></tr>
+      <tr><td>🅑 SOPilot <span class="small">(interpret)</span></td><td>gpt-4o (strong supervisor)</td><td><b style="color:#19b89a">100%</b> <span class="small">(31/31)</span></td><td>~0.95 s</td></tr>
+    </tbody>
+  </table></div>
+
   <div class="callout ok"><div class="clabel">◆ Result — parity (an honest null result)</div>
     Over <b>31 realistic cases</b> (colloquial, multilingual, slang, unit conversion, world-knowledge, relative dates), <b>both
-    scored 100%</b> — <b>🅐 Original 31/31, 🅑 SOPilot 31/31</b> — at ~0.9–1.0 s each. <b>gpt-4o-mini is already good enough
+    scored 100%</b> — <b>🅐 Original 31/31, 🅑 SOPilot 31/31</b> — at ~0.95–0.99 s each (see table). <b>gpt-4o-mini is already good enough
     at this narrow task</b>; the strong supervisor <b>matches but does not beat it</b> (and isn’t faster). So answer-capture is
     <b>not</b> a differentiator either. We built the step (it’s useful for keeping the coercion rules editable in the Studio and
     for a compliant model choice), but it doesn’t buy accuracy over what pt-forms already gets.
