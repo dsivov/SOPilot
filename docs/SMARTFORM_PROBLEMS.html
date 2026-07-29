@@ -116,7 +116,9 @@ b.hl{color:#8fd9c9}
     <li><a href="#leverage">Where SOPilot helps</a></li>
     <li><a href="#options">Three ways to engage</a></li>
     <li><a href="#solution">Proposed solution ★</a></li>
-    <li><a href="#next">Decision &amp; next steps</a></li>
+    <li><a href="#integration">Reuse, new &amp; integration</a></li>
+    <li><a href="#status">Built &amp; proven</a></li>
+    <li><a href="#next">Status &amp; next steps</a></li>
   </ol>
 </nav>
 
@@ -510,24 +512,155 @@ b.hl{color:#8fd9c9}
     <b>the SOP model is untouched</b> — we reuse it for structure, never bending its probabilistic runtime.</div>
 </section>
 
+<!-- integration -->
+<section id="integration">
+  <div class="kicker">The honest engineering ledger</div>
+  <h2>What we reused, what we added, how they integrate</h2>
+  <p class="lead-p">Almost everything is reuse. The design deliberately keeps PolarTie's working system intact and adds a
+  thin supervisor layer — here's the exact split.</p>
+
+  <div class="grid g3" style="margin:16px 0">
+    <div class="card"><span class="pill c">Reused — PolarTie (pt-forms)</span>
+      <ul class="small" style="margin:8px 0 0;padding-left:18px">
+        <li>The <b>form definitions</b> (<span class="mono">fields.json</span>: questions, <span class="mono">FieldCondition</span>s, options, sections) — the input we ingest.</li>
+        <li>The <b>answer store</b> (<span class="mono">submissions.data</span>) — the single source of truth.</li>
+        <li>pt-forms' own <b>deterministic form engine</b> + <b>browser UI</b> — unchanged.</li>
+        <li>The <b>realtime voice agent</b> + the <b>Next/Prev</b> turn boundary (our latency window).</li>
+        <li>The <span class="mono">pt_ai_agent_mcp</span> <b>supervisor seam</b> — to deliver the prepared instruction.</li>
+      </ul></div>
+    <div class="card"><span class="pill ctrl">Reused — SOPilot</span>
+      <ul class="small" style="margin:8px 0 0;padding-left:18px">
+        <li>The <b>SOP model</b> (<span class="mono">TaskDefinition</span>, <span class="mono">Sop</span>/<span class="mono">SopVersion</span>) — stages = groups; structure, versioning, Studio visibility.</li>
+        <li><b>Prompt blocks</b> (D-7) — the playbooks, flow block &amp; map block; versioned + editable in the Studio.</li>
+        <li>The <b>supervisor pattern</b> — a strong model preparing a compact per-turn instruction.</li>
+        <li>The <b>strong model</b> (<span class="mono">builder_model</span>), tenancy/scoping, and block resolution (<span class="mono">resolve_published_blocks</span>).</li>
+      </ul></div>
+    <div class="card"><span class="pill win">Newly added</span>
+      <ul class="small" style="margin:8px 0 0;padding-left:18px">
+        <li><b><span class="mono">constraints.py</span></b> — the canonical server-side constraint engine (value conditions) both forms and config lacked.</li>
+        <li><b><span class="mono">form_to_sop.py</span></b> — the offline grouping pipeline (form → grouped SOP + blocks).</li>
+        <li>The <b>stage↔field map block</b> — the deterministic driver's index.</li>
+        <li><b><span class="mono">/formflow/prepare</span></b> — the supervisor endpoint (deterministic driver + strong-model prep).</li>
+      </ul></div>
+  </div>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 280" role="img" aria-label="Integration boundary between pt-forms and SOPilot">
+      <defs>
+        <marker id="ia" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
+        <marker id="ip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#a974f0"/></marker>
+      </defs>
+      <style>
+        .lane{rx:12;stroke-width:1.4}.lh{font:800 12px "Segoe UI",sans-serif;text-anchor:middle}
+        .bx{rx:9;stroke-width:1.6}.t{fill:#fff;font:700 11px "Segoe UI",sans-serif;text-anchor:middle}
+        .s{fill:#e7ebf3;font:8.5px var(--mono),monospace;text-anchor:middle}.l{font:700 9px "Segoe UI",sans-serif;text-anchor:middle}
+      </style>
+      <!-- lanes -->
+      <rect class="lane" x="14" y="34" width="352" height="230" fill="rgba(240,167,60,.05)" stroke="rgba(240,167,60,.45)"/>
+      <rect class="lane" x="394" y="34" width="352" height="230" fill="rgba(169,116,240,.05)" stroke="rgba(169,116,240,.45)"/>
+      <text class="lh" x="190" y="26" fill="#ffce86">PolarTie — pt-forms (kept)</text>
+      <text class="lh" x="570" y="26" fill="#cdb1f7">SOPilot — supervisor (added/reused)</text>
+      <!-- pt-forms boxes -->
+      <rect class="bx" x="30" y="48" width="150" height="34" fill="#2a2114" stroke="#f0a73c"/><text class="t" x="105" y="69">fields.json (form defs)</text>
+      <rect class="bx" x="30" y="150" width="150" height="40" fill="#2a2114" stroke="#f0a73c"/><text class="t" x="105" y="167">🎙 realtime agent</text><text class="s" x="105" y="182">+ Next/Prev · browser UI</text>
+      <rect class="bx" x="200" y="150" width="150" height="40" fill="#2a2114" stroke="#f0a73c"/><text class="t" x="275" y="167">answers store</text><text class="s" x="275" y="182">submissions.data (truth)</text>
+      <!-- SOPilot boxes -->
+      <rect class="bx" x="410" y="48" width="320" height="40" fill="rgba(169,116,240,.18)" stroke="#a974f0"/><text class="t" x="570" y="65">form SOP + playbook/flow/map blocks</text><text class="s" x="570" y="80">SOP model + prompt blocks (reused) · map (new)</text>
+      <rect class="bx" x="410" y="150" width="200" height="52" fill="rgba(25,184,154,.20)" stroke="#19b89a"/><text class="t" x="510" y="170">/formflow/prepare</text><text class="s" x="510" y="185">supervisor loop (new)</text><text class="s" x="510" y="196">strong model (reused)</text>
+      <rect class="bx" x="628" y="150" width="102" height="52" fill="rgba(91,141,239,.18)" stroke="#5b8def"/><text class="t" x="679" y="170">constraints</text><text class="s" x="679" y="185">.py gating</text><text class="s" x="679" y="196">(new)</text>
+      <!-- offline pipeline -->
+      <path d="M180,65 C300,65 320,60 409,66" fill="none" stroke="#a974f0" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#ip)"/>
+      <text class="l" x="300" y="52" fill="#cdb1f7">OFFLINE: form_to_sop pipeline (once)</text>
+      <!-- runtime call -->
+      <path d="M180,164 C300,150 340,150 409,168" fill="none" stroke="#8a93a8" stroke-width="2.2" marker-end="url(#ia)"/>
+      <text class="l" x="300" y="140" fill="#c9d3e6">RUNTIME: prepare(current_field, answers)</text>
+      <path d="M409,182 C340,196 300,196 181,180" fill="none" stroke="#8a93a8" stroke-width="2.2" marker-end="url(#ia)"/>
+      <text class="l" x="300" y="212" fill="#c9d3e6">← one compact instruction</text>
+      <!-- supervisor reads blocks + constraints -->
+      <line x1="510" y1="150" x2="540" y2="90" stroke="#a974f0" stroke-width="1.6" marker-end="url(#ip)"/>
+      <line x1="610" y1="176" x2="627" y2="176" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#ia)"/>
+      <!-- agent writes answers -->
+      <line x1="180" y1="176" x2="199" y2="176" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#ia)"/>
+      <text class="l" x="190" y="205" fill="#7b8499">writes answers</text>
+    </svg>
+    <figcaption><b>Two meeting points.</b> <span style="color:#cdb1f7">Offline</span>: the pipeline ingests pt-forms'
+      definitions into a SOPilot SOP + blocks. <span style="color:#c9d3e6">Runtime</span>: pt-forms' realtime agent calls
+      <span class="mono">/formflow/prepare</span> with the current field + answers; SOPilot reads the stage's block, gates
+      with <span class="mono">constraints.py</span>, and returns one prepared line. Answers stay in pt-forms.</figcaption>
+  </div></figure>
+
+  <div class="callout key"><div class="clabel">◆ The boundary in one line</div>
+    <b>pt-forms owns</b> the form definitions, the answers, the browser UI and the realtime voice agent.
+    <b>SOPilot owns</b> the grouped playbooks (structure), the deterministic gating, and the strong per-turn supervisor.
+    They meet exactly twice: <b>once offline</b> (ingest defs → SOP) and <b>once per turn</b> (prepare call). No shared
+    database, no duplicated answer store.</div>
+</section>
+
+<!-- status -->
+<section id="status">
+  <div class="kicker">Built &amp; proven — spike</div>
+  <h2>Where the implementation stands</h2>
+  <p class="lead-p">This is no longer just a diagram — the <b>full loop runs end-to-end on the real 269-question form</b>,
+  on an isolated branch, with tests.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Piece</th><th>What shipped (branch <span class="mono">feature/smartform-engine</span>)</th><th>tests</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill a">constraints.py</span></td><td>Canonical <b>server-side constraint engine</b> — conditional visibility, value predicates, deterministic evaluation (the value-condition primitive both forms and config lacked).</td><td>9 ✓</td></tr>
+      <tr><td><span class="pill win">form → SOP pipeline</span></td><td>Grouped the form into <b>20 stages</b>; emitted <b>20 playbook prompt blocks</b> + a main-flow block + a stage↔field <b>map</b> block; published as the <b>“Injured Worker Questionnaire” SOP</b> under <span class="mono">polartie/smartform</span> — visible &amp; editable in the Studio (SOPs + Prompt blocks).</td><td>—</td></tr>
+      <tr><td><span class="pill b">/formflow/prepare</span></td><td>The <b>supervisor loop</b>: current field → stage (deterministic, via the map) → next visible field (<span class="mono">constraints.py</span> gating, crossing stages) → the strong model phrases one compact instruction.</td><td>7 ✓</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Backend suite: <b>103 passing</b>. Nothing on <span class="mono">main</span> — isolated on the feature branch until verified.</p>
+
+  <h3>Live spike results (real strong model, real form)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Situation</th><th>What the supervisor returned</th></tr></thead>
+    <tbody>
+      <tr><td>Start (no answers)</td><td>stage <b>Employee Information</b> → Q1, phrased <i>“What is your name?”</i></td></tr>
+      <tr><td>“No” to hospital (Q39)</td><td><b>skipped Q40–Q43</b> (all gated on the hospital answer) and crossed into <b>History of Treatment (part 2)</b></td></tr>
+      <tr><td>Admitted = Yes</td><td><b>opened Q43</b> → <i>“For how long were you admitted to the hospital?”</i></td></tr>
+      <tr><td>Admitted = No</td><td><b>skipped Q43</b> → Q45 <i>“Describe the treatment…”</i></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout ok"><div class="clabel">◆ What this proves</div>
+    Deterministic stage detection + deterministic skip-logic (including a cross-stage jump) + a strong model phrasing one
+    compact line — exactly the design, on the real form. The realtime model would only ever receive that one prepared line;
+    the SOP model itself is untouched.</div>
+</section>
+
 <!-- next -->
 <section id="next">
-  <div class="kicker">Where we are</div>
-  <h2>Decision &amp; next steps</h2>
-  <p><b>Decided:</b> the hybrid — <b>pt-forms keeps the deterministic form engine + answers + UI</b>; <b>SOPilot is the
-  strong supervisor</b> (grouped playbooks, per-turn preparation, guaranteed gating via <span class="mono">constraints.py</span>).
-  We reuse SOP for structure and do <b>not</b> extend its runtime (no risk to the conversational SOP feature).</p>
-  <ol class="ladder" style="margin:14px 0">
-    <li><b>Group the form</b> — auto-derive dependency-cohesive groups from the Injured Worker form and bring the proposed stage breakdown for review (the "with your help" step).</li>
-    <li><b>Emit the form SOP</b> — stages = groups, each with a draft playbook (questions + rendered <span class="mono">FieldCondition</span> rules); store + version it; visible in the Studio.</li>
-    <li><b>Spike one stage end-to-end</b> — supervisor prepares the next instruction from state; <span class="mono">constraints.py</span> enforces gating; prove the loop on one group before generalizing.</li>
-  </ol>
+  <div class="kicker">Status &amp; next steps</div>
+  <h2>Done, and what remains</h2>
+  <p><b>Decided &amp; built:</b> the hybrid — <b>pt-forms keeps the deterministic form engine + answers + UI</b>; <b>SOPilot
+  is the strong supervisor</b> (grouped playbooks, per-turn preparation, guaranteed gating via
+  <span class="mono">constraints.py</span>). SOP is reused for structure; its runtime is <b>not</b> extended.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>✓ Done</th><th>Remaining</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>
+          ✓ Group the form (20 stages)<br>
+          ✓ Emit the form SOP + playbook/flow/map blocks<br>
+          ✓ Supervisor loop spike (deterministic driver + strong-model prep)<br>
+          ✓ constraints.py engine + tests (103 pass)
+        </td>
+        <td>
+          ▫ Wire to a <b>live pt-forms</b> — read answers + current field from <span class="mono">get-fields</span>, apply the prepared instruction<br>
+          ▫ Feed the instruction into the <b>realtime loop</b> via the MCP supervisor seam<br>
+          ▫ <b>Edit-propagation</b> on changed answers; <b>repeaters</b><br>
+          ▫ Generalize the pipeline + let admins refine playbooks in the Studio
+        </td>
+      </tr>
+    </tbody>
+  </table></div>
   <div class="callout caveat"><div class="clabel">◆ Still to confirm with PolarTie</div>
-    <b>(1)</b> The strong model endpoint must be a <b>compliant/BAA</b> one — medical answers are sent to it.
+    <b>(1)</b> The strong-model endpoint must be a <b>compliant/BAA</b> one — medical answers are sent to it.
     <b>(2)</b> Access to the <span class="mono">pt_ai_agent_mcp</span> submodule (the outer voice loop).
-    <b>(3)</b> Whether the supervisor's prepared instruction feeds their realtime loop via the existing MCP supervisor seam.
+    <b>(3)</b> That the prepared instruction feeds their realtime loop via the existing MCP supervisor seam.
   </div>
-  <p class="small">Superframes the earlier config/SOP explorations: a form is neither a config (static settings) nor an
+  <p class="small">Supersedes the earlier config/SOP explorations: a form is neither a config (static settings) nor an
   SOP (probabilistic conversation) — it's a deterministic state machine pt-forms already runs, best served by SOPilot as
   the strong supervisor above it. Every “today” claim is read from the repo as it stands.</p>
 </section>
