@@ -115,7 +115,8 @@ b.hl{color:#8fd9c9}
     <li><a href="#p5">Problem 5 — 32k context</a></li>
     <li><a href="#leverage">Where SOPilot helps</a></li>
     <li><a href="#options">Three ways to engage</a></li>
-    <li><a href="#next">Decider &amp; open questions</a></li>
+    <li><a href="#solution">Proposed solution ★</a></li>
+    <li><a href="#next">Decision &amp; next steps</a></li>
   </ol>
 </nav>
 
@@ -386,27 +387,149 @@ b.hl{color:#8fd9c9}
   </table></div>
 </section>
 
+<!-- solution -->
+<section id="solution">
+  <div class="kicker">The direction we chose ★</div>
+  <h2>Proposed solution — a strong supervisor + grouped playbooks</h2>
+  <p class="lead-p">One reframe collapses all five problems. They're symptoms of a single cause — <b>the realtime voice
+  model is weak and has a 32k window.</b> So stop engineering around it: <b>move the thinking to a strong text model</b>
+  and hand the realtime model only compact, prepared instructions. That is exactly SOPilot's core pattern — a strong
+  supervisor steering a weak responder per turn.</p>
+
+  <div class="callout key"><div class="clabel">◆ The enabler PolarTie already has</div>
+    In the real app the user clicks <b>Next / Prev</b> to advance — so the realtime model's latency is <b>not</b> on the
+    critical path. That click is a generous window in which a strong supervisor can read the whole situation and return a
+    prepared instruction. It's the SOPilot supervisor window, handed to us for free.</p>
+  </div>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 250" role="img" aria-label="Root-cause reframe: weak realtime model vs strong supervisor">
+      <defs>
+        <marker id="sa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5b8def"/></marker>
+        <marker id="sg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#3ecf8e"/></marker>
+      </defs>
+      <style>
+        .bx{rx:9;stroke-width:2}.t{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}
+        .s{fill:#e7ebf3;font:9.5px var(--mono),monospace;text-anchor:middle}
+        .h{font:800 11px "Segoe UI",sans-serif;text-anchor:middle}
+      </style>
+      <!-- BEFORE -->
+      <text class="h" x="196" y="22" fill="#f6a2ad">TODAY — everything on the weak model</text>
+      <rect class="bx" x="40" y="34" width="312" height="40" fill="rgba(239,91,110,.10)" stroke="rgba(239,91,110,.5)"/>
+      <text class="s" x="196" y="52" style="fill:#f6c0c7">281 fields + rules + all answers</text><text class="s" x="196" y="66" style="fill:#f6c0c7">…crammed into a 32k voice model</text>
+      <rect class="bx" x="96" y="92" width="200" height="40" fill="rgba(239,91,110,.18)" stroke="#ef5b6e"/>
+      <text class="t" x="196" y="112">🎙 realtime model</text><text class="s" x="196" y="126">overflows · loses state · mis-navigates</text>
+      <text class="s" x="196" y="150" style="fill:#f6a2ad;font-size:11px">✖ nav · state · sync · context all break</text>
+      <!-- AFTER -->
+      <text class="h" x="576" y="22" fill="#7ee3b4">PROPOSED — strong model holds it</text>
+      <rect class="bx" x="420" y="34" width="300" height="40" fill="rgba(62,207,142,.10)" stroke="rgba(62,207,142,.5)"/>
+      <text class="t" x="570" y="52" style="font-size:11px">🧠 strong supervisor (big context)</text><text class="s" x="570" y="66">holds form + rules + state</text>
+      <rect class="bx" x="440" y="150" width="260" height="40" fill="rgba(91,141,239,.18)" stroke="#5b8def"/>
+      <text class="t" x="570" y="170">🎙 realtime model</text><text class="s" x="570" y="184">just speaks the prepared line</text>
+      <line x1="570" y1="74" x2="570" y2="149" stroke="#3ecf8e" stroke-width="2.4" marker-end="url(#sg)"/>
+      <text class="s" x="640" y="116" style="fill:#a8f0cf">compact instruction</text>
+    </svg>
+    <figcaption><b>The whole strategy in one picture.</b> Don't fit the form into the weak model — keep it in a strong
+      supervisor and hand the realtime model one prepared line at a time.</figcaption>
+  </div></figure>
+
+  <h3>How it's built — mostly reuse</h3>
+  <p>Four things SOPilot (or PolarTie) already has, plus one small pipeline:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Piece</th><th>Role</th><th>New?</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill ctrl">SOP</span></td><td><b>Structure &amp; storage</b> — each dependency group = a stage; its <b>playbook</b> (questions + transition rules) = the stage's prompt block. Versioned, visible in the Studio. Driven <b>deterministically</b> (current field → its group), <b>not</b> the SOP classifier.</td><td>reuse</td></tr>
+      <tr><td><span class="pill b">Supervisor</span></td><td><b>Reasoning</b> — the strong model, per Next/Prev turn, reads the stage playbook + the relevant answers and returns a compact instruction for the realtime model.</td><td>reuse</td></tr>
+      <tr><td><span class="pill a">constraints.py</span></td><td><b>Guaranteed gating</b> — deterministically enforces each field's <span class="mono">FieldCondition</span> so a field is never surfaced when its condition is false, whatever the model says (belt-and-suspenders).</td><td>reuse (built)</td></tr>
+      <tr><td><span class="pill c">pt-forms</span></td><td><b>Answers</b> — the source of truth (<span class="mono">submissions.data</span>) + the browser UI. The supervisor reads the answers; only the current group's + referenced deps are sent (context stays tight).</td><td>reuse</td></tr>
+      <tr><td><span class="pill win">grouping</span></td><td><b>The one new step</b> — offline, once: derive the groups from the dependency graph and emit the form SOP + draft playbooks.</td><td>new (offline)</td></tr>
+    </tbody>
+  </table></div>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 250" role="img" aria-label="The runtime turn loop">
+      <defs><marker id="rl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.b2{rx:9;stroke-width:2}.t2{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}.s2{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}.l2{font:700 9.5px "Segoe UI",sans-serif;text-anchor:middle;fill:#c9d3e6}</style>
+      <rect class="b2" x="30" y="100" width="150" height="56" fill="rgba(91,141,239,.22)" stroke="#5b8def"/>
+      <text class="t2" x="105" y="123">🎙 realtime</text><text class="s2" x="105" y="140">speak · capture answer</text>
+      <rect class="b2" x="300" y="96" width="180" height="64" fill="rgba(25,184,154,.22)" stroke="#19b89a"/>
+      <text class="t2" x="390" y="120">🧠 supervisor (strong)</text><text class="s2" x="390" y="136">reads playbook + answers</text><text class="s2" x="390" y="150">→ prepares next instruction</text>
+      <rect class="b2" x="560" y="34" width="170" height="46" fill="rgba(91,141,239,.12)" stroke="#5b8def"/>
+      <text class="t2" x="645" y="53" style="font-size:11px">constraints.py</text><text class="s2" x="645" y="69">enforce FieldCondition</text>
+      <rect class="b2" x="560" y="118" width="170" height="46" fill="rgba(240,167,60,.14)" stroke="#f0a73c"/>
+      <text class="t2" x="645" y="137" style="font-size:11px">pt-forms answers</text><text class="s2" x="645" y="153">source of truth</text>
+      <rect class="b2" x="300" y="196" width="180" height="34" fill="rgba(169,116,240,.14)" stroke="#a974f0"/>
+      <text class="s2" x="390" y="217" style="font-size:10px;fill:#e6d8ff">form SOP · current stage's playbook</text>
+      <!-- flows -->
+      <path d="M180,120 C230,110 250,116 300,122" fill="none" stroke="#8a93a8" stroke-width="2.2" marker-end="url(#rl)"/>
+      <text class="l2" x="240" y="104">Next ▶ (window)</text>
+      <path d="M300,148 C250,158 230,152 180,142" fill="none" stroke="#8a93a8" stroke-width="2.2" marker-end="url(#rl)"/>
+      <text class="l2" x="240" y="172">compact instruction</text>
+      <line x1="480" y1="118" x2="559" y2="70" stroke="#5b8def" stroke-width="2" marker-end="url(#rl)"/>
+      <line x1="480" y1="140" x2="559" y2="140" stroke="#f0a73c" stroke-width="2" marker-end="url(#rl)"/>
+      <line x1="390" y1="196" x2="390" y2="160" stroke="#a974f0" stroke-width="2" marker-end="url(#rl)"/>
+    </svg>
+    <figcaption><b>One turn.</b> User answers → clicks Next (the latency-tolerant window) → the strong supervisor reads the
+      current stage's playbook + the relevant answers, <span style="color:#9cc0ff">constraints.py</span> enforces the
+      skip-logic, and a compact instruction goes back for the realtime model to speak.</figcaption>
+  </div></figure>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 150" role="img" aria-label="Offline grouping pipeline">
+      <defs><marker id="pl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#a974f0"/></marker></defs>
+      <style>.b3{rx:10;stroke-width:2}.t3{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}.s3{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}</style>
+      <rect class="b3" x="14" y="46" width="150" height="58" fill="#1b1f2a" stroke="#39425a"/>
+      <text class="t3" x="89" y="70">fields.json</text><text class="s3" x="89" y="86">281 fields · 143 conds</text>
+      <rect class="b3" x="206" y="46" width="150" height="58" fill="rgba(91,141,239,.18)" stroke="#5b8def"/>
+      <text class="t3" x="281" y="70">dependency graph</text><text class="s3" x="281" y="86">who gates whom</text>
+      <rect class="b3" x="398" y="46" width="150" height="58" fill="rgba(25,184,154,.18)" stroke="#19b89a"/>
+      <text class="t3" x="473" y="70">cohesive groups</text><text class="s3" x="473" y="86">deps kept together</text>
+      <rect class="b3" x="590" y="46" width="156" height="58" fill="rgba(169,116,240,.22)" stroke="#a974f0"/>
+      <text class="t3" x="668" y="66">form SOP</text><text class="s3" x="668" y="82">stages = groups</text><text class="s3" x="668" y="95">+ draft playbooks</text>
+      <line x1="164" y1="75" x2="205" y2="75" stroke="#a974f0" stroke-width="2.4" marker-end="url(#pl)"/>
+      <line x1="356" y1="75" x2="397" y2="75" stroke="#a974f0" stroke-width="2.4" marker-end="url(#pl)"/>
+      <line x1="548" y1="75" x2="589" y2="75" stroke="#a974f0" stroke-width="2.4" marker-end="url(#pl)"/>
+      <text class="s3" x="380" y="128" style="fill:#7b8499">offline · once · admin refines the result</text>
+    </svg>
+    <figcaption><b>The one new step (offline).</b> Derive groups from the dependency graph and emit a form SOP whose stages
+      are the groups, each with a draft playbook — then an admin refines it.</figcaption>
+  </div></figure>
+
+  <h3>Locked decisions</h3>
+  <div class="deck">
+    <div class="row"><div class="k">Enforcement</div><div>The strong model <b>reasons</b> from the playbook; <span class="mono">constraints.py</span> <b>deterministically enforces</b> skip-logic. Belt-and-suspenders — safe for medical forms.</div></div>
+    <div class="row"><div class="k">State</div><div><b>Reuse pt-forms' answers</b> (source of truth); the supervisor is <b>sent</b> the relevant subset each turn. No new answer store; current stage derives from the current field.</div></div>
+    <div class="row"><div class="k">Grouping</div><div><b>Auto-derived from the dependency graph, offline, once</b> — stored as stages in a form SOP; admin refines.</div></div>
+  </div>
+
+  <div class="callout ok"><div class="clabel">◆ Why this dissolves the five problems</div>
+    <b>Navigation</b> — the supervisor resolves "go to X" against the current group; jumps just load another stage.
+    <b>Answering</b> — a strong model interprets the answer with the playbook's guidance. <b>State &amp; sync</b> — the
+    supervisor recomputes from the full answer set; <span class="mono">constraints.py</span> guarantees consistency.
+    <b>32k</b> — the form never enters the realtime context; only a compact per-turn instruction does. And crucially,
+    <b>the SOP model is untouched</b> — we reuse it for structure, never bending its probabilistic runtime.</div>
+</section>
+
 <!-- next -->
 <section id="next">
-  <div class="kicker">How we decide</div>
-  <h2>Navigation-first is also the decider</h2>
-  <p>The <b>way</b> we ship the first navigation fix effectively picks the engagement model — so the first deliverable
-  doubles as the pilot that tests it:</p>
-  <ul>
-    <li><span class="pill a">C</span> a SOPilot <b>router service beside <span class="mono">forms_navigate</span></b>, or</li>
-    <li><span class="pill b">B</span> a <b>design + field-index spec</b> PolarTie builds, or</li>
-    <li><span class="pill ctrl">A</span> SOPilot <b>owning resolution end-to-end</b>.</li>
-  </ul>
-  <div class="callout key"><div class="clabel">◆ What we need from PolarTie to go further</div>
-    <b>(1)</b> Which navigation failure actually bites in production (matcher / near-duplicate / repeater / relative /
-    latency)? Point us at live cases on the example form. <b>(2)</b> Does the server already do <b>backward</b>
-    edit-propagation, or only forward? <b>(3)</b> How does the voice loop manage the 32k window on long calls today?
-    <b>(4)</b> Access to the <span class="mono">pt_ai_agent_mcp</span> submodule — the outer LLM/voice loop isn't in the
-    checkout.
+  <div class="kicker">Where we are</div>
+  <h2>Decision &amp; next steps</h2>
+  <p><b>Decided:</b> the hybrid — <b>pt-forms keeps the deterministic form engine + answers + UI</b>; <b>SOPilot is the
+  strong supervisor</b> (grouped playbooks, per-turn preparation, guaranteed gating via <span class="mono">constraints.py</span>).
+  We reuse SOP for structure and do <b>not</b> extend its runtime (no risk to the conversational SOP feature).</p>
+  <ol class="ladder" style="margin:14px 0">
+    <li><b>Group the form</b> — auto-derive dependency-cohesive groups from the Injured Worker form and bring the proposed stage breakdown for review (the "with your help" step).</li>
+    <li><b>Emit the form SOP</b> — stages = groups, each with a draft playbook (questions + rendered <span class="mono">FieldCondition</span> rules); store + version it; visible in the Studio.</li>
+    <li><b>Spike one stage end-to-end</b> — supervisor prepares the next instruction from state; <span class="mono">constraints.py</span> enforces gating; prove the loop on one group before generalizing.</li>
+  </ol>
+  <div class="callout caveat"><div class="clabel">◆ Still to confirm with PolarTie</div>
+    <b>(1)</b> The strong model endpoint must be a <b>compliant/BAA</b> one — medical answers are sent to it.
+    <b>(2)</b> Access to the <span class="mono">pt_ai_agent_mcp</span> submodule (the outer voice loop).
+    <b>(3)</b> Whether the supervisor's prepared instruction feeds their realtime loop via the existing MCP supervisor seam.
   </div>
-  <p class="small">This document is a basis for discussion, not a committed plan. Every “today” claim is read from the
-  repository as it stands; the live example form (<span class="mono">/fill/25863473</span>) is a runtime instance, not a
-  fixture, so its exact conditions are inferred from the equivalent forms in the repo.</p>
+  <p class="small">Superframes the earlier config/SOP explorations: a form is neither a config (static settings) nor an
+  SOP (probabilistic conversation) — it's a deterministic state machine pt-forms already runs, best served by SOPilot as
+  the strong supervisor above it. Every “today” claim is read from the repo as it stands.</p>
 </section>
 
 </article>
