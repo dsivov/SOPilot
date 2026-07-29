@@ -120,6 +120,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#implementation">How the SOP flow works</a></li>
     <li><a href="#status">Built &amp; proven</a></li>
     <li><a href="#measurement">Why deterministic gating</a></li>
+    <li><a href="#headtohead">Head-to-head: Original vs SOPilot</a></li>
     <li><a href="#next">Status &amp; next steps</a></li>
   </ol>
 </nav>
@@ -709,7 +710,7 @@ b.hl{color:#8fd9c9}
       <tr><td><span class="pill b">/formflow/prepare</span></td><td>The <b>supervisor loop</b>: current field → stage (deterministic, via the map) → next visible field (<span class="mono">constraints.py</span> gating, crossing stages) → the strong model phrases one compact instruction. <b>Now wired to live pt-forms</b> — reads the answer snapshot from <span class="mono">get-fields</span> (id-keyed → FieldName via the map block).</td><td>14 ✓</td></tr>
     </tbody>
   </table></div>
-  <p class="small">Backend suite: <b>110 passing</b>. Nothing on <span class="mono">main</span> — isolated on the feature branch until verified.</p>
+  <p class="small">Backend suite: <b>116 passing</b> (incl. the reconcile edit-propagation step). Nothing on <span class="mono">main</span> — isolated on the feature branch until verified.</p>
 
   <h3>Live spike results (real strong model, real form)</h3>
   <div class="tablewrap"><table>
@@ -833,6 +834,82 @@ b.hl{color:#8fd9c9}
     path. Reproduce: <span class="mono">scripts/smartform_bench/</span> (README + harness + mock).</div>
 </section>
 
+<!-- headtohead -->
+<section id="headtohead">
+  <div class="kicker">The real head-to-head — Original vs SOPilot</div>
+  <h2>Where the two flows genuinely differ: a corrected answer that hides a question</h2>
+  <p class="lead-p">On “which question is next?” the two systems are <b>identical</b> (both evaluate the rules deterministically).
+  The one place they diverge — and it’s a real medical-data-integrity issue — is what happens when a patient <b>corrects an
+  earlier answer</b> so a question they already answered no longer applies.</p>
+
+  <div class="callout key"><div class="clabel">◆ What “reconcile” means (new term)</div>
+    <b>Reconcile</b> = a quick cleanup pass that re-checks the form’s show-if rules against the current answers and
+    <b>removes any answer that no longer applies</b>. When a correction hides a question that was already answered, reconcile
+    marks that stale answer “not applicable” so it cannot reach the PDF. It is a single server call
+    (<span class="mono">POST /formflow/reconcile</span>) run after an edit — think of it as <i>“tidy up the answers after a change.”</i></div>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>&nbsp;</th><th>🅐 &nbsp;Original pt-forms</th><th>🅑 &nbsp;SOPilot (SOP&nbsp;+&nbsp;reconcile)</th></tr></thead>
+    <tbody>
+      <tr><td><b>What it is</b></td>
+        <td>The current production flow: the pt-forms <b>MCP server + Laravel backend</b> + the voice agent.</td>
+        <td>The SOP flow (this project) <b>plus one new step</b>: <span class="mono">POST /formflow/reconcile</span>.</td></tr>
+      <tr><td><b>Skip logic</b></td>
+        <td>Deterministic, server-side (<span class="mono">_compute_next_field</span>).</td>
+        <td>Deterministic (<span class="mono">constraints.py</span>) — <b>identical behaviour</b>.</td></tr>
+      <tr><td><b>When a patient corrects an earlier answer</b></td>
+        <td>The now-hidden question <b>keeps its old answer</b> — nothing clears it (<span class="mono">_get_next_empty_field_id</span> skips already-valued fields; the PDF drops only blank / “not applicable”, never re-checking conditions).</td>
+        <td>Reconcile recomputes visibility and <b>voids every answered-but-hidden field</b> (to a fixpoint, so cascades are handled), writing “not applicable” back to pt-forms.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout caveat"><div class="clabel">◆ The defect, in one example</div>
+    “Were you admitted to hospital?” → <b>Yes</b>. “For how long?” → <b>5 days</b>. The patient then corrects the first answer
+    to <b>No</b>. The “how long?” question is now hidden — but in <b>🅐 Original pt-forms</b> the value <b>“5 days” stays in the
+    record and prints on the PDF</b>. In <b>🅑 SOPilot</b>, reconcile voids it.</div>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 210" role="img" aria-label="Stale answers reaching the PDF: Original vs SOPilot">
+      <style>
+        .ax{stroke:#3a4152;stroke-width:1.2}.lb{fill:#c9d3e6;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}
+        .big{font:800 30px "Segoe UI",sans-serif;text-anchor:middle}.sub{fill:#8a93a8;font:10px "Segoe UI",sans-serif;text-anchor:middle}
+        .t{fill:#c9d3e6;font:700 12px "Segoe UI",sans-serif}
+      </style>
+      <text class="t" x="20" y="22">Stale answers that leak to the PDF — 60 backward-edit scenarios on the real form</text>
+      <line class="ax" x1="120" y1="170" x2="700" y2="170"/>
+      <!-- Original: 61 (tall red) -->
+      <rect x="200" y="46" width="130" height="124" rx="5" fill="#e0574f"/>
+      <text class="big" x="265" y="34" fill="#e0574f">61</text>
+      <text class="lb" x="265" y="188">🅐 Original pt-forms</text>
+      <text class="sub" x="265" y="202">stale answers printed</text>
+      <!-- SOPilot: 0 (flat green) -->
+      <rect x="490" y="164" width="130" height="6" rx="3" fill="#19b89a"/>
+      <text class="big" x="555" y="152" fill="#19b89a">0</text>
+      <text class="lb" x="555" y="188">🅑 SOPilot (+reconcile)</text>
+      <text class="sub" x="555" y="202">stale answers printed</text>
+    </svg>
+    <figcaption><b>Accuracy (data integrity):</b> Original pt-forms left <b>61</b> stale answers on hidden fields across 60
+    realistic corrections; SOPilot + reconcile left <b>0</b>. <b>Latency:</b> reconcile runs <b>p50 30 ms / p95 37 ms</b> live
+    (incl. reading pt-forms + writing the voids back).</figcaption>
+  </div></figure>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Setup</th><th>Stale answers leaking to PDF<br>(60 scenarios)</th><th>Reconcile latency<br>p50 / p95</th><th>Next-field accuracy¹</th></tr></thead>
+    <tbody>
+      <tr><td>🅐 Original pt-forms</td><td><b style="color:#e0574f">61</b></td><td>— <span class="small">(no such step)</span></td><td>100%</td></tr>
+      <tr><td>🅑 SOPilot (SOP + reconcile)</td><td><b style="color:#19b89a">0</b></td><td><b>30 / 37 ms</b></td><td>100%</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">¹ Next-field / skip-logic accuracy is <b>100% for both</b> — that decision is deterministic in each system, so it is
+  <b>not</b> a differentiator. The difference is entirely in edit-propagation. Reproduce: <span class="mono">scripts/smartform_bench/reconcile_ab.py</span>.</p>
+
+  <div class="callout ok"><div class="clabel">◆ Honest read for PolarTie</div>
+    This is the <b>one measurable place</b> the SOP flow adds correctness today: it closes a real edit-propagation gap
+    (<b>61 leaked answers → 0</b>) at ~30 ms. It is <b>not</b> exclusive technology — pt-forms could add the same reconcile to
+    its own MCP. What the experiment proves is that the gap is <b>real and sized</b>, and that SOPilot’s constraint graph
+    (<span class="mono">constraints.py</span>) closes it cleanly. Everything else (next-field, navigation) is parity.</div>
+</section>
+
 <!-- next -->
 <section id="next">
   <div class="kicker">Status &amp; next steps</div>
@@ -848,13 +925,14 @@ b.hl{color:#8fd9c9}
           ✓ Group the form (20 stages)<br>
           ✓ Emit the form SOP + playbook/flow/map blocks<br>
           ✓ Supervisor loop spike (deterministic driver + strong-model prep)<br>
-          ✓ constraints.py engine + tests (110 pass)<br>
+          ✓ constraints.py engine + tests (116 pass)<br>
           ✓ <b>Wired to live pt-forms</b> get-fields (id↔FieldName bridge)<br>
-          ✓ <b>A/B measured</b> vs the realtime-inference baseline
+          ✓ <b>Edit-propagation</b>: <span class="mono">/formflow/reconcile</span> + head-to-head (61 leaks → 0)<br>
+          ✓ Honest comparison vs pt-forms (gating parity; reconcile is the real diff)
         </td>
         <td>
           ▫ Feed the instruction into the <b>realtime loop</b> via the MCP supervisor seam<br>
-          ▫ <b>Edit-propagation</b> on changed answers; <b>repeaters</b><br>
+          ▫ <b>Repeaters</b> (reconcile + prepare over repeating groups)<br>
           ▫ Generalize the pipeline + let admins refine playbooks in the Studio
         </td>
       </tr>

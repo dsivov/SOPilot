@@ -1,0 +1,57 @@
+{
+  "scenarios": 60,
+  "ORIG_ptforms_stale_answers_that_leak_to_pdf": 61,
+  "SOP_reconcile_stale_answers_remaining": 0,
+  "fields_voided_by_reconcile": 61,
+  "reconcile_latency_ms": {
+    "p50": 30.5,
+    "p95": 36.8,
+    "max": 80.2
+  },
+  "examples": [
+    {
+      "controlling": "Q26",
+      "hidden_field": "Q27",
+      "orig_leaked": [
+        "Q27"
+      ],
+      "sop_leaked": [],
+      "voided_by_sop": [
+        "Q27"
+      ]
+    },
+    {
+      "controlling": "Q39",
+      "hidden_field": "Q40",
+      "orig_leaked": [
+        "Q40"
+      ],
+      "sop_leaked": [],
+      "voided_by_sop": [
+        "Q40"
+      ]
+    },
+    {
+      "controlling": "Q39",
+      "hidden_field": "Q41",
+      "orig_leaked": [
+        "Q41"
+      ],
+      "sop_leaked": [],
+      "voided_by_sop": [
+        "Q41"
+      ]
+    },
+    {
+      "controlling": "Q39",
+      "hidden_field": "Q42",
+      "orig_leaked": [
+        "Q42"
+      ],
+      "sop_leaked": [],
+      "voided_by_sop": [
+        "Q42"
+      ]
+    }
+  ]
+}

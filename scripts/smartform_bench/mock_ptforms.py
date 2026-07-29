@@ -81,6 +81,9 @@ class H(BaseHTTPRequestHandler):
             return self._send(403, {"success": False, "message": "Invalid browser session"})
         n = int(self.headers.get("Content-Length", 0))
         payload = json.loads(self.rfile.read(n) or b"{}")
+        if payload.get("__reset__"):          # test helper: clear the answer store
+            VALUES.clear()
+            return self._send(200, {"success": True, "reset": True})
         for k, v in (payload.get("values") or payload.get("data") or payload).items():
             VALUES[str(k)] = v
         self._send(200, {"success": True, "count": len(VALUES)})

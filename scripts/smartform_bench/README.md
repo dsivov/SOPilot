@@ -41,6 +41,34 @@ tokens. The strong model is moved off the correctness path to phrasing only.
 *Token counts use `tiktoken` if installed, else a chars/4 approximation (labeled in the
 output).*
 
+## Head-to-head: backward edit-propagation (the real Original-vs-SOP difference)
+
+On "which field is next?" the original pt-forms flow and the SOP flow are **identical**
+(both deterministic → 100%). They diverge only when a patient **corrects an earlier
+answer** so a previously-answered question becomes hidden:
+
+- **Original pt-forms** leaves the stale answer in place (`_get_next_empty_field_id`
+  skips already-valued fields; the PDF drops only blank/"not applicable"), so it prints.
+- **SOPilot + reconcile** (`POST /formflow/reconcile`) recomputes visibility with
+  `constraints.py` and voids every answered-but-hidden field (to a fixpoint), writing
+  "not applicable" back to pt-forms.
+
+`reconcile_ab.py` builds backward-edit scenarios from the real form and measures stale
+answers that survive to output:
+
+| Setup | Stale answers leaking to PDF (60 scenarios) | Reconcile latency | Next-field accuracy |
+|---|:--:|:--:|:--:|
+| Original pt-forms | **61** | — | 100% |
+| SOPilot (SOP + reconcile) | **0** | p50 30 ms / p95 37 ms | 100% |
+
+Honest note: this is not exclusive tech — pt-forms could add the same reconcile. What
+it proves is the gap is **real and sized**, and SOPilot's constraint graph closes it.
+
+```bash
+backend/.venv/bin/python scripts/smartform_bench/mock_ptforms.py 9700 &   # if not already running
+backend/.venv/bin/python scripts/smartform_bench/reconcile_ab.py 60
+```
+
 ## Reproduce
 
 ```bash

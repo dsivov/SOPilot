@@ -90,6 +90,40 @@ def _visible_unanswered(manifest: dict, answers: dict, start_stage: str | None, 
     return None, None
 
 
+# Values pt-forms stores for a non-answer (a skipped field is recorded as one of
+# these); they must NOT be treated as real answers when reconciling visibility.
+_SENTINELS = {"", "not applicable", "n/a", "na", "unknown", "n.a."}
+
+
+def _is_real_answer(v) -> bool:
+    return v is not None and str(v).strip().lower() not in _SENTINELS
+
+
+def _reconcile_stale(manifest: dict, answers: dict) -> tuple[list[dict], dict]:
+    """Find fields that are ANSWERED but now HIDDEN, and void them — to a fixpoint.
+
+    A backward edit (changing an earlier answer) can hide a field that already holds
+    a real answer; that stale answer would otherwise survive into the PDF. We void it
+    ("not applicable"), which can in turn hide fields gated on it, so we iterate until
+    no answered-but-hidden field remains. Returns (voided_fields, reconciled_answers).
+    """
+    ans = dict(answers)
+    fields = [f for s in manifest.get("stages", {}).values() for f in s.get("fields", [])]
+    voided: list[dict] = []
+    changed = True
+    while changed:
+        changed = False
+        for f in fields:
+            cond = f.get("cond")
+            if not cond:
+                continue  # always-visible field is never stale
+            if _is_real_answer(ans.get(f["name"])) and not evaluate_condition(cond, ans):
+                voided.append({"name": f["name"], "id": f.get("id"), "was": ans.get(f["name"])})
+                ans[f["name"]] = "not applicable"
+                changed = True
+    return voided, ans
+
+
 def _stage_of(manifest: dict, field_name: str | None) -> str | None:
     if not field_name:
         return None
@@ -145,6 +179,16 @@ async def _fetch_get_fields(source: FormSource) -> dict:
         r = await hc.get(url, headers=headers)
         r.raise_for_status()
         return r.json()
+
+
+async def _push_set_fields(source: FormSource, id_values: dict) -> None:
+    """Write id-keyed values back to pt-forms (set-fields) — used to void stale answers."""
+    import httpx
+    headers = {"X-Browser-Session-Token": source.browser_session_token} if source.browser_session_token else {}
+    url = f"{source.base_url.rstrip('/')}/api/fill/{source.submission_uuid}/set-fields"
+    async with httpx.AsyncClient(timeout=10) as hc:
+        r = await hc.put(url, headers=headers, json={"values": id_values})
+        r.raise_for_status()
 
 
 @router.post("/prepare")
@@ -219,3 +263,50 @@ async def prepare(req: PrepareRequest, scope: Scope = Depends(resolve_scope),
     return {"stage": st["title"], "stage_id": stage_id, "next_field": field["name"],
             "next_field_id": field.get("id"), "label": field.get("label"), "instruction": instruction,
             "source": "live" if live else "inline", "done": False}
+
+
+class ReconcileRequest(BaseModel):
+    answers: dict = {}                  # inline snapshot (FieldName → value) — used when `source` is unset
+    source: FormSource | None = None    # live pt-forms; answers read (and voids written back) via get/set-fields
+    apply: bool = True                  # when live + apply, write the voids back to pt-forms; else dry-run
+
+
+@router.post("/reconcile")
+async def reconcile(req: ReconcileRequest, scope: Scope = Depends(resolve_scope),
+                    db: AsyncSession = Depends(get_db)) -> dict:
+    """Void answers that a later edit has hidden (backward edit-propagation).
+
+    A field answered while visible can be hidden by a subsequent change to a
+    controlling answer; its stale value would otherwise persist into the PDF. This
+    recomputes visibility with constraints.py and voids any answered-but-hidden
+    field (to a fixpoint, so cascades are handled). With a live source + apply, the
+    voids are written back to pt-forms as "not applicable".
+    """
+    manifest = await _load_manifest(db, scope)
+    if not manifest:
+        return {"error": "no form published for this project (missing __map__ block)"}
+
+    answers = req.answers or {}
+    live = False
+    if req.source is not None:
+        try:
+            body = await _fetch_get_fields(req.source)
+        except Exception as e:
+            return {"error": f"could not read pt-forms get-fields ({type(e).__name__}: {e})"}
+        answers = _live_answers(body, manifest)
+        live = True
+
+    voided, _ = _reconcile_stale(manifest, answers)
+
+    applied = False
+    if live and req.apply and voided:
+        id_values = {str(v["id"]): "not applicable" for v in voided if v.get("id") is not None}
+        try:
+            await _push_set_fields(req.source, id_values)
+            applied = True
+        except Exception as e:
+            return {"error": f"could not write set-fields to pt-forms ({type(e).__name__}: {e})",
+                    "would_void": voided}
+
+    return {"voided": voided, "count": len(voided),
+            "applied": applied, "source": "live" if live else "inline"}
