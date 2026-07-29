@@ -229,6 +229,7 @@ b.hl{color:#8fd9c9}
     <div class="row"><div class="k">Today</div><div><span class="mono">forms_navigate(request, current_field_id)</span> → the server <b>matches on question text</b> (<span class="filepath">_resolve_field_id_by_question :342</span>) and steps over skipped fields.</div></div>
     <div class="row"><div class="k">Hard residual</div><div>paraphrase / <b>multilingual</b> matching; “where I said <i>Ryanair</i>” (match by <b>answer content</b>); <b>near-duplicate</b> ambiguity (~20× “hours per day you X”; “doctor's name” in 3 sections + a repeater); <b>repeater-instance</b> jumps (“the 2nd object's weight”); relative moves over a <b>sparse/looping</b> graph + <b>display-number vs internal-id</b> confusion; ~1s latency + voice-friendly one-question disambiguation.</div></div>
     <div class="row"><div class="k">SOPilot fit</div><div>a <b>built analog</b>: the intake/switch <b>router</b> (semantic intent→graph node, multilingual, ASR-robust, per-turn) is a better resolver; a <b>semantic field index</b> (question + alt-name + current value, confidence-scored) improves precision + disambiguation.</div></div>
+    <div class="row" style="background:rgba(240,167,60,.08);border-radius:8px"><div class="k">Verdict ≈</div><div><b>Parity — premise was wrong.</b> On reading the code, <span class="mono">forms_navigate</span> already resolves jumps with <b>GPT</b> (<span class="mono">_gpt_pick_field</span>, any language, ambiguity handling) — <b>not</b> text-matching. Our semantic router isn’t part of the agreed SOP design and <b>underperformed</b> pt-forms’ GPT navigator in a quick test. <b>No SOP added value here; pt-forms handles navigation well.</b></div></div>
   </div>
 </section>
 
@@ -240,6 +241,7 @@ b.hl{color:#8fd9c9}
     <div class="row"><div class="k">Today</div><div>the LLM agent does it, guided per-field by an <span class="mono">Answer format:</span> line + prompt rules — date normalisation (incl. relative &amp; “same day as the injury”), transliteration, option-matching, <span class="mono">unknown</span>/<span class="mono">not applicable</span>; the server re-asks on validation error; <span class="mono">#alert</span> for alert conditions.</div></div>
     <div class="row"><div class="k">Hard residual</div><div>robustness under ASR noise; cross-field derivations; <b>alert recognition</b> is fragile in a “minimal” agent; long free-text read-back/confirm.</div></div>
     <div class="row"><div class="k">SOPilot fit</div><div>per-turn steering could inject stronger per-field validation + <b>precedent</b> (“how prior callers answered this field”); advisory mode fits the voice latency budget.</div></div>
+    <div class="row" style="background:rgba(240,167,60,.08);border-radius:8px"><div class="k">Verdict ≈</div><div><b>Parity — measured.</b> We built the strong-supervisor <span class="mono">/formflow/interpret</span> step and A/B’d it vs the weak model + pt-forms’ rule-based normalizer over 31 realistic + hard cases (slang, unit conversion, multilingual, relative dates): <b>both 100%</b>. gpt-4o-mini is already good enough; the strong model matches but <b>doesn’t beat</b> it. <b>Not a differentiator.</b></div></div>
   </div>
 </section>
 
@@ -280,6 +282,7 @@ b.hl{color:#8fd9c9}
     <div class="row"><div class="k">Today</div><div>the server stores answers (<span class="mono">submissions.data</span>), resumes from a saved-answers block, and supports a requested-changes revision walk. Skip-logic appears to run <b>forward</b>.</div></div>
     <div class="row"><div class="k">Open question</div><div>does the server already do <b>backward</b> edit-propagation (invalidate + re-surface), or only forward? This decides how big #3/#4 really is.</div></div>
     <div class="row"><div class="k">SOPilot fit</div><div><b>this is SOPilot.</b> The constraint-graph engine (requires / conflicts / enum, evaluated over state) does forward + backward + conflicts, <b>plus authoring &amp; verification tooling</b> for the dependency graph — a real pain for 271-field forms with two overlapping skip engines.</div></div>
+    <div class="row" style="background:rgba(25,184,154,.12);border-radius:8px"><div class="k" style="color:#7ee0cd">Verdict ✓</div><div><b>SOLVED — the one proven win.</b> Confirmed in code that pt-forms does <b>not</b> propagate backward (a now-hidden field keeps its stale answer, which prints on the PDF). We built <span class="mono">/formflow/reconcile</span> (constraints.py recomputes visibility and voids answered-but-hidden fields to a fixpoint, so cascades resolve). Head-to-head on the real form: <b>Original leaked 61 stale answers → SOPilot 0</b>, at ~30 ms. <span class="small">(Not exclusive tech — pt-forms could add the same reconcile — but the gap is real, sized, and closed.)</span></div></div>
   </div>
 </section>
 
@@ -311,6 +314,7 @@ b.hl{color:#8fd9c9}
   <div class="deck">
     <div class="row"><div class="k">The fix</div><div>because the <b>server is the source of truth</b>, the voice model's history is <b>disposable</b>: aggressive sliding-window / compaction, periodic session re-init that reloads only <span class="mono">guidelines + current field + a compact answers-so-far summary</span>, and a lean, stable system prompt.</div></div>
     <div class="row"><div class="k">SOPilot fit</div><div>SOPilot's whole thesis — <b>hold state in the engine, keep the responder context minimal, assemble only what this turn needs</b> — is precisely this mitigation; it could own the per-turn context block + the answers-so-far summary + compaction triggers.</div></div>
+    <div class="row" style="background:rgba(240,167,60,.08);border-radius:8px"><div class="k">Verdict ≈</div><div><b>Parity — and 32k didn’t even bind.</b> For this form the whole-form catalog is only <b>~4.7k tokens</b>, so a 32k window never overflows; the naive model’s errors were <b>reasoning</b>, not context. And <b>both</b> systems are already support-authoritative — the weak model only relays and sees one field/instruction — so context stays tiny in each. (a) is solved in both; (b) long-call transcript growth is real but the <b>server-authoritative design (pt-forms and SOP alike)</b> makes history disposable. <b>Not a SOP differentiator.</b></div></div>
   </div>
 </section>
 
@@ -321,22 +325,33 @@ b.hl{color:#8fd9c9}
   <div class="kicker">At a glance</div>
   <h2>Where SOPilot helps most</h2>
   <div class="tablewrap"><table>
-    <thead><tr><th>#</th><th>Problem</th><th>Handled today</th><th>Hard residual</th><th>SOPilot leverage</th></tr></thead>
+    <thead><tr><th>#</th><th>Problem</th><th>Handled today</th><th>Leverage <span class="small">(initial guess)</span></th><th>Measured verdict</th></tr></thead>
     <tbody>
-      <tr><td><span class="pnum p1" style="width:20px;height:20px;font-size:11px">1</span></td><td>Navigation</td><td>server text-match + skip-stepping</td><td>precision · repeater/relative · multilingual · latency</td><td><span class="lev high">high</span> router + field index</td></tr>
-      <tr><td><span class="pnum p2" style="width:20px;height:20px;font-size:11px">2</span></td><td>Answer quality</td><td>LLM agent + <span class="mono">Answer format:</span></td><td>robustness · alerts · derivations</td><td><span class="lev mid">moderate</span> steering + precedent</td></tr>
-      <tr><td><span class="pnum p4" style="width:20px;height:20px;font-size:11px">3·4</span></td><td>State + dependencies</td><td>2 forward skip engines</td><td><b>backward edit-propagation</b> · conflicts · authoring</td><td><span class="lev top">highest</span> this is SOPilot</td></tr>
-      <tr><td><span class="pnum p5" style="width:20px;height:20px;font-size:11px">5</span></td><td>32k context</td><td>one field at a time (a)</td><td>long-call compaction (b)</td><td><span class="lev high">high</span> minimal-context thesis</td></tr>
+      <tr><td><span class="pnum p1" style="width:20px;height:20px;font-size:11px">1</span></td><td>Navigation</td><td>server <b>GPT</b> resolver + skip-stepping</td><td><span class="lev high">high</span> router + field index</td><td><b style="color:#f0a73c">≈ parity</b> — pt-forms already GPT-based; premise was wrong</td></tr>
+      <tr><td><span class="pnum p2" style="width:20px;height:20px;font-size:11px">2</span></td><td>Answer quality</td><td>LLM agent + <span class="mono">Answer format:</span></td><td><span class="lev mid">moderate</span> steering + precedent</td><td><b style="color:#f0a73c">≈ parity</b> — both 100% (measured)</td></tr>
+      <tr><td><span class="pnum p4" style="width:20px;height:20px;font-size:11px">3·4</span></td><td>State + dependencies</td><td>forward skip only</td><td><span class="lev top">highest</span> this is SOPilot</td><td><b style="color:#19b89a">✓ SOLVED</b> — reconcile: 61 leaks → 0</td></tr>
+      <tr><td><span class="pnum p5" style="width:20px;height:20px;font-size:11px">5</span></td><td>32k context</td><td>one field at a time (a)</td><td><span class="lev high">high</span> minimal-context thesis</td><td><b style="color:#f0a73c">≈ parity</b> — both minimal-context; 32k never bound</td></tr>
     </tbody>
   </table></div>
-  <p class="small">Read: <b>1 &amp; 2</b> are “their server does it — tune quality.” <b>3 &amp; 4</b> are the core, and map directly onto SOPilot's constraint graph. <b>5(b)</b> is a real, separate engineering job that the server-authoritative + minimal-context pattern is built to solve.</p>
+  <p class="small"><b>The honest reckoning (initial guess → measured):</b> the leverage we expected on <b>1</b> and <b>5</b> didn’t
+  materialize — pt-forms was already stronger than assumed (GPT navigation; server-authoritative minimal context). <b>2</b> is
+  parity (the weak model is good enough). <b>Only 3·4 (backward edit-propagation) turned into a proven, measured win</b> — which
+  is exactly where we called the leverage “highest.” Everything else is parity or an authoring/governance judgement, not accuracy.</p>
 </section>
 
 <!-- options -->
 <section id="options">
   <div class="kicker">The engagement decision</div>
   <h2>Three ways SOPilot could plug in</h2>
-  <p>Orthogonal to <i>which problem we fix first</i>, this decides <b>who runs the code</b>. All three are on the table.</p>
+  <p>Orthogonal to <i>which problem we fix first</i>, this decides <b>who runs the code</b>.</p>
+
+  <div class="callout ok"><div class="clabel">◆ Resolved — C (hybrid), and measurement narrowed the scope</div>
+    We chose <b>C · hybrid</b>: pt-forms keeps the working flow; SOPilot inserts only where it measurably helps. Then the
+    measurements narrowed that sharply — the per-problem map below was the <i>initial</i> plan. The <b>proven</b> insertion point
+    is <b>#3·4 (edit-propagation → the <span class="mono">reconcile</span> step)</b>. <b>#1, #2 and #5 came out parity</b>
+    (pt-forms was already strong), so there is <b>nothing to insert</b> there. Config-driven authoring/governance is a separate
+    <b>candidate</b> value. So read the table below as “what we considered,” and the <a href="#leverage">reckoning</a> +
+    <a href="#headtohead">head-to-head</a> as “what actually landed.”</div>
 
   <figure><div class="fig">
     <svg viewBox="0 0 760 250" role="img" aria-label="Three engagement options: where SOPilot sits">
@@ -399,10 +414,16 @@ b.hl{color:#8fd9c9}
 <section id="solution">
   <div class="kicker">The direction we chose ★</div>
   <h2>Proposed solution — a strong supervisor + grouped playbooks</h2>
-  <p class="lead-p">One reframe collapses all five problems. They're symptoms of a single cause — <b>the realtime voice
-  model is weak and has a 32k window.</b> So stop engineering around it: <b>move the thinking to a strong text model</b>
-  and hand the realtime model only compact, prepared instructions. That is exactly SOPilot's core pattern — a strong
-  supervisor steering a weak responder per turn.</p>
+  <p class="lead-p">The reframe: the five problems share one cause — <b>the realtime voice model is weak and has a 32k
+  window.</b> So stop engineering around it: <b>move the thinking to a strong text model</b> and hand the realtime model only
+  compact, prepared instructions. That is exactly SOPilot's core pattern — a strong supervisor steering a weak responder per turn.</p>
+
+  <div class="callout caveat"><div class="clabel">◆ Built &amp; measured since — an honest update</div>
+    We built this and A/B’d it. The architecture is sound and shipped, but it did <b>not</b> turn all five problems into SOP wins.
+    On <b>navigation, answer-capture and context</b> pt-forms was already strong, and the measured result is <b>parity</b>. The
+    reframe’s genuine, <b>proven</b> payoff is <b>backward edit-propagation</b> — the <span class="mono">reconcile</span> step
+    (61 leaked answers → 0). See <a href="#measurement">measurement</a>, <a href="#headtohead">head-to-head</a>, and the
+    <a href="#leverage">reckoning</a> for the numbers. The sections below describe the architecture as built.</div>
 
   <div class="callout key"><div class="clabel">◆ The enabler PolarTie already has</div>
     In the real app the user clicks <b>Next / Prev</b> to advance — so the realtime model's latency is <b>not</b> on the
