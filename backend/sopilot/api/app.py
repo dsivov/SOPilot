@@ -13,7 +13,7 @@ from ..fetchers import register_default_fetchers
 from ..pool import SessionPool
 from ..prefetch import PrefetchManager
 from ..supervisor import SupervisorWorker
-from . import abtests, admin, configtools, connectors, copilot, corpora, formnav, metrics, project_io, prompt_blocks, runtime, secrets, sessions, sops, traces, voice
+from . import abtests, admin, configtools, connectors, copilot, corpora, formflow, formnav, metrics, project_io, prompt_blocks, runtime, secrets, sessions, sops, traces, voice
 
 
 def create_app() -> FastAPI:
@@ -90,6 +90,7 @@ def create_app() -> FastAPI:
     app.include_router(configtools.router)
     app.include_router(copilot.router)
     app.include_router(formnav.router)
+    app.include_router(formflow.router)
     app.include_router(project_io.router)
 
     @app.get("/health")
