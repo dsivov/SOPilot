@@ -117,8 +117,9 @@ b.hl{color:#8fd9c9}
     <li><a href="#options">Three ways to engage</a></li>
     <li><a href="#solution">Proposed solution ★</a></li>
     <li><a href="#integration">Reuse, new &amp; integration</a></li>
+    <li><a href="#implementation">How the SOP flow works</a></li>
     <li><a href="#status">Built &amp; proven</a></li>
-    <li><a href="#measurement">A/B measurement</a></li>
+    <li><a href="#measurement">Why deterministic gating</a></li>
     <li><a href="#next">Status &amp; next steps</a></li>
   </ol>
 </nav>
@@ -597,6 +598,102 @@ b.hl{color:#8fd9c9}
     database, no duplicated answer store.</div>
 </section>
 
+<!-- implementation -->
+<section id="implementation">
+  <div class="kicker">How the SOP deterministic flow works</div>
+  <h2>The flow in detail — three stored artifacts, one engine, one endpoint</h2>
+  <p class="lead-p">Everything the runtime needs is <b>stored as ordinary SOPilot objects</b> (a SOP + prompt blocks), read
+  by a <b>deterministic driver</b> that calls a <b>strong model only to phrase</b> each turn. Here is exactly what each piece
+  is and how they interlock.</p>
+
+  <h3>1 · What is stored (built once, offline, by <span class="mono">scripts/form_to_sop.py</span>)</h3>
+  <div class="grid g3" style="margin:12px 0">
+    <div class="card"><span class="pill ctrl">The form SOP</span>
+      <p class="small" style="margin:8px 0 0">A <span class="mono">TaskDefinition</span> whose <b>20 stages</b> are the
+      dependency-cohesive question groups — each an <span class="mono">agent_action</span> referencing its playbook block.
+      Versioned (<span class="mono">Sop/SopVersion</span>), visible &amp; editable in the <b>Studio</b>. Edges are
+      <span class="mono">both</span> — the user may jump to any stage, no forced order.</p></div>
+    <div class="card"><span class="pill ctrl">Playbook blocks</span>
+      <p class="small" style="margin:8px 0 0">One <b>prompt block per stage</b> = its questions + show-if rules + how to coerce
+      answers (dates, names, “don’t know”). Plus one global <span class="mono">__flow__</span> block = the supervisor’s
+      standing instructions. First-class, versioned, reviewable — <b>authors edit the playbook, not code</b>.</p></div>
+    <div class="card"><span class="pill ctrl">The map block</span>
+      <p class="small" style="margin:8px 0 0">A JSON <span class="mono">__map__</span> block: the stage order, and for every
+      field <span class="mono">{name, id, label, cond}</span>. This is the <b>deterministic index</b> — O(1) field→stage, and
+      the <span class="mono">id</span> is the pt-forms <span class="mono">get-fields</span> id, so live answers bind with no guesswork.</p></div>
+  </div>
+
+  <h3>2 · The deterministic engine (<span class="mono">constraints.py</span>)</h3>
+  <p class="small"><span class="mono">evaluate_condition(cond, answers)</span> is a <b>sandboxed evaluator</b> of the form’s own
+  show-if grammar (<span class="mono">isYes/isNo/values[{…}]</span> + comparisons; a missing answer ⇒ false; numeric strings
+  coerced). <span class="mono">_visible_unanswered(…)</span> walks the stages <b>in order</b>, skips any field whose condition
+  is false, and returns the <b>first visible, unanswered field</b> — <b>crossing into a later stage</b> (or an earlier one, if
+  the user went back) when the current stage is exhausted. This is the whole “which question is next?” decision — no model.</p>
+
+  <h3>3 · The runtime loop (<span class="mono">POST /formflow/prepare</span>, one call per Next/Prev)</h3>
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 250" role="img" aria-label="prepare() internals">
+      <style>
+        .bx{rx:9;stroke-width:1.6}.t{fill:#fff;font:700 11px "Segoe UI",sans-serif;text-anchor:middle}
+        .s{fill:#e7ebf3;font:8.5px var(--mono),monospace;text-anchor:middle}
+        .st{font:700 9px "Segoe UI",sans-serif;text-anchor:middle;fill:#8a93a8}
+      </style>
+      <defs><marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <rect class="bx" x="14" y="60" width="120" height="46" fill="#2a2114" stroke="#f0a73c"/><text class="t" x="74" y="80">pt-forms</text><text class="s" x="74" y="94">get-fields → answers</text>
+      <rect class="bx" x="170" y="60" width="120" height="46" fill="rgba(169,116,240,.18)" stroke="#a974f0"/><text class="t" x="230" y="80">map block</text><text class="s" x="230" y="94">field → stage (id↔name)</text>
+      <rect class="bx" x="326" y="60" width="128" height="46" fill="rgba(91,141,239,.18)" stroke="#5b8def"/><text class="t" x="390" y="78">constraints.py</text><text class="s" x="390" y="92">next VISIBLE unanswered</text>
+      <rect class="bx" x="490" y="44" width="120" height="34" fill="rgba(25,184,154,.15)" stroke="#19b89a"/><text class="t" x="550" y="65">target stage’s</text>
+      <rect class="bx" x="490" y="84" width="120" height="34" fill="rgba(25,184,154,.15)" stroke="#19b89a"/><text class="s" x="550" y="105">playbook + __flow__</text>
+      <rect class="bx" x="646" y="60" width="100" height="46" fill="rgba(25,184,154,.25)" stroke="#19b89a"/><text class="t" x="696" y="80">strong model</text><text class="s" x="696" y="94">phrases 1 line</text>
+      <line x1="134" y1="83" x2="169" y2="83" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#pa)"/>
+      <line x1="290" y1="83" x2="325" y2="83" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#pa)"/>
+      <line x1="454" y1="83" x2="489" y2="83" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#pa)"/>
+      <line x1="610" y1="83" x2="645" y2="83" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#pa)"/>
+      <!-- bounded window / cross-stage -->
+      <rect x="326" y="150" width="284" height="66" rx="10" fill="none" stroke="#19b89a" stroke-dasharray="5 4"/>
+      <text class="st" x="468" y="168" fill="#7ee0cd">the bounded window</text>
+      <text class="s" x="468" y="186" fill="#c9d3e6">constraints.py moves the pointer across stages;</text>
+      <text class="s" x="468" y="200" fill="#c9d3e6">only the TARGET stage’s playbook is loaded (~550 tok)</text>
+      <line x1="390" y1="106" x2="390" y2="149" stroke="#19b89a" stroke-width="1.4" marker-end="url(#pa)"/>
+      <line x1="550" y1="149" x2="550" y2="117" stroke="#19b89a" stroke-width="1.4" marker-end="url(#pa)"/>
+      <text class="s" x="696" y="150" fill="#8a93a8">↓ returns to pt-forms:</text>
+      <text class="s" x="696" y="164" fill="#c9d3e6">one instruction to speak</text>
+    </svg>
+    <figcaption><b>a</b> read answers from pt-forms → <b>b</b> current field → its stage (map) → <b>c</b> next visible unanswered
+    field via <span class="mono">constraints.py</span> (<b>may land in another stage</b>) → <b>d</b> load <i>that</i> stage’s
+    playbook + the flow block → <b>e</b> strong model phrases one line → <b>f</b> return; answers never leave pt-forms.</figcaption>
+  </div></figure>
+
+  <div class="callout key"><div class="clabel">◆ Bounded context — with stage-to-stage jumps</div>
+    The supervisor <b>never sees the whole form</b> — only the playbook of the stage the next question lives in (~550 tokens).
+    Crucially, that window <b>follows the deterministic pointer across stage boundaries</b>: when gating skips to a field in a
+    later group, or the user jumps back to an earlier one, <span class="mono">prepare</span> resolves the <b>target</b> stage and
+    loads <b>its</b> playbook. So the context stays ~one stage no matter where in the 20-stage form the answer flow moves.</div>
+
+  <h3>4 · A concrete turn</h3>
+  <div class="callout ok"><div class="clabel">◆ Worked example</div>
+    User just answered <span class="mono">Q39 “Did you go to the hospital?” → No</span>. <b>prepare</b>: get-fields says Q39=No;
+    map puts Q39 in <i>History of Treatment</i>; <span class="mono">constraints.py</span> finds Q40–Q43 all gated
+    <span class="mono">isYes({Q39})</span> ⇒ hidden, exhausts the stage, and returns the next visible field — <b>Q45 in the next
+    stage</b>. <b>prepare</b> loads <i>History of Treatment (part 2)</i>’s playbook (not the whole form) and the strong model
+    returns one line: <i>“Please describe the treatment you received.”</i> One deterministic hop across a stage boundary; one
+    bounded phrasing call.</div>
+
+  <h3>5 · Honestly, what this adds over pt-forms</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Capability</th><th>pt-forms today</th><th>SOP flow</th></tr></thead>
+    <tbody>
+      <tr><td>Skip-logic gating</td><td>deterministic, server-side (<span class="mono">_compute_next_field</span>)</td><td><b>parity</b> — same principle, <span class="mono">constraints.py</span></td></tr>
+      <tr><td>NL navigation (jumps)</td><td>GPT over the whole form (<span class="mono">_gpt_pick_field</span>)</td><td>not a new mechanism (out of scope)</td></tr>
+      <tr><td><b>Authoring / structure</b></td><td><span class="mono">fields.json</span> + <span class="mono">.md</span> rules + server code</td><td><b>versioned SOP + per-stage playbooks, edited in the Studio</b></td></tr>
+      <tr><td><b>Per-turn model context</b></td><td>whole-form GPT per navigation</td><td><b>one stage’s playbook (~550 tok)</b></td></tr>
+      <tr><td>Backward edit-propagation</td><td>forward skip; stale now-hidden answers not obviously cleared <span class="small">(to verify)</span></td><td>constraint-graph recompute — <b>candidate</b>, not built</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">The honest differentiation is <b>authoring/structure and bounded per-turn context</b> — not gating or
+  navigation, which pt-forms already handles well. Edit-propagation is the one place a real correctness gap <i>may</i> exist.</p>
+</section>
+
 <!-- status -->
 <section id="status">
   <div class="kicker">Built &amp; proven — spike</div>
@@ -632,22 +729,31 @@ b.hl{color:#8fd9c9}
 
 <!-- measurement -->
 <section id="measurement">
-  <div class="kicker">The number for PolarTie — A/B</div>
-  <h2>Original realtime flow vs the SOP deterministic flow</h2>
-  <p class="lead-p">The decision under test is the one that matters clinically: <b>“which question is next?”</b> — ask the
-  right one, skip the ones the form’s rules hide. Ground truth is the form’s own show-if rules
-  (<span class="mono">isYes/isNo/values[…]</span>), evaluated exactly.</p>
+  <div class="kicker">Why deterministic gating — and an honest correction</div>
+  <h2>Why the “next question” decision must not be model-inferred</h2>
+
+  <div class="callout caveat"><div class="clabel">◆ Correction — read this first</div>
+    An earlier draft framed this as <i>“SOP vs what pt-forms does today.”</i> That was wrong, and reading pt-forms’ source
+    proved it: <b>pt-forms already decides the next field deterministically server-side</b>
+    (<span class="mono">_compute_next_field → _should_skip_field → _evaluate_field_condition</span>, plus a deterministic
+    <span class="mono">.md</span>-rule layer), and its agent only relays the server’s question. So this experiment is
+    <b>not</b> a win over pt-forms — <b>both</b> pt-forms and our SOP flow gate deterministically. What it actually shows is
+    the shared principle underneath both designs: <b>if you let a model <i>infer</i> skip-logic instead of <i>evaluating</i>
+    it, it gets ~1-in-3 gating decisions wrong.</b> pt-forms and SOPilot independently arrived at the same answer — don’t.</div>
+
+  <p class="lead-p">The decision under test: <b>“which question is next?”</b> — ask the right one, skip the ones the form’s
+  rules hide. Ground truth is the form’s own show-if rules (<span class="mono">isYes/isNo/values[…]</span>), evaluated exactly.</p>
 
   <div class="grid g3" style="margin:16px 0">
-    <div class="card"><span class="pill a">Arm A — baseline</span>
-      <p class="small" style="margin:8px 0 0">A realtime model <b>infers</b> the next field from the whole form + answers —
-      <b>what pt-forms does today</b>. Run at two tiers so the baseline can’t be called crippled:
-      <b>A-weak</b> = <span class="mono">gpt-4o-mini</span> (proxy for the weak 32k voice model),
-      <b>A-strong</b> = <span class="mono">gpt-4o</span> (upper bound for inference).</p></div>
-    <div class="card"><span class="pill b">Arm B — SOP</span>
-      <p class="small" style="margin:8px 0 0">The deterministic driver <b>evaluates</b> the FieldConditions
-      (<span class="mono">constraints.py</span>) to pick the next field; the strong model only <b>phrases</b> it.
-      This is <span class="mono">/formflow/prepare</span>.</p></div>
+    <div class="card"><span class="pill a">Inference (the anti-pattern)</span>
+      <p class="small" style="margin:8px 0 0">A model <b>infers</b> the next field from the whole form + answers — what
+      happens if navigation is left to the realtime model with <b>no</b> deterministic backing. Two tiers:
+      <b>weak</b> = <span class="mono">gpt-4o-mini</span>, <b>strong</b> = <span class="mono">gpt-4o</span>.
+      <b>Neither production system does this</b> — it’s the strawman that quantifies the risk.</p></div>
+    <div class="card"><span class="pill b">Evaluation (both systems)</span>
+      <p class="small" style="margin:8px 0 0">The next field is <b>evaluated</b> from the FieldConditions. pt-forms does it
+      in <span class="mono">_compute_next_field</span>; our SOP flow does it in <span class="mono">constraints.py</span>.
+      Same principle, correct by construction.</p></div>
     <div class="card"><span class="pill win">Setup</span>
       <p class="small" style="margin:8px 0 0">Real <b>269-question</b> Injured Worker Questionnaire · <b>120 decision points</b>
       (34 at skip/gating boundaries) generated by walking the form under yes/no/alternating answer policies · answers read
@@ -672,28 +778,29 @@ b.hl{color:#8fd9c9}
       </g>
       <!-- bars: 250 = 0%, 4.8px per % -->
       <g>
-        <text class="lbl" x="16" y="62">A-weak</text><text class="cap" x="16" y="76">gpt-4o-mini</text>
+        <text class="lbl" x="16" y="62">Infer · weak</text><text class="cap" x="16" y="76">gpt-4o-mini</text>
         <rect x="250" y="48" width="268.3" height="26" rx="4" fill="#e0574f"/><text class="val" x="530" y="66" fill="#e0574f">55.9%</text>
-        <text class="lbl" x="16" y="106">A-strong</text><text class="cap" x="16" y="120">gpt-4o</text>
+        <text class="lbl" x="16" y="106">Infer · strong</text><text class="cap" x="16" y="120">gpt-4o</text>
         <rect x="250" y="92" width="324.5" height="26" rx="4" fill="#f0a73c"/><text class="val" x="586" y="110" fill="#f0a73c">67.6%</text>
-        <text class="lbl" x="16" y="150">B — SOP</text><text class="cap" x="16" y="164">deterministic</text>
+        <text class="lbl" x="16" y="150">Evaluate</text><text class="cap" x="16" y="164">pt-forms &amp; SOP</text>
         <rect x="250" y="136" width="480" height="26" rx="4" fill="#19b89a"/><text class="val" x="700" y="154" fill="#0f1420">100%</text>
       </g>
     </svg>
-    <figcaption><b>On the decisions that hide questions, even a strong model is wrong ~1 turn in 3.</b> The deterministic
-    engine evaluates the real conditions, so it is right every time.</figcaption>
+    <figcaption><b>Left to <i>infer</i> skip-logic, even a strong model is wrong ~1 turn in 3.</b> <i>Evaluating</i> the real
+    conditions is right every time — the principle <b>both pt-forms and SOPilot</b> follow (this is not a difference between them).</figcaption>
   </div></figure>
 
   <div class="tablewrap"><table>
-    <thead><tr><th>Arm</th><th>Accuracy<br>(all 120)</th><th>Accuracy<br>(skip/gating)</th><th>Dangerous errors¹</th><th>Decision latency<br>p50 / p95</th><th>Decision context<br>per turn</th></tr></thead>
+    <thead><tr><th>Approach</th><th>Accuracy<br>(all 120)</th><th>Accuracy<br>(skip/gating)</th><th>Dangerous errors¹</th><th>Decision latency<br>p50 / p95</th><th>Decision context<br>per turn</th></tr></thead>
     <tbody>
-      <tr><td><span class="pill a">A-weak · gpt-4o-mini</span></td><td>83.3%</td><td>55.9%</td><td>15 <span class="small">(14 asked a hidden field)</span></td><td>933 / 2259 ms</td><td>~4.7k tokens</td></tr>
-      <tr><td><span class="pill a">A-strong · gpt-4o</span></td><td>86.7%</td><td>67.6%</td><td>11 <span class="small">(11 asked a hidden field)</span></td><td>819 / 1419 ms</td><td>~4.7k tokens</td></tr>
-      <tr><td><span class="pill win">B · deterministic (SOP)</span></td><td><b>100%</b></td><td><b>100%</b></td><td><b>0</b></td><td><b>~0 / 0.3 ms</b></td><td><b>0 tokens</b></td></tr>
+      <tr><td><span class="pill a">Infer · gpt-4o-mini</span></td><td>83.3%</td><td>55.9%</td><td>15 <span class="small">(14 asked a hidden field)</span></td><td>933 / 2259 ms</td><td>~4.7k tokens</td></tr>
+      <tr><td><span class="pill a">Infer · gpt-4o</span></td><td>86.7%</td><td>67.6%</td><td>11 <span class="small">(11 asked a hidden field)</span></td><td>819 / 1419 ms</td><td>~4.7k tokens</td></tr>
+      <tr><td><span class="pill win">Evaluate · deterministic</span></td><td><b>100%</b></td><td><b>100%</b></td><td><b>0</b></td><td><b>~0 / 0.3 ms</b></td><td><b>0 tokens</b></td></tr>
     </tbody>
   </table></div>
   <p class="small">¹ <b>Dangerous error</b> = surfaced a field the rules HIDE (asked an inapplicable medical question) or re-asked an
-  answered one — the clinically meaningful failures. Token counts: chars/4 approximation (labeled in the harness output).</p>
+  answered one — the clinically meaningful failures. Token counts: chars/4 approximation (labeled in the harness output).
+  <b>“Evaluate”</b> is how <b>both</b> pt-forms and our SOP flow work; the two “Infer” rows are the anti-pattern neither uses.</p>
 
   <figure><div class="fig">
     <svg viewBox="0 0 760 150" role="img" aria-label="Cost per turn: latency and context">
@@ -718,10 +825,12 @@ b.hl{color:#8fd9c9}
     with phrasing <b>p50 1.07 s / p95 1.74 s</b> — same order as Arm A, but never on the correctness path.</figcaption>
   </div></figure>
 
-  <div class="callout ok"><div class="clabel">◆ What the A/B shows</div>
-    Moving the <b>decision</b> from model <i>inference</i> to deterministic <i>evaluation</i> turns ~1-in-3 skip-logic errors
-    into <b>zero</b>, at <b>~0 ms</b> and <b>0 decision tokens</b> — while the strong model is kept for what it’s actually good
-    at (phrasing), off the critical path. Reproduce: <span class="mono">scripts/smartform_bench/</span> (README + harness + mock).</div>
+  <div class="callout ok"><div class="clabel">◆ What this shows (and doesn’t)</div>
+    <b>Does show:</b> the decision of <i>which</i> field is next must be <i>evaluated</i>, not <i>inferred</i> — inference costs
+    ~1-in-3 skip errors, ~0.8–0.9 s, and ~4.7k tokens <i>every turn</i>; evaluation is exact at ~0 ms and 0 tokens.
+    <b>Does NOT show:</b> a SOP advantage over pt-forms — pt-forms already evaluates deterministically. The strong model still
+    runs each turn in our design, but only to <i>phrase</i> the pre-decided question (~1.07 s, ~550 tokens), off the correctness
+    path. Reproduce: <span class="mono">scripts/smartform_bench/</span> (README + harness + mock).</div>
 </section>
 
 <!-- next -->
