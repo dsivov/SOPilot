@@ -49,14 +49,20 @@ def parse(form_path: str):
     if isinstance(fields, dict):
         fields = fields.get("fields", [])
     sections, cur, byname = [], None, {}
+    # id: 1-based counter over EVERY entry carrying a real FieldName (sections
+    # included) — exactly pt-forms' mapFieldNamesToIndexes, so get-fields ids line up 1:1.
+    fid = 0
     for i, f in enumerate(fields):
         ft, nm = f.get("FieldType", "Text"), f.get("FieldName", f"_{i}")
+        if "FieldName" in f:
+            fid += 1
         if ft == "Section":
             cur = {"title": str(f.get("FieldValue") or nm), "fields": []}
             sections.append(cur)
             continue
         rec = {"name": nm, "ftype": ft, "label": str(f.get("FieldNameAlt") or ""),
-               "cond": f.get("FieldCondition") or "", "options": f.get("FieldOptions"), "order": i}
+               "cond": f.get("FieldCondition") or "", "options": f.get("FieldOptions"),
+               "order": i, "id": fid}
         byname[nm] = rec
         if cur is None:
             cur = {"title": "(prologue)", "fields": []}
@@ -238,8 +244,10 @@ def main() -> int:
         "form": name, "flow_block": flow_block, "order": [st["_id"] for st in stages],
         "stages": {st["_id"]: {
             "title": st["title"], "block": st["_block"],
-            # per-field detail so the deterministic driver can gate + label without prose parsing
-            "fields": [{"name": f["name"], "label": f["label"], "cond": f["cond"]} for f in st["fields"]],
+            # per-field detail so the deterministic driver can gate + label without prose parsing.
+            # id = pt-forms get-fields id → live driver maps id-keyed answers ⇄ FieldName.
+            "fields": [{"name": f["name"], "id": f["id"], "label": f["label"], "cond": f["cond"]}
+                       for f in st["fields"]],
         } for st in stages},
     }
     map_block = f"{prefix}.__map__"

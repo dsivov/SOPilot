@@ -15,6 +15,7 @@ uses the strong model only to phrase the prepared turn. No answers are stored he
 from __future__ import annotations
 
 import json
+import re
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -26,10 +27,23 @@ from ..tenancy import Scope, resolve_scope
 
 router = APIRouter(prefix="/formflow", tags=["formflow"])
 
+# pt-forms get-fields addresses fields by numeric id and surfaces repeater
+# instances as "<id>[i]"; strip the instance suffix down to the base id.
+_ID_SUFFIX = re.compile(r"^(\d+)(?:\[\d+\])?$")
+
+
+class FormSource(BaseModel):
+    """Live pt-forms submission to pull the answer snapshot from (get-fields)."""
+    base_url: str
+    submission_uuid: str
+    browser_session_token: str | None = None
+
 
 class PrepareRequest(BaseModel):
-    current_field: str | None = None   # where the user is now (from pt-forms); None = start
-    answers: dict = {}                  # answer snapshot (FieldName → value), from pt-forms
+    current_field: str | None = None   # where the user is now (FieldName or numeric id); None = start
+    answers: dict = {}                  # inline snapshot (FieldName → value) — used when `source` is unset
+    source: FormSource | None = None    # when set, answers are read live from pt-forms get-fields
+    phrase: bool = True                 # False = return the raw next field (skip the strong model) + context size
 
 
 async def _load_manifest(db, scope) -> dict | None:
@@ -85,6 +99,54 @@ def _stage_of(manifest: dict, field_name: str | None) -> str | None:
     return None
 
 
+def _id_to_name(manifest: dict) -> dict[int, str]:
+    """pt-forms numeric id → our FieldName (from the ingested __map__ block)."""
+    out: dict[int, str] = {}
+    for s in manifest.get("stages", {}).values():
+        for f in s.get("fields", []):
+            if f.get("id") is not None:
+                out[int(f["id"])] = f["name"]
+    return out
+
+
+def _live_answers(get_fields_body: dict, manifest: dict) -> dict:
+    """Convert pt-forms get-fields id-keyed `values` → FieldName-keyed answers.
+
+    get-fields strips FieldName, so the id→name bridge comes from our manifest.
+    Repeater instances ('<id>[i]') collapse to the base field for the pilot.
+    """
+    id2name = _id_to_name(manifest)
+    values = get_fields_body.get("values") or get_fields_body.get("data") or {}
+    answers: dict = {}
+    for k, v in values.items():
+        m = _ID_SUFFIX.match(str(k))
+        name = id2name.get(int(m.group(1))) if m else None
+        if name is None:
+            name = str(k)  # already a FieldName, or an unknown id — pass through
+        answers[name] = v
+    return answers
+
+
+def _normalize_field(manifest: dict, current: str | None) -> str | None:
+    """Accept the cursor as a FieldName or a numeric get-fields id; return the FieldName."""
+    if current is None:
+        return None
+    m = _ID_SUFFIX.match(str(current))
+    if m:
+        return _id_to_name(manifest).get(int(m.group(1)), str(current))
+    return str(current)
+
+
+async def _fetch_get_fields(source: FormSource) -> dict:
+    import httpx
+    headers = {"X-Browser-Session-Token": source.browser_session_token} if source.browser_session_token else {}
+    url = f"{source.base_url.rstrip('/')}/api/fill/{source.submission_uuid}/get-fields"
+    async with httpx.AsyncClient(timeout=10) as hc:
+        r = await hc.get(url, headers=headers)
+        r.raise_for_status()
+        return r.json()
+
+
 @router.post("/prepare")
 async def prepare(req: PrepareRequest, scope: Scope = Depends(resolve_scope),
                   db: AsyncSession = Depends(get_db)) -> dict:
@@ -96,8 +158,21 @@ async def prepare(req: PrepareRequest, scope: Scope = Depends(resolve_scope),
     if not manifest:
         return {"error": "no form published for this project (missing __map__ block)"}
 
-    cur_stage = _stage_of(manifest, req.current_field)
-    stage_id, field = _visible_unanswered(manifest, req.answers or {}, cur_stage, req.current_field)
+    # Live pt-forms: pull the answer snapshot from get-fields (source of truth),
+    # converting its id-keyed values to the FieldName-keyed answers the driver uses.
+    answers = req.answers or {}
+    live = False
+    if req.source is not None:
+        try:
+            body = await _fetch_get_fields(req.source)
+        except Exception as e:
+            return {"error": f"could not read pt-forms get-fields ({type(e).__name__}: {e})"}
+        answers = _live_answers(body, manifest)
+        live = True
+
+    current_field = _normalize_field(manifest, req.current_field)
+    cur_stage = _stage_of(manifest, current_field)
+    stage_id, field = _visible_unanswered(manifest, answers, cur_stage, current_field)
     if field is None:
         return {"done": True, "message": "All visible questions are answered — ready to submit."}
 
@@ -111,7 +186,7 @@ async def prepare(req: PrepareRequest, scope: Scope = Depends(resolve_scope),
 
     # only the answers this stage references (keep the strong-model context tight)
     stage_field_names = {f["name"] for f in st["fields"]}
-    relevant = {k: v for k, v in (req.answers or {}).items() if k in stage_field_names}
+    relevant = {k: v for k, v in answers.items() if k in stage_field_names}
 
     user = (
         f"CURRENT STAGE: {st['title']}\n\n{playbook}\n\n"
@@ -120,6 +195,14 @@ async def prepare(req: PrepareRequest, scope: Scope = Depends(resolve_scope),
         "Prepare the single compact instruction the realtime agent should speak to ask this field. "
         "Return ONLY the question text (plus a requested-change note if any) — no field id, no metadata."
     )
+    # Deterministic-only path (benchmark / no-LLM fallback consumers): return the raw
+    # field plus the strong-model context size that WOULD be sent, without calling it.
+    if not req.phrase:
+        return {"stage": st["title"], "stage_id": stage_id, "next_field": field["name"],
+                "next_field_id": field.get("id"), "label": field.get("label"),
+                "instruction": field.get("label") or field["name"],
+                "context_chars": len(flow) + len(user), "source": "live" if live else "inline",
+                "phrased": False, "done": False}
     try:
         res = await client().chat.completions.create(
             model=get_settings().builder_model,
@@ -129,8 +212,10 @@ async def prepare(req: PrepareRequest, scope: Scope = Depends(resolve_scope),
     except Exception as e:
         instruction = field.get("label") or field["name"]  # fallback: raw label
         return {"stage": st["title"], "stage_id": stage_id, "next_field": field["name"],
-                "label": field.get("label"), "instruction": instruction,
+                "next_field_id": field.get("id"), "label": field.get("label"), "instruction": instruction,
+                "source": "live" if live else "inline",
                 "warning": f"supervisor model unavailable ({type(e).__name__}) — raw label used"}
 
     return {"stage": st["title"], "stage_id": stage_id, "next_field": field["name"],
-            "label": field.get("label"), "instruction": instruction, "done": False}
+            "next_field_id": field.get("id"), "label": field.get("label"), "instruction": instruction,
+            "source": "live" if live else "inline", "done": False}
