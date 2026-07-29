@@ -123,6 +123,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#completion">Robot accuracy (end-to-end)</a></li>
     <li><a href="#answercapture">Robot accuracy (answer-capture)</a></li>
     <li><a href="#headtohead">Head-to-head: Original vs SOPilot</a></li>
+    <li><a href="#candidate">Candidate value: config-driven authoring</a></li>
     <li><a href="#next">Status &amp; next steps</a></li>
   </ol>
 </nav>
@@ -1009,6 +1010,45 @@ b.hl{color:#8fd9c9}
     (<b>61 leaked answers → 0</b>) at ~30 ms. It is <b>not</b> exclusive technology — pt-forms could add the same reconcile to
     its own MCP. What the experiment proves is that the gap is <b>real and sized</b>, and that SOPilot’s constraint graph
     (<span class="mono">constraints.py</span>) closes it cleanly. Everything else (next-field, navigation) is parity.</div>
+</section>
+
+<!-- candidate -->
+<section id="candidate">
+  <div class="kicker">A candidate added value — not yet proven</div>
+  <h2>Config-driven authoring &amp; governance</h2>
+  <p class="lead-p">Distinct from the <b>proven</b> value (reconcile). This one is about <b>who can change the form’s behaviour,
+  and how it’s governed</b> — an authoring/ops benefit, <b>not</b> a runtime-accuracy one (accuracy is parity, as measured).</p>
+
+  <div class="callout caveat"><div class="clabel">◆ One honest correction to the premise</div>
+    pt-forms’ state machine is <b>not</b> code-based at the rule level — its FieldConditions are already <b>config</b>, authored in
+    pt-forms’ own visual condition builder. Both systems are “generic <b>engine</b> (code) + per-form <b>rules</b> (config)”. So SOP
+    doesn’t move a code machine to config; it moves a <b>wider slice</b> of behaviour into versioned, Studio-editable config.</div>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Aspect</th><th>🅐 pt-forms today</th><th>🅑 SOP flow</th></tr></thead>
+    <tbody>
+      <tr><td>Field conditions (show-if)</td><td>config (visual builder)</td><td>config (map block) — <b>parity</b></td></tr>
+      <tr><td>Evaluation engine</td><td>code (<span class="mono">_compute_next_field</span>)</td><td>code (<span class="mono">constraints.py</span>) — <b>parity</b></td></tr>
+      <tr><td><b>Question grouping / stages</b></td><td>none (field-by-field)</td><td><b>explicit config (SOP stages)</b></td></tr>
+      <tr><td><b>Per-group playbooks &amp; instructions</b></td><td>one global <span class="mono">agent_prompt.md</span> + code</td><td><b>versioned prompt blocks per stage</b></td></tr>
+      <tr><td><b>Coercion rules</b></td><td>in code / the agent prompt</td><td><b>the flow block (editable)</b></td></tr>
+      <tr><td><b>Versioning · audit · RBAC of all the above</b></td><td>split across schema DB + code + files</td><td><b>one Studio, versioned</b></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout ok"><div class="clabel">◆ Adding another form = data, not code</div>
+    The engine is <b>generic</b>. To onboard a new form you run the ingest pipeline (<span class="mono">form_to_sop.py</span>) on
+    its <span class="mono">fields.json</span> — no changes to <span class="mono">constraints.py</span>. It already covers the full
+    FieldCondition grammar (<span class="mono">isYes/isNo/values[…]</span>, comparisons, and compound <span class="mono">AND/OR/NOT</span>
+    — the real form uses 40 <span class="mono">AND</span> conditions). You’d touch engine code <b>only</b> for something new: an
+    unseen operator, pt-forms’ fuzzy <span class="mono">.md</span> rule layer, repeaters, or a new field type. (Same is true of
+    pt-forms’ own generic engine.)</div>
+
+  <div class="callout key"><div class="clabel">◆ Honest status of this value</div>
+    Real for <b>medical governance</b> — non-engineers editing grouping, instructions &amp; coercion in one <b>versioned, auditable</b>
+    place instead of touching server code + <span class="mono">agent_prompt.md</span> + <span class="mono">.md</span> files. But it’s a
+    <b>product/ops</b> benefit to be <b>validated against pt-forms’ existing builder</b>, not a measured accuracy win. <b>Candidate,
+    not proven.</b></div>
 </section>
 
 <!-- next -->
