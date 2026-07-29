@@ -1,0 +1,37 @@
+{
+  "cases": 31,
+  "A_original_ptforms_weak+rules": {
+    "accuracy_pct": 100.0,
+    "correct": 31,
+    "n": 31,
+    "by_category": {
+      "choice": "5/5",
+      "date": "3/3",
+      "hard": "7/7",
+      "multilingual": "2/2",
+      "number": "5/5",
+      "text": "1/1",
+      "unknown": "3/3",
+      "yesno": "5/5"
+    },
+    "latency_ms_p50": 986.0,
+    "misses": []
+  },
+  "B_sopilot_interpret_strong": {
+    "accuracy_pct": 100.0,
+    "correct": 31,
+    "n": 31,
+    "by_category": {
+      "choice": "5/5",
+      "date": "3/3",
+      "hard": "7/7",
+      "multilingual": "2/2",
+      "number": "5/5",
+      "text": "1/1",
+      "unknown": "3/3",
+      "yesno": "5/5"
+    },
+    "latency_ms_p50": 951.0,
+    "misses": []
+  }
+}

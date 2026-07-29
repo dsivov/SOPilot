@@ -310,3 +310,111 @@ async def reconcile(req: ReconcileRequest, scope: Scope = Depends(resolve_scope)
 
     return {"voided": voided, "count": len(voided),
             "applied": applied, "source": "live" if live else "inline"}
+
+
+class InterpretRequest(BaseModel):
+    raw_answer: str                     # what the patient said (messy / colloquial / any language)
+    field_name: str | None = None       # for stage/flow context + optional live write-back
+    label: str = ""                     # the question (falls back to the manifest / get-fields)
+    ftype: str = "Text"                 # Number / Boolean / Button(choice) / Date / Text …
+    options: object | None = None       # choice options (list or {key: label})
+    source: FormSource | None = None    # optional live: pull the field's schema + write the value back
+    apply: bool = False                 # when live + apply, write the interpreted value back to pt-forms
+
+
+def _coerce_option(value: str, options) -> str:
+    """Map a produced value to the exact stored option (key or case-insensitive label)."""
+    if not options:
+        return value
+    t = str(value).strip().lower()
+    if isinstance(options, dict):
+        for k in options:
+            if str(k).strip().lower() == t:
+                return str(k)
+        for k, lab in options.items():
+            if str(lab).strip().lower() == t:
+                return str(k)
+    elif isinstance(options, list):
+        for o in options:
+            if str(o).strip().lower() == t:
+                return str(o)
+    return value
+
+
+@router.post("/interpret")
+async def interpret(req: InterpretRequest, scope: Scope = Depends(resolve_scope),
+                    db: AsyncSession = Depends(get_db)) -> dict:
+    """Answer capture — turn a messy spoken answer into the exact value to store.
+
+    The strong supervisor normalizes one patient utterance to the field's format
+    (numbers as digits, dates as YYYY-MM-DD, yes/no, EXACTLY one option for a choice,
+    'don't know' → unknown), using the SOP flow block's coercion rules. This is the
+    piece pt-forms leaves to the weak realtime model.
+    """
+    import datetime as _dt
+    from .prompt_blocks import resolve_published_blocks
+    from ..bench.llm import client
+    from ..config import get_settings
+
+    label, ftype, options = req.label, req.ftype, req.options
+    live = False
+    if req.source is not None:
+        manifest0 = await _load_manifest(db, scope)
+        fid = None
+        if manifest0 and req.field_name:
+            fid = next((f.get("id") for s in manifest0.get("stages", {}).values()
+                        for f in s.get("fields", []) if f["name"] == req.field_name), None)
+        try:
+            body = await _fetch_get_fields(req.source)
+            for f in body.get("fields", []):
+                if fid is not None and str(f.get("id")) == str(fid):
+                    label = label or str(f.get("FieldNameAlt") or "")
+                    ftype = f.get("FieldType") or ftype
+                    options = f.get("FieldOptions") or options
+                    break
+            live = True
+        except Exception as e:
+            return {"error": f"could not read pt-forms get-fields ({type(e).__name__}: {e})"}
+
+    # reuse the SOP flow block's coercion policy as the system context
+    manifest = await _load_manifest(db, scope)
+    flow = ""
+    if manifest and manifest.get("flow_block"):
+        blocks, _ = await resolve_published_blocks(db, scope, {manifest["flow_block"]})
+        flow = blocks.get(manifest["flow_block"], {}).get("content", "")
+
+    opt_txt = ""
+    if options:
+        opts = list(options.values()) if isinstance(options, dict) else options
+        opt_txt = f"\nCHOICES (return EXACTLY one, verbatim): {', '.join(map(str, opts))}"
+    today = _dt.date.today().isoformat()
+    system = (
+        (flow + "\n\n" if flow else "") +
+        "You capture ONE patient answer for a form field and output the exact value to STORE.\n"
+        f"Today is {today}. Rules: numbers as digits; dates as YYYY-MM-DD (resolve relative dates against today); "
+        "yes/no questions → 'Yes' or 'No'; a choice field → EXACTLY one of the given choices; "
+        "\"don't know\" / \"not sure\" / refusals → 'unknown'; a name → keep it (transliterate to Latin letters); "
+        "otherwise the answer as-is, cleaned. Output ONLY the value — no punctuation, no explanation.")
+    user = f"QUESTION: {label or req.field_name}\nFIELD TYPE: {ftype}{opt_txt}\nPATIENT SAID: \"{req.raw_answer}\"\nVALUE TO STORE:"
+    try:
+        res = await client().chat.completions.create(
+            model=get_settings().builder_model,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+            temperature=0, max_tokens=40)
+        value = (res.choices[0].message.content or "").strip().strip('".')
+    except Exception as e:
+        return {"error": f"supervisor model unavailable ({type(e).__name__})", "value": req.raw_answer}
+
+    value = _coerce_option(value, options)
+    applied = False
+    if live and req.apply and req.field_name:
+        m = await _load_manifest(db, scope)
+        fid = next((f.get("id") for s in (m or {}).get("stages", {}).values()
+                    for f in s.get("fields", []) if f["name"] == req.field_name), None)
+        if fid is not None:
+            try:
+                await _push_set_fields(req.source, {str(fid): value})
+                applied = True
+            except Exception:
+                pass
+    return {"value": value, "field_name": req.field_name, "applied": applied, "source": "live" if live else "inline"}

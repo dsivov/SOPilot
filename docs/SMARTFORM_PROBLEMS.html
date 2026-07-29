@@ -121,6 +121,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#status">Built &amp; proven</a></li>
     <li><a href="#measurement">Why deterministic gating</a></li>
     <li><a href="#completion">Robot accuracy (end-to-end)</a></li>
+    <li><a href="#answercapture">Robot accuracy (answer-capture)</a></li>
     <li><a href="#headtohead">Head-to-head: Original vs SOPilot</a></li>
     <li><a href="#next">Status &amp; next steps</a></li>
   </ol>
@@ -886,6 +887,54 @@ b.hl{color:#8fd9c9}
   Reproduce: <span class="mono">scripts/smartform_bench/completion_ab.py</span>.</p>
 </section>
 
+<!-- answercapture -->
+<section id="answercapture">
+  <div class="kicker">Robot accuracy — capturing the answer</div>
+  <h2>Turning what the patient <i>says</i> into the value to <i>store</i></h2>
+
+  <div class="callout key"><div class="clabel">◆ Two new terms, in plain words</div>
+    <b>Answer-capture</b> = converting what the patient <i>says</i> (messy, spoken, any language) into the exact
+    <b>value to store</b> in the field. <b>Coercion rules</b> = the rules for that conversion — spoken numbers → digits
+    (<i>“forty-five”</i> → <span class="mono">45</span>), any date phrasing → <span class="mono">YYYY-MM-DD</span>, yes/no
+    wording → <span class="mono">Yes/No</span>, a <i>described</i> choice → exactly one listed option, and
+    <i>“don’t know”</i> / a refusal → <span class="mono">unknown</span>.</div>
+
+  <p class="lead-p">This is the robot’s core language job. We built it as a SOPilot step
+  (<span class="mono">POST /formflow/interpret</span>, the strong supervisor applying the SOP flow block’s coercion rules)
+  and A/B’d it against how pt-forms does it today.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>&nbsp;</th><th>🅐 Original pt-forms</th><th>🅑 SOPilot (interpret step)</th></tr></thead>
+    <tbody>
+      <tr><td><b>Who interprets the utterance</b></td>
+        <td>The <b>weak realtime model</b> (gpt-4o-mini) produces the value, then pt-forms’ <b>rule-based</b>
+          <span class="mono">_validate_and_normalize_answer</span> finalizes the format (option-key map, yes/no dictionary, number strip).</td>
+        <td>The <b>strong supervisor</b> (gpt-4o) normalizes the utterance using the SOP flow block’s coercion rules.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Patient said</th><th>Field</th><th>Value stored (both arms)</th></tr></thead>
+    <tbody>
+      <tr><td><i>“I’m forty-five”</i></td><td>Age (number)</td><td><span class="mono">45</span></td></tr>
+      <tr><td><i>“claro que sí”</i></td><td>Have an attorney? (yes/no)</td><td><span class="mono">Yes</span></td></tr>
+      <tr><td><i>“five foot ten”</i></td><td>Height in inches</td><td><span class="mono">70</span></td></tr>
+      <tr><td><i>“about a pack”</i></td><td>Cigarettes per day</td><td><span class="mono">20</span></td></tr>
+      <tr><td><i>“I got laid off last month”</i></td><td>Employment status (choice)</td><td><span class="mono">Unemployed</span></td></tr>
+      <tr><td><i>“the day after Christmas last year”</i></td><td>Date of injury</td><td><span class="mono">2025-12-26</span></td></tr>
+      <tr><td><i>“no idea”</i></td><td>Last tetanus shot</td><td><span class="mono">unknown</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout ok"><div class="clabel">◆ Result — parity (an honest null result)</div>
+    Over <b>31 realistic cases</b> (colloquial, multilingual, slang, unit conversion, world-knowledge, relative dates), <b>both
+    scored 100%</b> — <b>🅐 Original 31/31, 🅑 SOPilot 31/31</b> — at ~0.9–1.0 s each. <b>gpt-4o-mini is already good enough
+    at this narrow task</b>; the strong supervisor <b>matches but does not beat it</b> (and isn’t faster). So answer-capture is
+    <b>not</b> a differentiator either. We built the step (it’s useful for keeping the coercion rules editable in the Studio and
+    for a compliant model choice), but it doesn’t buy accuracy over what pt-forms already gets.
+    Reproduce: <span class="mono">scripts/smartform_bench/interpret_ab.py</span>.</div>
+</section>
+
 <!-- headtohead -->
 <section id="headtohead">
   <div class="kicker">The real head-to-head — Original vs SOPilot</div>
@@ -977,10 +1026,11 @@ b.hl{color:#8fd9c9}
           ✓ Group the form (20 stages)<br>
           ✓ Emit the form SOP + playbook/flow/map blocks<br>
           ✓ Supervisor loop spike (deterministic driver + strong-model prep)<br>
-          ✓ constraints.py engine + tests (116 pass)<br>
+          ✓ constraints.py engine + tests (119 pass)<br>
           ✓ <b>Wired to live pt-forms</b> get-fields (id↔FieldName bridge)<br>
           ✓ <b>Edit-propagation</b>: <span class="mono">/formflow/reconcile</span> + head-to-head (61 leaks → 0)<br>
-          ✓ Honest comparison vs pt-forms (gating parity; reconcile is the real diff)
+          ✓ <b>Robot accuracy</b>: end-to-end completion + answer-capture — both <b>parity</b> vs pt-forms<br>
+          ✓ Honest comparison vs pt-forms (reconcile is the only measured diff)
         </td>
         <td>
           ▫ Feed the instruction into the <b>realtime loop</b> via the MCP supervisor seam<br>

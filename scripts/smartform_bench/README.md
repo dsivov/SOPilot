@@ -41,6 +41,28 @@ tokens. The strong model is moved off the correctness path to phrasing only.
 *Token counts use `tiktoken` if installed, else a chars/4 approximation (labeled in the
 output).*
 
+## Answer-capture accuracy (interpret step)
+
+`interpret_ab.py` A/Bs turning a messy spoken answer into the value to store:
+**Arm A** = weak realtime model (gpt-4o-mini) interprets → pt-forms rule-based
+`_validate_and_normalize_answer` finalizes; **Arm B** = SOPilot `POST /formflow/interpret`
+(strong supervisor + the SOP flow block's coercion rules). 31 realistic + hard cases
+(colloquial, multilingual, slang, unit conversion, world-knowledge, relative dates):
+
+| Setup | Answer-capture accuracy | Latency p50 |
+|---|:--:|:--:|
+| Original pt-forms (weak + rules) | **100%** (31/31) | ~0.99 s |
+| SOPilot (interpret, strong) | **100%** (31/31) | ~0.95 s |
+
+**Parity — an honest null result.** gpt-4o-mini already handles this narrow task; the
+strong supervisor matches but doesn't beat it. The step is still useful (coercion rules
+stay editable in the Studio, and it allows a compliant model choice), but it buys no
+accuracy over pt-forms.
+
+```bash
+backend/.venv/bin/python scripts/smartform_bench/interpret_ab.py   # needs OPENAI_API_KEY
+```
+
 ## End-to-end robot accuracy (with a simulated weak voice model)
 
 `completion_ab.py` runs the **full 269-question form to completion** with a real weak
