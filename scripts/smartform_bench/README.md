@@ -41,6 +41,30 @@ tokens. The strong model is moved off the correctness path to phrasing only.
 *Token counts use `tiktoken` if installed, else a chars/4 approximation (labeled in the
 output).*
 
+## End-to-end robot accuracy (with a simulated weak voice model)
+
+`completion_ab.py` runs the **full 269-question form to completion** with a real weak
+model — **gpt-4o-mini, context capped at 32k** — in the loop as the voice agent, for
+both setups. Metric: did the robot ask all-and-only the visible fields, honor every
+skip, and reach "done" (ground truth = the form's own rules)?
+
+| Setup | Who decides the next question | End-to-end completion accuracy | Skip violations |
+|---|---|:--:|:--:|
+| Weak model decides (naive) | gpt-4o-mini | ~56% (skip-logic) | many |
+| Original pt-forms | server (`_compute_next_field`) | **100%** | 0 |
+| SOPilot (live `/formflow/prepare`) | supervisor (`constraints.py`) | **100%** | 0 |
+
+Both real systems: 100%, identical walks (126 asked / 143 skipped, reached done); the
+SOPilot walk ran live in ~2.8 s. The point: in **both** pt-forms and SOPilot the weak
+model only *relays* — the support system decides navigation — so the weak model can't
+steer the form wrong. Only the naive "weak model decides" case degrades. (The 32k cap
+never binds here: the whole-form catalog is ~4.7k tokens, so those errors are reasoning,
+not overflow.)
+
+```bash
+backend/.venv/bin/python scripts/smartform_bench/completion_ab.py   # needs the mock + OPENAI_API_KEY
+```
+
 ## Head-to-head: backward edit-propagation (the real Original-vs-SOP difference)
 
 On "which field is next?" the original pt-forms flow and the SOP flow are **identical**

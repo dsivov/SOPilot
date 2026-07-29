@@ -120,6 +120,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#implementation">How the SOP flow works</a></li>
     <li><a href="#status">Built &amp; proven</a></li>
     <li><a href="#measurement">Why deterministic gating</a></li>
+    <li><a href="#completion">Robot accuracy (end-to-end)</a></li>
     <li><a href="#headtohead">Head-to-head: Original vs SOPilot</a></li>
     <li><a href="#next">Status &amp; next steps</a></li>
   </ol>
@@ -832,6 +833,57 @@ b.hl{color:#8fd9c9}
     <b>Does NOT show:</b> a SOP advantage over pt-forms — pt-forms already evaluates deterministically. The strong model still
     runs each turn in our design, but only to <i>phrase</i> the pre-decided question (~1.07 s, ~550 tokens), off the correctness
     path. Reproduce: <span class="mono">scripts/smartform_bench/</span> (README + harness + mock).</div>
+</section>
+
+<!-- completion -->
+<section id="completion">
+  <div class="kicker">Robot accuracy — end-to-end, with a real weak voice model</div>
+  <h2>Does the robot fill the whole form correctly?</h2>
+  <p class="lead-p">We put an actual weak model — <b>gpt-4o-mini, context capped at 32k</b> (the realtime voice model’s
+  budget) — in the loop as the voice agent, and ran the <b>full 269-question form to completion</b> under both setups.
+  Ground truth is the form’s own show-if rules: did the robot ask <b>all-and-only</b> the visible fields, honor every skip,
+  and reach the end?</p>
+
+  <div class="callout key"><div class="clabel">◆ The one thing that decides this</div>
+    <b>Who chooses the next question?</b> If the <b>weak voice model</b> chooses (the naive approach), it misreads skip-logic
+    ~1 turn in 3 (see previous section). If the <b>support system</b> chooses and the weak model just relays — which is how
+    <b>both</b> 🅐 Original pt-forms (its server) and 🅑 SOPilot (its supervisor) work — the weak model can’t steer the form
+    wrong. That’s why both complete accurately.</div>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 190" role="img" aria-label="End-to-end completion accuracy by who decides navigation">
+      <style>
+        .gl{stroke:#2b3140;stroke-width:1;stroke-dasharray:3 4}.lbl{fill:#c9d3e6;font:700 12px "Segoe UI",sans-serif}
+        .cap{fill:#8a93a8;font:10px "Segoe UI",sans-serif}.val{font:800 13px "Segoe UI",sans-serif}
+        .tk{fill:#7b8499;font:9px var(--mono),monospace;text-anchor:middle}
+      </style>
+      <text class="lbl" x="16" y="20">End-to-end completion accuracy — full 269-question form, gpt-4o-mini voice model</text>
+      <line class="gl" x1="250" y1="34" x2="250" y2="150"/><text class="tk" x="250" y="166">0%</text>
+      <line class="gl" x1="490" y1="34" x2="490" y2="150"/><text class="tk" x="490" y="166">50</text>
+      <line class="gl" x1="730" y1="34" x2="730" y2="150"/><text class="tk" x="730" y="166">100</text>
+      <text class="lbl" x="16" y="54">Weak model decides</text><text class="cap" x="16" y="68">naive — no support</text>
+      <rect x="250" y="42" width="268" height="22" rx="4" fill="#e0574f"/><text class="val" x="528" y="58" fill="#e0574f">~56%</text>
+      <text class="lbl" x="16" y="92">🅐 Original pt-forms</text><text class="cap" x="16" y="106">server decides, weak relays</text>
+      <rect x="250" y="80" width="480" height="22" rx="4" fill="#19b89a"/><text class="val" x="700" y="96" fill="#0f1420">100%</text>
+      <text class="lbl" x="16" y="130">🅑 SOPilot</text><text class="cap" x="16" y="144">supervisor decides, weak relays</text>
+      <rect x="250" y="118" width="480" height="22" rx="4" fill="#19b89a"/><text class="val" x="700" y="134" fill="#0f1420">100%</text>
+    </svg>
+    <figcaption><b>Both real systems: 100%.</b> Identical walks — <b>126 fields asked, 143 skipped, 0 skip violations, reached
+    “done”.</b> The SOPilot run went through the live <span class="mono">/formflow/prepare</span> endpoint end-to-end in ~2.8 s.
+    The ~56% bar is the naive case where the weak model itself decides (from the previous section) — neither production system does this.</figcaption>
+  </div></figure>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Setup</th><th>Who decides the next question</th><th>End-to-end completion accuracy</th><th>Reached “done”</th><th>Skip violations</th></tr></thead>
+    <tbody>
+      <tr><td>Weak model decides <span class="small">(naive)</span></td><td>gpt-4o-mini</td><td><b style="color:#e0574f">~56%</b> <span class="small">(skip-logic)</span></td><td>—</td><td>many</td></tr>
+      <tr><td>🅐 Original pt-forms</td><td>server (<span class="mono">_compute_next_field</span>)</td><td><b style="color:#19b89a">100%</b></td><td>✓</td><td>0</td></tr>
+      <tr><td>🅑 SOPilot (live)</td><td>supervisor (<span class="mono">constraints.py</span>)</td><td><b style="color:#19b89a">100%</b></td><td>✓</td><td>0</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">The 32k cap never binds here — the whole-form catalog is only ~4.7k tokens — so the naive model’s errors are
+  <b>reasoning</b>, not context overflow. The lesson holds regardless: keep the weak model off the navigation decision.
+  Reproduce: <span class="mono">scripts/smartform_bench/completion_ab.py</span>.</p>
 </section>
 
 <!-- headtohead -->

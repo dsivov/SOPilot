@@ -1,0 +1,22 @@
+{
+  "voice_model": "gpt-4o-mini (context capped at 32000 tokens)",
+  "note": "For this form the whole-form catalog is ~4.7k tokens, so the 32k cap never binds; navigation is decided by the support system in BOTH arms, not the voice model.",
+  "identical_walks": true,
+  "A_original_ptforms": {
+    "end_to_end_accuracy_pct": 100.0,
+    "reached_done": true,
+    "fields_asked": 126,
+    "fields_skipped": 143,
+    "skip_violations": 0,
+    "missed_visible": 0
+  },
+  "B_sopilot_live": {
+    "end_to_end_accuracy_pct": 100.0,
+    "reached_done": true,
+    "fields_asked": 126,
+    "fields_skipped": 143,
+    "skip_violations": 0,
+    "missed_visible": 0,
+    "wallclock_ms": 2845
+  }
+}
