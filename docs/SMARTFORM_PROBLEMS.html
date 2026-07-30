@@ -999,16 +999,17 @@ b.hl{color:#8fd9c9}
   short of 100%, at a per-turn model call. Reproduce: <span class="mono">scripts/smartform_bench/instage_ab.py</span>.</p>
 
   <div class="callout info"><div class="clabel">◆ Can a better playbook + the STRONG supervisor close the gap? (we searched)</div>
-    We took one self-contained stage (30 conditional fields) and swept playbook formats with the real supervisor model
-    (gpt-4o). <b>A clean playbook ties deterministic: terse / rules / inline / few-shot all hit 100%.</b> Two lessons:
-    <b>(1) format matters non-monotonically</b> — terse &amp; clear wins; <b>chain-of-thought actively <i>hurts</i></b> (76% even on
-    gpt-4o; the weak model too). More words ≠ better. <b>(2) For gating, the playbook isn’t under-informative</b> — the show-if
-    conditions <i>are</i> the complete information; the strong model uses even the terse form to reach 100%. But across all
-    stages it’s ~<b>90% overall / ~100% conditional</b> (residual = ordering / premature-“done”, some of them unsafe skips), and
-    it’s a <b>probabilistic tie on a sample</b>, not exact-by-construction, at ~0.8 s + tokens/turn. So the supervisor <i>can</i>
-    navigate, but there’s no accuracy reason to spend it there. <b>Where richer playbooks genuinely pay off is the
-    non-navigation work</b> — coercion, judgment, the fuzzy <span class="mono">.md</span> rules, phrasing — which is where the
-    strong supervisor actually beats the weak realtime model. Lab: <span class="mono">scripts/smartform_bench/playbook_lab.py</span>.</div>
+    We swept playbook formats with the real supervisor model (gpt-4o) on two stages — an easy one (30 <span class="mono">isYes</span>
+    chains) and the <b>hardest</b> (20 conditional, 16 value-comparisons, 17 compound <span class="mono">and/or</span>).
+    <b>A clean playbook ties deterministic on the easy stage (100%)</b>; on the hardest, the best format hits 100% but most land
+    <b>97–99%</b> (a few compound-condition slips). Three lessons: <b>(1) format matters non-monotonically</b> —
+    <b>chain-of-thought actively <i>hurts</i></b> (76–81%); more words ≠ better. <b>(2) the best format isn’t stable</b> — terse
+    won the easy stage, <span class="mono">rules-json</span> won the hard one — so tuning playbooks to beat deterministic is
+    fragile. <b>(3) for gating the playbook isn’t under-informative</b> — the conditions <i>are</i> the info. Across all stages
+    it’s ~<b>90% overall / ~100% conditional</b>, a <b>probabilistic tie on a sample</b>, not exact-by-construction, at ~0.8 s +
+    tokens/turn. So the supervisor <i>can</i> navigate, but there’s no accuracy reason to spend it there. <b>Richer playbooks pay
+    off on the non-navigation work</b> — coercion, judgment, the fuzzy <span class="mono">.md</span> rules, phrasing — where the
+    strong supervisor genuinely beats the weak realtime model. Lab: <span class="mono">scripts/smartform_bench/playbook_lab.py</span>.</div>
 
   <div class="callout key"><div class="clabel">◆ The real prize is authoring cost — here’s the safe way to win it</div>
     The strongest argument for the hybrid isn’t runtime — it’s that <b>authoring 269 conditions is hard</b>, while “stages +

@@ -57,7 +57,55 @@ def nxt(names, ans, cursor):
     return None
 
 
+_A_YES = re.compile(r"isYes\(\{([^}]+)\}\)")
+_A_NO = re.compile(r"isNo\(\{([^}]+)\}\)")
+_A_CMP = re.compile(r"values\[\{([^}]+)\}\]\s*(==|!=|>=|<=|>|<)\s*('[^']*'|\"[^\"]*\"|-?\d+)")
+
+
+def build_candidates():
+    """Per field, values that SATISFY and that FALSIFY the atoms referencing it — so a
+    walk can make each conditional field visible or hidden (exercises both branches)."""
+    sat, neg = {}, {}
+    for info in BY.values():
+        c = info["cond"]
+        if not c:
+            continue
+        for f in _A_YES.findall(c):
+            sat.setdefault(f, []).append("Yes"); neg.setdefault(f, []).append("No")
+        for f in _A_NO.findall(c):
+            sat.setdefault(f, []).append("No"); neg.setdefault(f, []).append("Yes")
+        for f, op, v in _A_CMP.findall(c):
+            v2 = v.strip("'\""); num = v2.lstrip("-").isdigit()
+            if op == "==":
+                s, g = [v2], [str(int(v2) + 1) if num else "other"]
+            elif op == "!=":
+                s, g = [str(int(v2) + 1) if num else "other"], [v2]
+            elif num and op == ">=":
+                s, g = [v2], [str(int(v2) - 1)]
+            elif num and op == ">":
+                s, g = [str(int(v2) + 1)], [v2]
+            elif num and op == "<=":
+                s, g = [v2], [str(int(v2) + 1)]
+            elif num and op == "<":
+                s, g = [str(int(v2) - 1)], [v2]
+            else:                                     # non-numeric inequality (rare)
+                s, g = [v2], ["other"]
+            sat.setdefault(f, []).extend(s); neg.setdefault(f, []).extend(g)
+    cand = {}
+    for f in set(list(sat) + list(neg)):
+        vals = list(dict.fromkeys(sat.get(f, []) + neg.get(f, [])))
+        if vals:
+            cand[f] = vals
+    return cand
+
+
+CAND = build_candidates()
+
+
 def synth(n, seed):
+    if n in CAND:                                    # value drawn from the condition-satisfier
+        vals = CAND[n]
+        return vals[(hash((n, seed)) % len(vals))]
     o = BY[n]["opts"]; yn = o and {str(x).lower() for x in o} <= {"yes", "no"}
     if yn:
         return "Yes" if (hash((n, seed)) & 1) else "No"
@@ -76,7 +124,7 @@ def pick_stage():
 def gen_points(si):
     names = STAGES[si]
     seen, pts = set(), []
-    for seed in range(12):                       # diverse answer assignments
+    for seed in range(24):                       # diverse answer assignments
         ans, cursor, guard = {}, None, 0
         while guard < 200:
             guard += 1
