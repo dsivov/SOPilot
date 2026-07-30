@@ -392,6 +392,15 @@ b.hl{color:#8fd9c9}
     Authoring rules as prose for a model to interpret is cheap to type but <b>unvalidatable</b> (silent regressions). The Studio
     keeps rules <b>explicit and deterministic</b> yet cheap to edit — AI-assisted, contradiction-checked, diffable, with impact
     analysis and reconcile for the consequences. Cheap <i>and</i> safe — the right trade for medical forms.</div>
+
+  <div class="callout caveat"><div class="clabel">◆ Scope — what the Studio does and doesn’t do today</div>
+    The Studio <b>edits an existing form</b> that was ingested from pt-forms — it loads the graph produced by the pipeline,
+    then lets you visualize, AI-edit, validate and trace it. It does <b>not</b> yet create a form from scratch (add fields,
+    define a new graph) in the UI, and its source is the pt-forms <span class="mono">fields.json</span>. So, as built, this is a
+    <b>SmartForm-scoped tool</b>, not a general-purpose constraint editor. The <i>engine</i> underneath
+    (<span class="mono">constraints.py</span>) is written generically, so a source-agnostic “generic constraint Studio”
+    (create-from-scratch + import adapters) is a plausible future SOPilot-platform initiative — but that is out of scope for the
+    SmartForm decision.</div>
 </section>
 
 <!-- 10 · NEXT -->
