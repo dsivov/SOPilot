@@ -118,6 +118,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#solution">Proposed solution ★</a></li>
     <li><a href="#integration">Reuse, new &amp; integration</a></li>
     <li><a href="#implementation">How the SOP flow works</a></li>
+    <li><a href="#transitions">FAQ: the 3 transition mechanisms</a></li>
     <li><a href="#status">Built &amp; proven</a></li>
     <li><a href="#measurement">Why deterministic gating</a></li>
     <li><a href="#completion">Robot accuracy (end-to-end)</a></li>
@@ -718,6 +719,61 @@ b.hl{color:#8fd9c9}
   </table></div>
   <p class="small">The honest differentiation is <b>authoring/structure and bounded per-turn context</b> — not gating or
   navigation, which pt-forms already handles well. Edit-propagation is the one place a real correctness gap <i>may</i> exist.</p>
+</section>
+
+<!-- transitions -->
+<section id="transitions">
+  <div class="kicker">Architecture FAQ — a question PolarTie will ask</div>
+  <h2>Three “transition” mechanisms — how they fit together</h2>
+  <p class="lead-p">pt-forms has deterministic field transitions; SOPilot’s SOP has stage transitions steered by an LLM; and
+  SOPilot also has the <span class="mono">constraints.py</span> rule engine. They look overlapping. They aren’t — because two
+  different things are being conflated: <b>structure</b> and the <b>transition engine</b>.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 300" role="img" aria-label="Structure vs pluggable transition engine">
+      <style>.bx{rx:9;stroke-width:1.8}.t{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}
+        .s{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}.h{font:800 11px "Segoe UI",sans-serif;text-anchor:middle}
+        .note{fill:#8a93a8;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}</style>
+      <!-- structure layer -->
+      <rect class="bx" x="30" y="30" width="700" height="56" fill="rgba(169,116,240,.14)" stroke="#a974f0"/>
+      <text class="h" x="380" y="52" fill="#cdb1f7">STRUCTURE — the SOP (shared container)</text>
+      <text class="s" x="380" y="72">stages = question groups · playbooks = prompt blocks · versioned in the Studio</text>
+      <!-- transition engine layer: two pluggable options -->
+      <text class="h" x="380" y="118" fill="#c9d3e6">TRANSITION ENGINE — pluggable: pick by problem shape</text>
+      <rect class="bx" x="30" y="132" width="345" height="96" fill="rgba(25,184,154,.12)" stroke="#19b89a"/>
+      <text class="t" x="202" y="154">DETERMINISTIC</text>
+      <text class="s" x="202" y="172">constraints.py  ≡  pt-forms FieldConditions</text>
+      <text class="s" x="202" y="188">evaluate show-if → next field (exact)</text>
+      <text class="note" x="202" y="210">for FORMS · value-gated state machine</text>
+      <rect class="bx" x="395" y="132" width="335" height="96" fill="rgba(91,141,239,.12)" stroke="#5b8def"/>
+      <text class="t" x="562" y="154">PROBABILISTIC</text>
+      <text class="s" x="562" y="172">LLM + trajectory predictor</text>
+      <text class="s" x="562" y="188">SOP edges carry NO conditions</text>
+      <text class="note" x="562" y="210">for CONVERSATIONS · no rule for “what next”</text>
+      <!-- SmartForm selection -->
+      <rect class="bx" x="30" y="248" width="700" height="40" fill="#161b28" stroke="#39425a"/>
+      <text class="s" x="380" y="266" style="fill:#c9d3e6">SmartForm uses:  STRUCTURE (SOP)  +  the DETERMINISTIC engine.  The probabilistic one is OFF;</text>
+      <text class="s" x="380" y="280" style="fill:#c9d3e6">form-SOP edges are `both` (inert); the LLM only PHRASES — it decides zero transitions.</text>
+    </svg>
+    <figcaption><b>Two layers, one live engine.</b> The SOP is structure; the transition engine is pluggable. A form is
+      deterministic → the deterministic engine drives; a conversation isn’t → the LLM engine drives. Never both at once.</figcaption>
+  </div></figure>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Mechanism</th><th>Kind</th><th>Decides “what’s next” by</th><th>Live in SmartForm?</th></tr></thead>
+    <tbody>
+      <tr><td>SOP stage/edge transitions</td><td>probabilistic (LLM + predictor)</td><td>an LLM reading the conversation; edges carry <b>no</b> conditions</td><td><b style="color:#e0574f">No</b> — reserved for conversational SOPs</td></tr>
+      <tr><td>pt-forms field rules</td><td>deterministic</td><td>evaluating FieldConditions</td><td>Yes (pt-forms runtime)</td></tr>
+      <tr><td>SOPilot <span class="mono">constraints.py</span></td><td>deterministic (superset)</td><td>same rules + requires/conflicts/enum</td><td><b style="color:#19b89a">Yes</b> — the sole transition authority</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout key"><div class="clabel">◆ The one-liner for PolarTie</div>
+    <b>SOP = structure</b> (stages + playbooks). <b>Transitions are pluggable</b>: probabilistic (LLM) for conversations,
+    deterministic (<span class="mono">constraints.py</span>, equivalent to pt-forms’ FieldConditions) for forms. <b>SmartForm
+    runs the deterministic engine and keeps the LLM off the transition decision entirely</b> — the SOP edges are inert,
+    <span class="mono">constraints.py</span> drives, the model only phrases. That’s why the mechanisms compose instead of
+    competing — and it’s exactly what the A/B forced (LLM-decided transitions ≈ 56%, deterministic = 100%).</div>
 </section>
 
 <!-- status -->
