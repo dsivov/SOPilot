@@ -687,10 +687,19 @@ b.hl{color:#8fd9c9}
       <text class="s" x="696" y="150" fill="#8a93a8">↓ returns to pt-forms:</text>
       <text class="s" x="696" y="164" fill="#c9d3e6">one instruction to speak</text>
     </svg>
-    <figcaption><b>a</b> read answers from pt-forms → <b>b</b> current field → its stage (map) → <b>c</b> next visible unanswered
-    field via <span class="mono">constraints.py</span> (<b>may land in another stage</b>) → <b>d</b> load <i>that</i> stage’s
-    playbook + the flow block → <b>e</b> strong model phrases one line → <b>f</b> return; answers never leave pt-forms.</figcaption>
+    <figcaption><b>a</b> read answers from pt-forms → <b>b</b> current field → its stage <i>(a map lookup, not a nav step)</i> →
+    <b>c</b> next visible unanswered field via <span class="mono">constraints.py</span> (<b>may land in another stage</b>) →
+    <b>d</b> load <i>that</i> stage’s playbook + the flow block → <b>e</b> strong model phrases one line → <b>f</b> return;
+    answers never leave pt-forms.</figcaption>
   </div></figure>
+
+  <div class="callout info"><div class="clabel">◆ Which part actually navigates? (a common misread)</div>
+    <b>All navigation — within a stage <i>and</i> across stages — is <span class="mono">constraints.py</span></b> (step c). The
+    stage boundary is <b>not</b> a navigation boundary; the engine crosses it transparently. The map/SOP does <b>no</b> navigating:
+    it’s a <b>passive index</b> (field → stage → playbook) consulted in steps <b>b</b> and <b>d</b> only to load the right playbook
+    for <i>phrasing</i>, plus the <b>ordered field list</b> the engine walks (that order is just the form’s field order — the same
+    data pt-forms has). This is why “SOP is not the navigation engine” and “the flow uses the SOP” are both true: the engine
+    <b>decides</b>; the SOP is the <b>phone book it consults</b>. The SOP’s own transition mechanism (LLM + edges) is off.</div>
 
   <div class="callout key"><div class="clabel">◆ Bounded context — with stage-to-stage jumps</div>
     The supervisor <b>never sees the whole form</b> — only the playbook of the stage the next question lives in (~550 tokens).
