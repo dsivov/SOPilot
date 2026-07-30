@@ -998,6 +998,18 @@ b.hl{color:#8fd9c9}
   Restricting to one self-contained stage lifts the weak model 56%→88.5% — the original instinct had merit — but it’s still
   short of 100%, at a per-turn model call. Reproduce: <span class="mono">scripts/smartform_bench/instage_ab.py</span>.</p>
 
+  <div class="callout info"><div class="clabel">◆ Can a better playbook + the STRONG supervisor close the gap? (we searched)</div>
+    We took one self-contained stage (30 conditional fields) and swept playbook formats with the real supervisor model
+    (gpt-4o). <b>A clean playbook ties deterministic: terse / rules / inline / few-shot all hit 100%.</b> Two lessons:
+    <b>(1) format matters non-monotonically</b> — terse &amp; clear wins; <b>chain-of-thought actively <i>hurts</i></b> (76% even on
+    gpt-4o; the weak model too). More words ≠ better. <b>(2) For gating, the playbook isn’t under-informative</b> — the show-if
+    conditions <i>are</i> the complete information; the strong model uses even the terse form to reach 100%. But across all
+    stages it’s ~<b>90% overall / ~100% conditional</b> (residual = ordering / premature-“done”, some of them unsafe skips), and
+    it’s a <b>probabilistic tie on a sample</b>, not exact-by-construction, at ~0.8 s + tokens/turn. So the supervisor <i>can</i>
+    navigate, but there’s no accuracy reason to spend it there. <b>Where richer playbooks genuinely pay off is the
+    non-navigation work</b> — coercion, judgment, the fuzzy <span class="mono">.md</span> rules, phrasing — which is where the
+    strong supervisor actually beats the weak realtime model. Lab: <span class="mono">scripts/smartform_bench/playbook_lab.py</span>.</div>
+
   <div class="callout key"><div class="clabel">◆ The real prize is authoring cost — here’s the safe way to win it</div>
     The strongest argument for the hybrid isn’t runtime — it’s that <b>authoring 269 conditions is hard</b>, while “stages +
     let the LLM handle in-stage” is light. True. But two facts reframe it: <b>(1)</b> all deps are intra-stage, so “LLM in-stage”

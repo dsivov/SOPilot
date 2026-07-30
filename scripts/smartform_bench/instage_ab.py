@@ -132,6 +132,35 @@ async def arm(model, pt):
     return pred, ms, None
 
 
+_FINAL = re.compile(r"FINAL:\s*([A-Za-z0-9_\-]+)")
+
+
+async def arm_cot(model, pt):
+    """Optimized playbook: explicit step-by-step condition evaluation (chain-of-thought)."""
+    cat = stage_catalog(pt["stage"])
+    sysp = (
+        "You navigate WITHIN one stage of a form. Work carefully and DETERMINISTICALLY.\n"
+        "Procedure: walk the stage's fields IN ORDER, starting AFTER the current field. For each field:\n"
+        " 1. if it already has an answer in ANSWERS → skip it;\n"
+        " 2. else evaluate its show-if against ANSWERS exactly (isYes/isNo/values[{name}], and/or); "
+        "if the show-if is present and FALSE → the field is hidden, skip it;\n"
+        " 3. the FIRST field that is unanswered AND visible is the answer.\n"
+        "If none remain, the answer is DONE.\n"
+        "Show your check for each field briefly, then end with exactly one line:  FINAL: <FieldName or DONE>\n\n" + cat)
+    user = f'CURRENT FIELD: {pt["cursor"]}\nANSWERS: {json.dumps(pt["ans"])}\nWork step by step, then give FINAL:'
+    t0 = time.perf_counter()
+    try:
+        r = await client().chat.completions.create(
+            model=model, temperature=0, max_tokens=600,
+            messages=[{"role": "system", "content": sysp}, {"role": "user", "content": user}])
+        ms = (time.perf_counter() - t0) * 1000
+        m = _FINAL.findall(r.choices[0].message.content or "")
+        pred = m[-1] if m else None
+    except Exception as e:
+        return None, (time.perf_counter() - t0) * 1000, "ERR:" + type(e).__name__
+    return pred, ms, None
+
+
 def pct(n, d): return round(100 * n / d, 1) if d else 0.0
 
 
@@ -141,11 +170,15 @@ async def main():
     gating = [p for p in pts if p["gating"]]
     print(f"# in-stage decision points: {len(pts)} ({len(gating)} conditional) across {len(STAGE_FIELDS)} stages", flush=True)
     out = {"decision_points": len(pts), "conditional_points": len(gating), "arms": []}
-    for tier, model in (("in-stage LLM · gpt-4o-mini", WEAK), ("in-stage LLM · gpt-4o", STRONG)):
+    tiers = (("in-stage LLM · gpt-4o-mini", WEAK, arm),
+             ("in-stage LLM · gpt-4o", STRONG, arm),
+             ("in-stage LLM + CoT playbook · gpt-4o-mini", WEAK, arm_cot),
+             ("in-stage LLM + CoT playbook · gpt-4o", STRONG, arm_cot))
+    for tier, model, fn in tiers:
         sem = asyncio.Semaphore(8)
-        async def one(p):
+        async def one(p, fn=fn, model=model):
             async with sem:
-                return await arm(model, p)
+                return await fn(model, p)
         res = await asyncio.gather(*[one(p) for p in pts])
         correct = sum(1 for (pred, _, _), p in zip(res, pts) if pred == p["gt"])
         gc = sum(1 for (pred, _, _), p in zip(res, pts) if p["gating"] and pred == p["gt"])
