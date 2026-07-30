@@ -55,3 +55,50 @@ def test_already_voided_field_is_idempotent():
     ans = {"admitted": "No", "how_long": "not applicable", "age": "40"}
     voided, _ = _reconcile_stale(MANIFEST, ans)
     assert voided == []   # already "not applicable" → nothing to do
+
+
+# --- repeaters: a group (med_name, med_prescribed, med_rx_num) + the "add another" repeater ---
+REP = {
+    "order": ["s0"],
+    "stages": {"s0": {"title": "Meds", "block": "b", "fields": [
+        {"name": "takes_meds", "id": 1, "label": "Do you take medications?", "cond": ""},
+        {"name": "med_name", "id": 2, "label": "Medication", "cond": "isYes({takes_meds})", "repeat_group": "add_med"},
+        {"name": "med_prescribed", "id": 3, "label": "Prescribed?", "cond": "isYes({takes_meds})", "repeat_group": "add_med"},
+        {"name": "med_rx_num", "id": 4, "label": "Rx number", "cond": "isYes({med_prescribed})", "repeat_group": "add_med"},
+        {"name": "add_med", "id": 5, "label": "Add another medication?", "cond": "isYes({takes_meds})",
+         "repeater": True, "members": ["med_name", "med_prescribed", "med_rx_num"]},
+    ]}},
+}
+
+
+def test_repeater_per_instance_void():
+    # instance 0: prescribed=Yes → rx kept; instance 1: prescribed=No → rx_num[1] is stale
+    ans = {"takes_meds": "Yes",
+           "med_name[0]": "Aspirin", "med_prescribed[0]": "Yes", "med_rx_num[0]": "R123",
+           "med_name[1]": "Advil", "med_prescribed[1]": "No", "med_rx_num[1]": "R999"}
+    voided, out = _reconcile_stale(REP, ans)
+    assert {v["name"] for v in voided} == {"med_rx_num[1]"}
+    assert out["med_rx_num[1]"] == "not applicable"
+    assert out["med_rx_num[0]"] == "R123"   # instance 0 untouched
+
+
+def test_repeater_whole_group_hidden_voids_all_instances():
+    # takes_meds flipped to No → the whole repeater is hidden → every instance answer voided
+    ans = {"takes_meds": "No",
+           "med_name[0]": "Aspirin", "med_prescribed[0]": "Yes", "med_rx_num[0]": "R123",
+           "med_name[1]": "Advil", "med_prescribed[1]": "No",
+           "add_med": "No"}
+    voided, out = _reconcile_stale(REP, ans)
+    # every instance answer AND the now-moot "add another?" control itself
+    assert {v["name"] for v in voided} == {"med_name[0]", "med_prescribed[0]", "med_rx_num[0]",
+                                           "med_name[1]", "med_prescribed[1]", "add_med"}
+    assert all(out[k] == "not applicable" for k in
+               ("med_name[0]", "med_prescribed[0]", "med_rx_num[0]", "med_name[1]", "med_prescribed[1]"))
+
+
+def test_repeater_no_stale_when_consistent():
+    ans = {"takes_meds": "Yes",
+           "med_name[0]": "Aspirin", "med_prescribed[0]": "Yes", "med_rx_num[0]": "R123",
+           "med_name[1]": "Advil", "med_prescribed[1]": "No"}   # rx[1] correctly absent
+    voided, _ = _reconcile_stale(REP, ans)
+    assert voided == []

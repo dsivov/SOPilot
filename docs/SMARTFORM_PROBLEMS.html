@@ -734,7 +734,7 @@ b.hl{color:#8fd9c9}
       <tr><td><span class="pill b">/formflow/prepare</span></td><td>The <b>supervisor loop</b>: current field → stage (deterministic, via the map) → next visible field (<span class="mono">constraints.py</span> gating, crossing stages) → the strong model phrases one compact instruction. <b>Now wired to live pt-forms</b> — reads the answer snapshot from <span class="mono">get-fields</span> (id-keyed → FieldName via the map block).</td><td>14 ✓</td></tr>
     </tbody>
   </table></div>
-  <p class="small">Backend suite: <b>116 passing</b> (incl. the reconcile edit-propagation step). Nothing on <span class="mono">main</span> — isolated on the feature branch until verified.</p>
+  <p class="small">Backend suite: <b>132 passing</b> (incl. reconcile + repeater support). Nothing on <span class="mono">main</span> — isolated on the feature branch until verified.</p>
 
   <h3>Live spike results (real strong model, real form)</h3>
   <div class="tablewrap"><table>
@@ -1097,15 +1097,16 @@ b.hl{color:#8fd9c9}
           ✓ Group the form (20 stages)<br>
           ✓ Emit the form SOP + playbook/flow/map blocks<br>
           ✓ Supervisor loop spike (deterministic driver + strong-model prep)<br>
-          ✓ constraints.py engine + tests (119 pass)<br>
+          ✓ constraints.py engine + tests (132 pass)<br>
           ✓ <b>Wired to live pt-forms</b> get-fields (id↔FieldName bridge)<br>
           ✓ <b>Edit-propagation</b>: <span class="mono">/formflow/reconcile</span> + head-to-head (61 leaks → 0)<br>
           ✓ <b>Robot accuracy</b>: end-to-end completion + answer-capture — both <b>parity</b> vs pt-forms<br>
+          ✓ <b>Repeaters</b>: pipeline metadata + prepare (instances + “add another?”) + reconcile (per-instance &amp; whole-group)<br>
           ✓ Honest comparison vs pt-forms (reconcile is the only measured diff)
         </td>
         <td>
+          ▸ <b>Constraint-graph Studio</b> (in progress): unified graph view + AI editing with contradiction-checking + live execution trace<br>
           ▫ Feed the instruction into the <b>realtime loop</b> via the MCP supervisor seam<br>
-          ▫ <b>Repeaters</b> (reconcile + prepare over repeating groups)<br>
           ▫ Generalize the pipeline + let admins refine playbooks in the Studio
         </td>
       </tr>

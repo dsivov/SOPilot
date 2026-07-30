@@ -62,12 +62,24 @@ def parse(form_path: str):
             continue
         rec = {"name": nm, "ftype": ft, "label": str(f.get("FieldNameAlt") or ""),
                "cond": f.get("FieldCondition") or "", "options": f.get("FieldOptions"),
-               "order": i, "id": fid}
+               "order": i, "id": fid, "repeat_from": f.get("RepeatFrom")}
         byname[nm] = rec
         if cur is None:
             cur = {"title": "(prologue)", "fields": []}
             sections.append(cur)
         cur["fields"].append(rec)
+
+    # Repeaters: a Repeater field repeats the group from its RepeatFrom field up to
+    # (excluding) itself, in schema order — mirrors pt-forms _repeater_member_ids.
+    allrecs = [r for sec in sections for r in sec["fields"]]
+    for r in allrecs:
+        if r["ftype"] == "Repeater" and r.get("repeat_from") and r["repeat_from"] in byname:
+            start = byname[r["repeat_from"]]
+            members = [x for x in allrecs if start["order"] <= x["order"] < r["order"]]
+            r["repeater"] = True
+            r["members"] = [m["name"] for m in members]
+            for m in members:
+                m["repeat_group"] = r["name"]
     return sections, byname
 
 
@@ -87,6 +99,11 @@ def split_section(sec: dict) -> list[list[dict]]:
         for g in TOKEN.findall(f["cond"]):
             if g in names:
                 parent[find(g)] = find(f["name"])
+        # keep a repeat group whole: union each member with its repeater
+        if f.get("repeater"):
+            for m in f.get("members", []):
+                if m in names:
+                    parent[find(m)] = find(f["name"])
     comps: dict = {}
     for f in flds:
         comps.setdefault(find(f["name"]), []).append(f)
@@ -246,7 +263,9 @@ def main() -> int:
             "title": st["title"], "block": st["_block"],
             # per-field detail so the deterministic driver can gate + label without prose parsing.
             # id = pt-forms get-fields id → live driver maps id-keyed answers ⇄ FieldName.
-            "fields": [{"name": f["name"], "id": f["id"], "label": f["label"], "cond": f["cond"]}
+            "fields": [{"name": f["name"], "id": f["id"], "label": f["label"], "cond": f["cond"],
+                        **({"repeat_group": f["repeat_group"]} if f.get("repeat_group") else {}),
+                        **({"repeater": True, "members": f["members"]} if f.get("repeater") else {})}
                        for f in st["fields"]],
         } for st in stages},
     }

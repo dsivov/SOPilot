@@ -64,27 +64,98 @@ async def _load_manifest(db, scope) -> dict | None:
         return None
 
 
+_INST_RE = re.compile(r"^(.*)\[(\d+)\]$")
+
+
+def _split_instance(key):
+    """'MedName[2]' → ('MedName', 2); 'age' → ('age', None)."""
+    m = _INST_RE.match(str(key))
+    return (m.group(1), int(m.group(2))) if m else (str(key), None)
+
+
+def _instance_view(answers: dict, members: set, inst: int) -> dict:
+    """Values for evaluating a repeat member's condition AT one instance: group members
+    resolve to their <name>[inst] value; everything else stays as its flat value."""
+    view = {k: v for k, v in answers.items() if "[" not in str(k)}
+    for m in members:
+        view[m] = answers.get(f"{m}[{inst}]", "")
+    return view
+
+
+def _repeat_next(members: list, repeater: dict, answers: dict):
+    """The next field to ask inside a repeat group, or None when the group is done.
+
+    Serves each unanswered, visible member at the current instance; when an instance is
+    complete, serves the repeater itself ('add another?'); a Yes answer opens the next
+    instance, a No ends the group. Instance answers are keyed <name>[i].
+    """
+    if repeater.get("cond") and not evaluate_condition(repeater["cond"], answers):
+        return None  # whole group hidden
+    mset = {m["name"] for m in members}
+    i = 0
+    while True:
+        view = _instance_view(answers, mset, i)
+        for m in members:
+            if m.get("cond") and not evaluate_condition(m["cond"], view):
+                continue
+            key = f'{m["name"]}[{i}]'
+            if str(answers.get(key, "")).strip() == "":
+                return {"name": key, "id": m.get("id"), "label": m.get("label"), "repeat_instance": i}
+        addkey = f'{repeater["name"]}[{i}]'
+        if str(answers.get(addkey, "")).strip() == "":
+            return {"name": addkey, "id": repeater.get("id"), "label": repeater.get("label"),
+                    "repeat_instance": i, "is_repeater": True}
+        if str(answers.get(addkey)).strip().lower() in ("yes", "y", "true", "1"):
+            i += 1
+            continue
+        return None  # "No" → group complete
+
+
 def _visible_unanswered(manifest: dict, answers: dict, start_stage: str | None, start_after: str | None):
     """First visible, unanswered field at/after the cursor, across stages in order.
+    Repeat groups (a Repeater + its members) are served instance-by-instance.
     Returns (stage_id, field) or (None, None) when the form is complete."""
     order = manifest.get("order", [])
     stages = manifest.get("stages", {})
     started = start_stage is None
-    passed_cursor = start_after is None
+    cur_base, cur_inst = _split_instance(start_after) if start_after else (None, None)
+    # an instance cursor (mid-repeat) → process from the start; answered-checks skip filled fields
+    passed_cursor = (start_after is None) or (cur_inst is not None)
+    consumed: set = set()
     for sid in order:
         if not started:
             if sid == start_stage:
                 started = True
             else:
                 continue
-        for f in stages.get(sid, {}).get("fields", []):
+        fields = stages.get(sid, {}).get("fields", [])
+        for f in fields:
+            name = f["name"]
+            grp = f.get("repeat_group") or (name if f.get("repeater") else None)
+            if grp is not None:                       # a repeat member or the repeater itself
+                if grp in consumed:
+                    continue
+                if not passed_cursor:
+                    if cur_base == name or (f.get("repeater") and cur_base in f.get("members", [])):
+                        passed_cursor = True
+                    else:
+                        continue
+                membs = [x for x in fields if x.get("repeat_group") == grp]
+                repf = next((x for x in fields if x.get("name") == grp and x.get("repeater")), None)
+                consumed.add(grp)
+                if repf is None:
+                    continue
+                nxt = _repeat_next(membs, repf, answers)
+                if nxt is not None:
+                    return sid, nxt
+                continue
             if not passed_cursor:
-                if f["name"] == start_after:
+                if name == cur_base:
                     passed_cursor = True
                 continue
             if not evaluate_condition(f.get("cond"), answers):        # gating (constraints.py)
                 continue
-            v = answers.get(f["name"])
+            v = answers.get(name)
             if v is None or str(v).strip() == "":
                 return sid, f
     return None, None
@@ -102,25 +173,59 @@ def _is_real_answer(v) -> bool:
 def _reconcile_stale(manifest: dict, answers: dict) -> tuple[list[dict], dict]:
     """Find fields that are ANSWERED but now HIDDEN, and void them — to a fixpoint.
 
-    A backward edit (changing an earlier answer) can hide a field that already holds
-    a real answer; that stale answer would otherwise survive into the PDF. We void it
-    ("not applicable"), which can in turn hide fields gated on it, so we iterate until
-    no answered-but-hidden field remains. Returns (voided_fields, reconciled_answers).
+    A backward edit (changing an earlier answer) can hide a field that already holds a
+    real answer; that stale value would otherwise survive into the PDF. We void it
+    ("not applicable"), iterating until stable so cascades resolve. Repeat groups are
+    handled per instance: if the whole repeater is hidden, every <member>[i] and the
+    repeater's own answer are voided; otherwise each instance is checked on its own
+    values. Returns (voided_fields, reconciled_answers).
     """
     ans = dict(answers)
     fields = [f for s in manifest.get("stages", {}).values() for f in s.get("fields", [])]
+    # repeat metadata from the manifest
+    repeaters = {f["name"]: f for f in fields if f.get("repeater")}
+    members_of = {rn: set(rf.get("members", [])) for rn, rf in repeaters.items()}
+    member_names = {m for ms in members_of.values() for m in ms}
+
+    def _void(key, f):
+        voided.append({"name": key, "id": f.get("id"), "was": ans.get(key)})
+        ans[key] = "not applicable"
+
     voided: list[dict] = []
     changed = True
     while changed:
         changed = False
         for f in fields:
-            cond = f.get("cond")
+            name, cond = f["name"], f.get("cond")
+            if name in member_names:
+                continue  # repeat members handled per instance below
             if not cond:
-                continue  # always-visible field is never stale
-            if _is_real_answer(ans.get(f["name"])) and not evaluate_condition(cond, ans):
-                voided.append({"name": f["name"], "id": f.get("id"), "was": ans.get(f["name"])})
-                ans[f["name"]] = "not applicable"
-                changed = True
+                continue
+            if _is_real_answer(ans.get(name)) and not evaluate_condition(cond, ans):
+                _void(name, f); changed = True
+
+        # repeat groups, per instance
+        for rn, rep in repeaters.items():
+            members = members_of[rn]
+            rep_hidden = bool(rep.get("cond")) and not evaluate_condition(rep["cond"], ans)
+            mem_fields = {m: next((x for x in fields if x["name"] == m), {}) for m in members}
+            # every instance index seen for any member or the repeater's own [i] key
+            insts = set()
+            for k in ans:
+                b, i = _split_instance(k)
+                if i is not None and (b in members or b == rn):
+                    insts.add(i)
+            for i in sorted(insts):
+                view = _instance_view(ans, members, i)
+                for m in members:
+                    key = f"{m}[{i}]"
+                    if not _is_real_answer(ans.get(key)):
+                        continue
+                    mcond = mem_fields[m].get("cond")
+                    if rep_hidden or (mcond and not evaluate_condition(mcond, view)):
+                        _void(key, mem_fields[m]); changed = True
+            if rep_hidden and _is_real_answer(ans.get(rn)):
+                _void(rn, rep); changed = True
     return voided, ans
 
 
