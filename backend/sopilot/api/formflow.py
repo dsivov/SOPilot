@@ -744,3 +744,38 @@ async def graph_edit(req: GraphEditRequest, scope: Scope = Depends(resolve_scope
             "rationale": prop.get("rationale", ""), "validation": check,
             "diff": {"from": old_cond or "(always shown)", "to": new_cond or "(always shown)"},
             "applied": applied}
+
+
+class TraceRequest(BaseModel):
+    answers: dict = {}                  # FieldName → value (the current submission state)
+
+
+@router.post("/graph/trace")
+async def graph_trace(req: TraceRequest, scope: Scope = Depends(resolve_scope),
+                      db: AsyncSession = Depends(get_db)) -> dict:
+    """Live execution trace: given an answer set, return each field's runtime state —
+    visible (gating), answered, and stale (answered-but-hidden → reconcile would void it) —
+    plus the field the driver would ask next. Powers the Studio's live graph coloring."""
+    manifest = await _load_manifest(db, scope)
+    if not manifest:
+        return {"error": "no form published for this project (missing __map__ block)"}
+    answers = req.answers or {}
+    fields = [f for s in manifest.get("stages", {}).values() for f in s.get("fields", [])]
+
+    out = []
+    for f in fields:
+        cond = f.get("cond") or ""
+        visible = evaluate_condition(cond, answers) if cond else True
+        answered = _is_real_answer(answers.get(f["name"]))
+        out.append({"name": f["name"], "visible": visible, "answered": answered,
+                    "stale": answered and not visible})
+
+    _, nxt = _visible_unanswered(manifest, answers, None, None)
+    counts = {
+        "answered": sum(1 for x in out if x["answered"] and not x["stale"]),
+        "visible_unanswered": sum(1 for x in out if x["visible"] and not x["answered"]),
+        "hidden": sum(1 for x in out if not x["visible"] and not x["stale"]),
+        "stale": sum(1 for x in out if x["stale"]),
+    }
+    return {"fields": out, "next_field": (nxt or {}).get("name"), "counts": counts,
+            "done": nxt is None}
