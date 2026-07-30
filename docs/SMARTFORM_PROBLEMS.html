@@ -119,6 +119,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#integration">Reuse, new &amp; integration</a></li>
     <li><a href="#implementation">How the SOP flow works</a></li>
     <li><a href="#transitions">FAQ: the 3 transition mechanisms</a></li>
+    <li><a href="#navigation">FAQ: navigation — which mechanism</a></li>
     <li><a href="#status">Built &amp; proven</a></li>
     <li><a href="#measurement">Why deterministic gating</a></li>
     <li><a href="#completion">Robot accuracy (end-to-end)</a></li>
@@ -783,6 +784,48 @@ b.hl{color:#8fd9c9}
     runs the deterministic engine and keeps the LLM off the transition decision entirely</b> — the SOP edges are inert,
     <span class="mono">constraints.py</span> drives, the model only phrases. That’s why the mechanisms compose instead of
     competing — and it’s exactly what the A/B forced (LLM-decided transitions ≈ 56%, deterministic = 100%).</div>
+</section>
+
+<!-- navigation -->
+<section id="navigation">
+  <div class="kicker">For the pt-forms developer — is SOP/playbook right for navigation?</div>
+  <h2>Navigation: which mechanism handles each task</h2>
+  <p class="lead-p">Short answer to the developer’s question: <b>a playbook/SOP is the wrong tool for navigation</b> — it’s an
+  LLM prompt for <i>phrasing one turn</i>, not control flow, and it fits <b>none</b> of the list. Navigation splits across four
+  mechanisms, none of them a playbook:</p>
+
+  <div class="grid g3" style="margin:14px 0">
+    <div class="card"><span class="pill win">DET</span><p class="small" style="margin:8px 0 0">Deterministic engine — <span class="mono">constraints.py</span> + the driver + relative stepping. Most of the list.</p></div>
+    <div class="card"><span class="pill b">RES</span><p class="small" style="margin:8px 0 0">Semantic resolver — a GPT/embedding matcher for “by meaning”. pt-forms already has this (<span class="mono">_gpt_pick_field</span>).</p></div>
+    <div class="card"><span class="pill a">HIST / DERIVE</span><p class="small" style="margin:8px 0 0"><b>HIST</b>: an answer-history/trace store. <b>DERIVE</b>: the interpret step (parse + compute) or a form formula.</p></div>
+  </div>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>Task</th><th>Mechanism</th><th>Playbook?</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>1.1</td><td>Next unanswered question</td><td><span class="pill win">DET</span></td><td>✗</td><td>our <span class="mono">_visible_unanswered</span></td></tr>
+      <tr><td>1.1</td><td>Skip fields whose FieldCondition is false</td><td><span class="pill win">DET</span></td><td>✗</td><td>exactly <span class="mono">constraints.py</span></td></tr>
+      <tr><td>1.1</td><td>Store “not applicable” for skipped</td><td><span class="pill win">DET</span></td><td>✗</td><td>skip ⇒ persist sentinel</td></tr>
+      <tr><td>1.1</td><td>After repeater, loop to block start if under limit</td><td><span class="pill win">DET</span></td><td>✗</td><td>our <span class="mono">_repeat_next</span> (honors a max-instances)</td></tr>
+      <tr><td>1.2</td><td>Back to a prior <i>answered</i> question, skip empty/NA</td><td><span class="pill win">DET</span></td><td>✗</td><td>relative stepping (pt-forms <span class="mono">_step_relative</span>)</td></tr>
+      <tr><td>1.2</td><td>(better) Back through <b>answer history</b></td><td><span class="pill a">HIST</span></td><td>✗</td><td>needs an ordered history/trace store (new)</td></tr>
+      <tr><td>1.3</td><td>First unanswered on resume</td><td><span class="pill win">DET</span></td><td>✗</td><td><span class="mono">_visible_unanswered</span> from the start</td></tr>
+      <tr><td>1.4</td><td>“Appointment = injury date + 1 day”</td><td><span class="pill ctrl">DERIVE</span></td><td>✗</td><td><b>not navigation</b> — a derived answer: resolve <span class="mono">{injury date}</span> + date math; interpret step or a form formula</td></tr>
+      <tr><td>2.1</td><td>Go to question by number (TOC)</td><td><span class="pill win">DET</span></td><td>✗</td><td>direct id/index jump</td></tr>
+      <tr><td>2.2</td><td>Go to question by content (“correct my age”)</td><td><span class="pill b">RES</span></td><td>✗</td><td>the one fuzzy case; pt-forms’ GPT resolver already does it</td></tr>
+      <tr><td>3.1</td><td>Absolute section (“family history”)</td><td><span class="pill b">RES</span></td><td>✗</td><td>match section name (or DET if exact)</td></tr>
+      <tr><td>3.2</td><td>Relative section (“start of section”, “next section”)</td><td><span class="pill win">DET</span></td><td>✗</td><td>section/stage structure + stepping</td></tr>
+      <tr><td>4.1</td><td>Next question needing revision</td><td><span class="pill win">DET</span></td><td>✗</td><td>filter the revision flag (pt-forms <span class="mono">_compute_requested_change_field</span>)</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout info"><div class="clabel">◆ Two things to tell him</div>
+    <b>(1) This isn’t SOPilot replacing your navigation.</b> We measured navigation at <b>parity</b> — pt-forms already does the
+    deterministic parts and the GPT “by content” resolver well. The table just says <i>which tool each task needs</i>, and it’s
+    DET/RES/HIST/DERIVE — never a playbook. <b>(2) Where the SOP world adds something next to 1.2:</b> when the user goes back
+    and <b>changes</b> an earlier answer, the hard part isn’t the jump — it’s the <b>propagation</b> afterward (downstream answers
+    now hidden). That’s <span class="mono">reconcile</span> (our one measured win, 61 stale → 0). So 1.2 + reconcile compose:
+    DET does the jump, <span class="mono">constraints.py</span> cleans up the consequences.</div>
 </section>
 
 <!-- status -->
