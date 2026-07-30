@@ -1,4 +1,4 @@
-import { Blocks, Database, Download, FileText, Gauge, Headphones, MessagesSquare, Moon, Network, Plug, ShieldCheck, Sun, Upload } from "lucide-react";
+import { Blocks, Database, Download, FileText, Gauge, Headphones, MessagesSquare, Moon, Network, Plug, Share2, ShieldCheck, Sun, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, ApiError, apiRaw, clearCreds, getCreds, setCreds } from "./api";
 import SopsView from "./views/Sops";
@@ -9,13 +9,14 @@ import DashboardView from "./views/Dashboard";
 import TracesView from "./views/Traces";
 import ConnectorsView from "./views/Connectors";
 import ConfigView from "./views/Config";
+import FormGraphView from "./views/FormGraph";
 import CopilotPanel from "./CopilotPanel";
 import { CopilotBridge } from "./copilot/bridge";
 import ConfigAdminView from "./views/ConfigAdmin";
 import AdminConsole from "./views/AdminConsole";
 import Help from "./views/Help";
 
-type ViewId = "sops" | "blocks" | "config" | "configAdmin" | "dashboard" | "playground" | "sessions" | "traces" | "connectors";
+type ViewId = "sops" | "blocks" | "config" | "configAdmin" | "dashboard" | "playground" | "sessions" | "traces" | "connectors" | "formGraph";
 
 function BrandMark() {
   // four token-colored dots joined by line2 edges (per the design guide §11)
@@ -355,6 +356,7 @@ export default function App() {
         { id: "connectors", label: "Connectors", icon: <Plug /> },
         { id: "configAdmin", label: "Config admin", icon: <ShieldCheck /> },
         { id: "config", label: "Config viewer", icon: <Network /> },
+        { id: "formGraph", label: "Constraint graph", icon: <Share2 /> },
       ],
     },
     {
@@ -454,6 +456,7 @@ export default function App() {
             {view === "connectors" && <ConnectorsView />}
             {view === "configAdmin" && <ConfigAdminView />}
             {view === "config" && <ConfigView />}
+            {view === "formGraph" && <FormGraphView />}
           </div>
           <CopilotPanel view={view} project={project} />
         </div>
