@@ -523,3 +523,68 @@ async def interpret(req: InterpretRequest, scope: Scope = Depends(resolve_scope)
             except Exception:
                 pass
     return {"value": value, "field_name": req.field_name, "applied": applied, "source": "live" if live else "inline"}
+
+
+# ---------------------------------------------------------------------------
+# Constraint-graph view — the form's dependency graph as nodes/edges (+ health).
+# The first slice of the constraint-graph Studio: visualize, then edit (AI +
+# visual) with contradiction-checking, then a live execution trace.
+# ---------------------------------------------------------------------------
+_COND_TOKEN = re.compile(r"\{([^}]+)\}")
+
+
+@router.get("/graph")
+async def graph(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depends(get_db)) -> dict:
+    """The published form's dependency graph: fields → nodes, show-if conditions → edges.
+
+    An edge Y → X means "field X is shown only when Y's value satisfies X's condition".
+    Also returns a health block (dangling references, cross-stage deps, top controllers)
+    — the seed of contradiction-checking.
+    """
+    manifest = await _load_manifest(db, scope)
+    if not manifest:
+        return {"error": "no form published for this project (missing __map__ block)"}
+
+    stage_of: dict[str, str] = {}
+    stage_title: dict[str, str] = {}
+    fields: list[dict] = []
+    for sid, s in manifest.get("stages", {}).items():
+        for f in s.get("fields", []):
+            stage_of[f["name"]] = sid
+            stage_title[sid] = s.get("title", sid)
+            fields.append(f)
+    names = {f["name"] for f in fields}
+
+    nodes = [{
+        "name": f["name"], "id": f.get("id"), "label": f.get("label") or f["name"],
+        "stage": stage_of[f["name"]], "stage_title": stage_title[stage_of[f["name"]]],
+        "conditional": bool(f.get("cond")),
+        "repeat_group": f.get("repeat_group"), "repeater": bool(f.get("repeater")),
+    } for f in fields]
+
+    edges: list[dict] = []
+    dangling: list[dict] = []
+    from collections import Counter
+    fanout: Counter = Counter()
+    for f in fields:
+        cond = f.get("cond") or ""
+        for tok in dict.fromkeys(_COND_TOKEN.findall(cond)):   # unique, in order
+            if tok in names:
+                edges.append({"src": tok, "dst": f["name"], "expr": cond,
+                              "cross_stage": stage_of[tok] != stage_of[f["name"]]})
+                fanout[tok] += 1
+            else:
+                dangling.append({"field": f["name"], "missing_ref": tok, "expr": cond})
+
+    stats = {
+        "fields": len(fields),
+        "conditional_fields": sum(1 for f in fields if f.get("cond")),
+        "edges": len(edges),
+        "cross_stage_edges": sum(1 for e in edges if e["cross_stage"]),
+        "stages": len(manifest.get("stages", {})),
+        "dangling_refs": len(dangling),
+        "top_controllers": [{"name": n, "controls": c} for n, c in fanout.most_common(8)],
+    }
+    stages = [{"id": sid, "title": stage_title.get(sid, sid)} for sid in manifest.get("order", [])]
+    return {"form": manifest.get("form"), "nodes": nodes, "edges": edges,
+            "stages": stages, "stats": stats, "health": {"dangling": dangling}}

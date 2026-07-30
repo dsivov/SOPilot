@@ -1,0 +1,82 @@
+<style>
+  :root{--bg:#0f1420;--panel:#161b28;--ink:#c9d3e6;--mut:#8a93a8;--line:#2b3140;--blue:#5b8def;--grn:#19b89a;--amb:#f0a73c;--red:#e0574f;}
+  @media (prefers-color-scheme:light){:root{--bg:#f7f8fb;--panel:#fff;--ink:#1c2330;--mut:#5a6473;--line:#e3e7ee;}}
+  :root[data-theme=dark]{--bg:#0f1420;--panel:#161b28;--ink:#c9d3e6;--mut:#8a93a8;--line:#2b3140;}
+  :root[data-theme=light]{--bg:#f7f8fb;--panel:#fff;--ink:#1c2330;--mut:#5a6473;--line:#e3e7ee;}
+  body{background:var(--bg);color:var(--ink);font:15px/1.55 "Segoe UI",system-ui,sans-serif;}
+  .wrap{max-width:960px;margin:0 auto;padding:32px 22px 64px;}
+  h1{font-size:26px;font-weight:800;margin:0 0 8px;text-wrap:balance;}
+  h2{font-size:18px;font-weight:800;margin:34px 0 6px;padding-top:14px;border-top:1px solid var(--line);}
+  .lead{color:var(--ink);font-size:15px;} .small{color:var(--mut);font-size:12.5px;}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;color:var(--amb);}
+  .cards{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0;}
+  .card{flex:1 1 120px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .card .big{font:800 30px "Segoe UI",sans-serif;color:var(--blue);}
+  .card.ok .big{color:var(--grn);} .card.bad .big{color:var(--red);}
+  .card .cap{color:var(--mut);font-size:11.5px;margin-top:2px;}
+  .chart{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;overflow-x:auto;}
+  .chart svg{max-width:100%;height:auto;}
+  .tw{overflow-x:auto;} table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0;}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);} th{color:var(--mut);font-weight:700;}
+  td{font-variant-numeric:tabular-nums;}
+  .callout{border:1px solid var(--line);border-left:4px solid var(--grn);border-radius:8px;background:var(--panel);padding:12px 14px;margin:12px 0;font-size:13.5px;}
+  .callout.bad{border-left-color:var(--red);}
+  pre.mermaid{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;overflow-x:auto;}
+</style>
+<div class="wrap">
+<h1>Constraint graph — Injured Worker Questionnaire</h1>
+<p class="lead">A prototype of the <b>constraint-graph Studio</b>: the form's show-if rules as a live
+<b>dependency graph</b>, read straight from <span class="mono">GET /formflow/graph</span> (backed by
+<span class="mono">constraints.py</span>). This is step 1 — visualize; next come AI-assisted editing with
+contradiction-checking and a live execution trace.</p>
+
+<div class="cards">
+  <div class="card"><div class="big">269</div><div class="cap">fields</div></div>
+  <div class="card"><div class="big">143</div><div class="cap">have a show-if rule</div></div>
+  <div class="card"><div class="big">182</div><div class="cap">dependency edges</div></div>
+  <div class="card"><div class="big">20</div><div class="cap">stages (groups)</div></div>
+  <div class="card ok"><div class="big">0</div><div class="cap">cross-stage edges</div></div>
+  <div class="card ok"><div class="big">0</div><div class="cap">dangling refs</div></div>
+</div>
+
+<h2>Hub controllers — a few questions gate most of the form</h2>
+<p class="small">Fan-out = how many fields a single answer shows/hides. These hubs are where an edit ripples
+furthest — exactly what reconcile and the live trace watch.</p>
+<div class="chart"><svg viewBox="0 0 720 238" role="img" aria-label="top controllers"><text x="8" y="33" fill="#c9d3e6" font="700 11px sans-serif" style="font:700 11px sans-serif">B167</text><rect x="120" y="20" width="560" height="18" rx="3" fill="#5b8def"/><text x="685" y="33" fill="#9cc0ff" style="font:700 11px sans-serif">30</text><text x="8" y="59" fill="#c9d3e6" font="700 11px sans-serif" style="font:700 11px sans-serif">B238-1</text><rect x="120" y="46" width="373" height="18" rx="3" fill="#5b8def"/><text x="498" y="59" fill="#9cc0ff" style="font:700 11px sans-serif">20</text><text x="8" y="85" fill="#c9d3e6" font="700 11px sans-serif" style="font:700 11px sans-serif">B51</text><rect x="120" y="72" width="336" height="18" rx="3" fill="#5b8def"/><text x="461" y="85" fill="#9cc0ff" style="font:700 11px sans-serif">18</text><text x="8" y="111" fill="#c9d3e6" font="700 11px sans-serif" style="font:700 11px sans-serif">Q292</text><rect x="120" y="98" width="317" height="18" rx="3" fill="#5b8def"/><text x="442" y="111" fill="#9cc0ff" style="font:700 11px sans-serif">17</text><text x="8" y="137" fill="#c9d3e6" font="700 11px sans-serif" style="font:700 11px sans-serif">B238-2</text><rect x="120" y="124" width="298" height="18" rx="3" fill="#5b8def"/><text x="423" y="137" fill="#9cc0ff" style="font:700 11px sans-serif">16</text><text x="8" y="163" fill="#c9d3e6" font="700 11px sans-serif" style="font:700 11px sans-serif">B277</text><rect x="120" y="150" width="224" height="18" rx="3" fill="#5b8def"/><text x="349" y="163" fill="#9cc0ff" style="font:700 11px sans-serif">12</text><text x="8" y="189" fill="#c9d3e6" font="700 11px sans-serif" style="font:700 11px sans-serif">B293</text><rect x="120" y="176" width="224" height="18" rx="3" fill="#5b8def"/><text x="349" y="189" fill="#9cc0ff" style="font:700 11px sans-serif">12</text><text x="8" y="215" fill="#c9d3e6" font="700 11px sans-serif" style="font:700 11px sans-serif">Q39</text><rect x="120" y="202" width="186" height="18" rx="3" fill="#5b8def"/><text x="311" y="215" fill="#9cc0ff" style="font:700 11px sans-serif">10</text></svg></div>
+
+<h2>Dependency subgraph — the top hub, <span class="mono">B167</span></h2>
+<p class="small">One answer (<b>B167</b>) controls the visibility of 30 fields. Rendered live from the graph edges.</p>
+<pre class="mermaid">flowchart LR
+  n_B167["🎛 B167 · How many current symptoms "]:::hub
+  n_B167 --> n_Q167["Q167 · First complaint resulting "]
+  n_B167 --> n_Q168["Q168 · Percentage of time you fel"]
+  n_B167 --> n_Q169["Q169 · Pain scale (0-10)"]
+  n_B167 --> n_Q170["Q170 · Symptoms without activity?"]
+  n_B167 --> n_Q171["Q171 · What activities make this "]
+  n_B167 --> n_Q172["Q172 · What makes this symptom be"]
+  n_B167 --> n_Q173["Q173 · Second complaint resulting"]
+  n_B167 --> n_Q174["Q174 · Percentage of time you fel"]
+  n_B167 --> n_Q175["Q175 · Pain scale (0-10)"]
+  n_B167 --> n_Q176["Q176 · Symptoms without activity?"]
+  n_B167 --> n_Q177["Q177 · What activities make this "]
+  n_B167 --> n_Q178["Q178 · What makes this symptom be"]
+  n_B167 --> more["…+18 more fields"]:::more
+  classDef hub fill:#2a2114,stroke:#f0a73c,color:#fff;
+  classDef more fill:#1b1f2a,stroke:#39425a,color:#8a93a8;</pre>
+
+<h2>Per-stage breakdown</h2>
+<div class="tw"><table>
+  <thead><tr><th>Stage</th><th>Fields</th><th>Conditional</th><th>Edges</th></tr></thead>
+  <tbody><tr><td>Employee Information</td><td>19</td><td>1</td><td>1</td></tr><tr><td>History of the Injury</td><td>4</td><td>1</td><td>1</td></tr><tr><td>History of Treatment (part 1)</td><td>14</td><td>10</td><td>13</td></tr><tr><td>History of Treatment (part 2)</td><td>19</td><td>18</td><td>23</td></tr><tr><td>History of Treatment (part 3)</td><td>8</td><td>3</td><td>3</td></tr><tr><td>History of Other Injuries</td><td>13</td><td>7</td><td>7</td></tr><tr><td>Activities of Daily Living and Current Complaints (part 1)</td><td>9</td><td>0</td><td>0</td></tr><tr><td>Activities of Daily Living and Current Complaints (part 2)</td><td>31</td><td>30</td><td>30</td></tr><tr><td>Activities of Daily Living and Current Complaints (part 3)</td><td>5</td><td>3</td><td>3</td></tr><tr><td>Job Description (part 1)</td><td>16</td><td>0</td><td>0</td></tr><tr><td>Job Description (part 2)</td><td>18</td><td>0</td><td>0</td></tr><tr><td>Job Description (part 3)</td><td>21</td><td>20</td><td>37</td></tr><tr><td>Job Description (part 4)</td><td>16</td><td>8</td><td>8</td></tr><tr><td>Work History (part 1)</td><td>4</td><td>3</td><td>3</td></tr><tr><td>Work History (part 2)</td><td>13</td><td>12</td><td>12</td></tr><tr><td>Work History (part 3)</td><td>22</td><td>21</td><td>35</td></tr><tr><td>Past Medical History</td><td>7</td><td>0</td><td>0</td></tr><tr><td>Review of Systems</td><td>11</td><td>0</td><td>0</td></tr><tr><td>Off Work Activities</td><td>8</td><td>3</td><td>3</td></tr><tr><td>Social History</td><td>11</td><td>3</td><td>3</td></tr></tbody>
+</table></div>
+
+<h2>Health — the contradiction-check foundation</h2>
+<div class="callout ok">
+  <b>✓ Clean.</b>
+  <b>0</b> dangling references (a condition pointing at a field that doesn't exist) and
+  <b>0</b> cross-stage dependencies — i.e. every stage is self-contained, which is why the
+  grouping is safe. Dangling-ref detection is the first of the contradiction checks the Studio will run before an edit is
+  saved (next: unreachable fields, cyclic conditions, always-false rules).
+  
+</div>
+</div>

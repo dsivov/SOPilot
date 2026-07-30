@@ -123,6 +123,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#completion">Robot accuracy (end-to-end)</a></li>
     <li><a href="#answercapture">Robot accuracy (answer-capture)</a></li>
     <li><a href="#headtohead">Head-to-head: Original vs SOPilot</a></li>
+    <li><a href="#repeaters">Repeaters (repeating groups)</a></li>
     <li><a href="#candidate">Candidate value: config-driven authoring</a></li>
     <li><a href="#next">Status &amp; next steps</a></li>
   </ol>
@@ -1043,6 +1044,56 @@ b.hl{color:#8fd9c9}
     (<span class="mono">constraints.py</span>) closes it cleanly. Everything else (next-field, navigation) is parity.</div>
 </section>
 
+<!-- repeaters -->
+<section id="repeaters">
+  <div class="kicker">Completeness — repeating groups</div>
+  <h2>Repeaters: “list each medication…”, done right</h2>
+  <p class="lead-p">Some form sections <b>repeat</b> — one medication, then another; each prior injury; each dependent. pt-forms
+  models this with a <b>Repeater</b> field whose <span class="mono">RepeatFrom</span> marks the group start; every instance is
+  stored as <span class="mono">&lt;field&gt;[i]</span>. This was the one construct the spike didn’t handle — now it does, across
+  all three layers.</p>
+
+  <figure><div class="fig">
+    <svg viewBox="0 0 760 190" role="img" aria-label="How a repeat group iterates">
+      <defs><marker id="rp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
+        <marker id="rpy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#19b89a"/></marker></defs>
+      <style>.rb{rx:8;stroke-width:1.6}.rt{fill:#fff;font:700 11px "Segoe UI",sans-serif;text-anchor:middle}.rs{fill:#e7ebf3;font:8.5px var(--mono),monospace;text-anchor:middle}.rl{font:700 9px "Segoe UI",sans-serif;text-anchor:middle}</style>
+      <text class="rl" x="150" y="20" fill="#8a93a8">instance i — serve each visible member in order</text>
+      <rect class="rb" x="30" y="30" width="110" height="40" fill="rgba(91,141,239,.18)" stroke="#5b8def"/><text class="rt" x="85" y="50">med_name[i]</text><text class="rs" x="85" y="63">Medication</text>
+      <rect class="rb" x="160" y="30" width="110" height="40" fill="rgba(91,141,239,.18)" stroke="#5b8def"/><text class="rt" x="215" y="50">med_dose[i]</text><text class="rs" x="215" y="63">Dose</text>
+      <line x1="140" y1="50" x2="159" y2="50" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#rp)"/>
+      <rect class="rb" x="320" y="26" width="150" height="48" fill="#2a2114" stroke="#f0a73c"/><text class="rt" x="395" y="46">add another? 🔁</text><text class="rs" x="395" y="61">the Repeater control</text>
+      <line x1="270" y1="50" x2="319" y2="50" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#rp)"/>
+      <!-- yes loop -->
+      <path d="M395,74 C395,120 150,120 85,74" fill="none" stroke="#19b89a" stroke-width="1.8" marker-end="url(#rpy)"/>
+      <text class="rl" x="240" y="118" fill="#7ee0cd">Yes → instance i+1</text>
+      <!-- no exit -->
+      <rect class="rb" x="560" y="30" width="170" height="40" fill="rgba(25,184,154,.14)" stroke="#39425a"/><text class="rt" x="645" y="50">next field after group</text>
+      <line x1="470" y1="50" x2="559" y2="50" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#rp)"/><text class="rl" x="515" y="42" fill="#8a93a8">No</text>
+      <text class="rs" x="395" y="150" fill="#8a93a8">each member gated per-instance · answers keyed med_name[0], med_name[1], …</text>
+    </svg>
+    <figcaption>The driver serves each visible member of instance <span class="mono">i</span>, then the “add another?”
+      control; <b>Yes</b> opens instance <span class="mono">i+1</span>, <b>No</b> moves on.</figcaption>
+  </div></figure>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Layer</th><th>What it does for repeaters</th></tr></thead>
+    <tbody>
+      <tr><td><b>Pipeline</b> (<span class="mono">form_to_sop.py</span>)</td><td>Detects the Repeater + its members (from <span class="mono">RepeatFrom</span> up to the repeater, mirroring pt-forms) and writes <span class="mono">repeat_group</span>/<span class="mono">members</span> into the map block; keeps the whole group in <b>one stage</b>.</td></tr>
+      <tr><td><b>prepare</b></td><td>Serves each visible unanswered member at the current instance, then the “add another?” control; per-instance gating (a member’s show-if is evaluated on <i>that</i> instance’s values). Yes → next instance, No → past the group.</td></tr>
+      <tr><td><b>reconcile</b></td><td>Instance-aware: voids <span class="mono">&lt;member&gt;[i]</span> hidden at that instance, and voids <b>all instances</b> + the now-moot “add another?” answer when the whole group is hidden — so a removed or hidden repeating item can’t leak stale answers into the PDF.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout key"><div class="clabel">◆ Role &amp; how to use</div>
+    <b>Role:</b> completeness — forms with repeating sections work end-to-end, and the <b>proven reconcile win extends to
+    repeating data</b> (the highest-risk place for stale answers). <b>How to use:</b> author it in pt-forms as a Repeater field
+    with <span class="mono">RepeatFrom</span> — the pipeline picks it up automatically, <b>no engine code</b> (adding a form,
+    repeaters and all, stays a data operation). Instances are addressed <span class="mono">&lt;name&gt;[i]</span> in the answer
+    snapshot. <span class="small">Covered by 13 tests against a synthetic repeater fixture — no pt-forms sample form uses
+    repeaters, so we built one to validate all three layers.</span></div>
+</section>
+
 <!-- candidate -->
 <section id="candidate">
   <div class="kicker">A candidate added value — not yet proven</div>
@@ -1080,6 +1131,14 @@ b.hl{color:#8fd9c9}
     place instead of touching server code + <span class="mono">agent_prompt.md</span> + <span class="mono">.md</span> files. But it’s a
     <b>product/ops</b> benefit to be <b>validated against pt-forms’ existing builder</b>, not a measured accuracy win. <b>Candidate,
     not proven.</b></div>
+
+  <div class="callout ok"><div class="clabel">◆ First slice prototyped — the constraint graph</div>
+    We’ve built the first step of a <b>constraint-graph Studio</b>: <span class="mono">GET /formflow/graph</span> turns the form’s
+    show-if rules into a live dependency graph (backed by <span class="mono">constraints.py</span>), rendered house-style. On the
+    real form: <b>269 fields · 143 conditional · 182 edges · 0 cross-stage · 0 dangling refs</b>, with hub controllers like one
+    question gating <b>30</b> fields. Dangling-reference detection is the first contradiction check. Next: <b>AI-assisted editing</b>
+    (the copilot proposes → validates → applies) and a <b>live execution trace</b> lighting the graph as answers flow.
+    <br><span class="small">Prototype render (separate page): the SmartForm Constraint Graph artifact.</span></div>
 </section>
 
 <!-- next -->
