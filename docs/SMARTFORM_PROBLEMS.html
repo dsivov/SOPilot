@@ -122,6 +122,7 @@ b.hl{color:#8fd9c9}
     <li><a href="#navigation">FAQ: navigation — which mechanism</a></li>
     <li><a href="#status">Built &amp; proven</a></li>
     <li><a href="#measurement">Why deterministic gating</a></li>
+    <li><a href="#instage">In-stage LLM nav &amp; authoring cost</a></li>
     <li><a href="#completion">Robot accuracy (end-to-end)</a></li>
     <li><a href="#answercapture">Robot accuracy (answer-capture)</a></li>
     <li><a href="#headtohead">Head-to-head: Original vs SOPilot</a></li>
@@ -974,6 +975,38 @@ b.hl{color:#8fd9c9}
     <b>Does NOT show:</b> a SOP advantage over pt-forms — pt-forms already evaluates deterministically. The strong model still
     runs each turn in our design, but only to <i>phrase</i> the pre-decided question (~1.07 s, ~550 tokens), off the correctness
     path. Reproduce: <span class="mono">scripts/smartform_bench/</span> (README + harness + mock).</div>
+</section>
+
+<!-- instage -->
+<section id="instage">
+  <div class="kicker">The design variant we’d skipped — and the authoring trade-off</div>
+  <h2>“Let the LLM navigate within a stage” — tested</h2>
+  <p class="lead-p">The original idea was a hybrid: constraints handle stage-to-stage; an <b>LLM handles in-stage
+  navigation</b> (from the playbook). We had only tested the strawman (LLM over the <i>whole</i> form). So we tested the real
+  variant — an LLM given <b>only the current stage’s self-contained fields</b> — against the deterministic engine.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Navigation approach</th><th>Accuracy (all)</th><th>Accuracy (conditional)</th><th>Per-turn</th><th>Failure mode</th></tr></thead>
+    <tbody>
+      <tr><td>LLM · whole form (gpt-4o-mini)</td><td>83%</td><td><b style="color:#e0574f">56%</b></td><td>~0.9 s</td><td>wrong-skip</td></tr>
+      <tr><td>LLM · <b>in-stage</b> (gpt-4o-mini)</td><td>87%</td><td><b style="color:#f0a73c">88.5%</b></td><td>~0.7 s</td><td>wrong-skip</td></tr>
+      <tr><td>LLM · <b>in-stage</b> (gpt-4o)</td><td>90%</td><td>100%*</td><td>~0.7 s</td><td>wrong-skip</td></tr>
+      <tr><td><b>Deterministic</b> (constraints.py)</td><td><b style="color:#19b89a">100%</b></td><td><b style="color:#19b89a">100%</b></td><td><b>~0 ms</b></td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">*gpt-4o got the conditional decisions in-sample but still made ordering/“done” errors → 90% overall.
+  Restricting to one self-contained stage lifts the weak model 56%→88.5% — the original instinct had merit — but it’s still
+  short of 100%, at a per-turn model call. Reproduce: <span class="mono">scripts/smartform_bench/instage_ab.py</span>.</p>
+
+  <div class="callout key"><div class="clabel">◆ The real prize is authoring cost — here’s the safe way to win it</div>
+    The strongest argument for the hybrid isn’t runtime — it’s that <b>authoring 269 conditions is hard</b>, while “stages +
+    let the LLM handle in-stage” is light. True. But two facts reframe it: <b>(1)</b> all deps are intra-stage, so “LLM in-stage”
+    means the LLM owns <b>all 182 gates</b> (≈88%, weak); <b>(2)</b> the failure modes differ —
+    <b>under-authored + deterministic = over-ask</b> (a maybe-irrelevant question; <b>safe</b>), whereas
+    <b>under-authored + LLM = wrong-skip</b> (a missed required question; <b>unsafe</b> for medical intake). So get the authoring
+    win in the <b>authoring layer</b>, not the runtime: author only the safety-critical gates (the rest are asked in order), and
+    make full authoring cheap with the <b>constraint-graph Studio</b> (visualize + AI-assisted edit + contradiction-check).
+    <b>Make authoring easy and keep execution deterministic — don’t move navigation to the LLM.</b></div>
 </section>
 
 <!-- completion -->
