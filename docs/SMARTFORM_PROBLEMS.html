@@ -1008,8 +1008,13 @@ b.hl{color:#8fd9c9}
     fragile. <b>(3) for gating the playbook isn’t under-informative</b> — the conditions <i>are</i> the info. Across all stages
     it’s ~<b>90% overall / ~100% conditional</b>, a <b>probabilistic tie on a sample</b>, not exact-by-construction, at ~0.8 s +
     tokens/turn. So the supervisor <i>can</i> navigate, but there’s no accuracy reason to spend it there. <b>Richer playbooks pay
-    off on the non-navigation work</b> — coercion, judgment, the fuzzy <span class="mono">.md</span> rules, phrasing — where the
-    strong supervisor genuinely beats the weak realtime model. Lab: <span class="mono">scripts/smartform_bench/playbook_lab.py</span>.</div>
+    off on the non-navigation work</b> — coercion, judgment, the fuzzy <span class="mono">.md</span> rules, phrasing — where an
+    LLM is needed at all (the deterministic gate can’t). <b>Honest correction:</b> on 16 such SmartForm judgment cases (derived
+    dates, former-smoker, colloquial→diagnosis, unit conversion, red-flag &amp; critical <b>alerts</b>, <b>contradiction</b>
+    detection, N/A logic) the strong model did <b>not</b> beat the weak one — <b>15/16 both</b>. So the split is <b>“LLM vs
+    deterministic,” not “strong vs weak.”</b> The strong-supervisor advantage is unproven against our capable weak proxy
+    (gpt-4o-mini); it may still hold against the <i>actual</i> realtime voice model (gpt-realtime), which we haven’t tested.
+    Labs: <span class="mono">playbook_lab.py</span>, <span class="mono">judgment_ab.py</span>.</div>
 
   <div class="callout key"><div class="clabel">◆ The real prize is authoring cost — here’s the safe way to win it</div>
     The strongest argument for the hybrid isn’t runtime — it’s that <b>authoring 269 conditions is hard</b>, while “stages +
@@ -1294,6 +1299,16 @@ b.hl{color:#8fd9c9}
     place instead of touching server code + <span class="mono">agent_prompt.md</span> + <span class="mono">.md</span> files. But it’s a
     <b>product/ops</b> benefit to be <b>validated against pt-forms’ existing builder</b>, not a measured accuracy win. <b>Candidate,
     not proven.</b></div>
+
+  <div class="callout info"><div class="clabel">◆ Maintenance cost — the honest split</div>
+    Maintenance = <b>editing effort + validation/regression safety</b>. <b>LLM-in-stage (prose playbooks)</b> is cheaper to
+    <i>type</i>, but <b>unvalidatable</b> — no contradiction-check, no dead-end/cycle detection, no precise diff; every tweak
+    risks a <b>silent ~10–12% navigation regression</b> (a maintenance liability for medical). <b>Deterministic conditions +
+    the constraint-graph Studio</b> give NL edit → <b>validated</b> condition + diff, plus graph <b>impact analysis</b>
+    (“changing Q39 affects these 10 fields”) and <b>reconcile</b> for the consequences — cheap to edit <i>and</i> safe. So
+    “SOP navigation is simpler to maintain” holds when it means <b>deterministic + the Studio</b>; as LLM-prose it’s cheaper to
+    type but riskier to own. The maintenance win is in the <b>tooling</b> (graph · validation · reconcile), not the SOP
+    structure (which is <i>more</i> artifacts than a single <span class="mono">fields.json</span>).</div>
 
   <div class="callout ok"><div class="clabel">◆ First slice prototyped — the constraint graph</div>
     We’ve built the first step of a <b>constraint-graph Studio</b>: <span class="mono">GET /formflow/graph</span> turns the form’s
