@@ -106,6 +106,7 @@ b.hl{color:#8fd9c9}
 <nav class="toc" aria-label="Contents">
   <div class="tl-title">In this doc</div>
   <ol>
+    <li><a href="#valuemap"><b>★ Bottom line — SOPilot's value</b></a></li>
     <li><a href="#what">What SmartForm is</a></li>
     <li><a href="#arch">How it works today</a></li>
     <li><a href="#insight">The one core insight</a></li>
@@ -136,6 +137,41 @@ b.hl{color:#8fd9c9}
 <article>
 
 <!-- 1 -->
+<!-- valuemap -->
+<section id="valuemap">
+  <div class="kicker">Read this first — the bottom line</div>
+  <h2>SOPilot’s added value in SmartForm — the clean mapping</h2>
+  <p class="lead-p">After measuring every dimension, most of what pt-forms does is already strong, so SOPilot is an
+  <b>add-on, not a replacement</b>. There are exactly <b>two</b> reasons to adopt it for SmartForm.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Capability</th><th>pt-forms today</th><th>With SOPilot</th><th>Verdict</th><th>Adopt?</th></tr></thead>
+    <tbody>
+      <tr><td>Next-field / skip logic</td><td>deterministic, works</td><td>deterministic (<span class="mono">constraints.py</span>)</td><td>parity</td><td>No</td></tr>
+      <tr><td>NL navigation (“go to my age”)</td><td>GPT-based, works</td><td>—</td><td>parity</td><td>No</td></tr>
+      <tr><td>Answer capture / coercion</td><td>weak model, works</td><td>strong supervisor</td><td>parity <span class="small">(measured)</span></td><td>No</td></tr>
+      <tr><td>Judgment: alerts · contradictions · derived values</td><td>not built</td><td>LLM supervisor does it</td><td>LLM needed (either side)</td><td>Maybe</td></tr>
+      <tr><td>32k context, long calls</td><td>server-authoritative</td><td>same</td><td>parity</td><td>No</td></tr>
+      <tr style="background:rgba(25,184,154,.10)"><td><b>Backward edit-propagation</b></td><td><b style="color:#e0574f">leaks stale answers (61)</b></td><td><b style="color:#19b89a">reconcile → 0</b></td><td><b>SOPilot wins — proven</b></td><td><b style="color:#19b89a">YES</b></td></tr>
+      <tr style="background:rgba(91,141,239,.08)"><td><b>Authoring/maintenance of the 269-rule graph</b></td><td><span class="mono">fields.json</span> + builder + code</td><td><b>constraint-graph Studio</b>: visual + AI-edit + contradiction-check + impact + reconcile</td><td><b>candidate</b> (product value)</td><td><b style="color:#5b8def">Maybe</b></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="grid g3" style="margin:16px 0">
+    <div class="card"><span class="pill win">Reason 1 — proven, ship now</span>
+      <p class="small" style="margin:8px 0 0"><b>Reconcile.</b> pt-forms has a real medical data-integrity bug today: correct an
+      earlier answer and now-hidden fields keep stale answers that print on the PDF. SOPilot fixes it (<b>61 → 0</b>, ~30 ms) as a
+      <b>thin add-on</b> — pt-forms keeps its engine.</p></div>
+    <div class="card"><span class="pill b">Reason 2 — candidate</span>
+      <p class="small" style="margin:8px 0 0"><b>Constraint-graph Studio.</b> Make the 269-field dependency graph <b>visible,
+      AI-editable, contradiction-checked, impact-analyzable</b> — cheaper &amp; safer to build/maintain, with an audit trail for
+      medical governance. Weigh vs their existing builder.</p></div>
+    <div class="card"><span class="pill a">What it does NOT add</span>
+      <p class="small" style="margin:8px 0 0">Navigation, answer-capture, context — all <b>parity</b>. SOPilot is <b>not</b> a
+      replacement for the working engine. <span class="small">(Separate business angle: one platform across PolarTie’s other robots.)</span></p></div>
+  </div>
+</section>
+
 <section id="what">
   <div class="kicker">The use case</div>
   <h2>What SmartForm is</h2>
