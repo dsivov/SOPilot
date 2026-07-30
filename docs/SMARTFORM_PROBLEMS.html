@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PolarTie SmartForm — the five problems, and three ways SOPilot could help</title>
+<title>PolarTie SmartForm × SOPilot — architecture & findings</title>
 <style>
 :root{
   --bg:#0f1117; --bg2:#161922; --panel:#1b1f2a; --panel2:#222736;
@@ -66,38 +66,29 @@ figure{margin:22px 0}figure .fig{background:var(--panel);border:1px solid var(--
 figcaption{color:var(--ink-faint);font-size:13.5px;margin-top:8px}figcaption b{color:var(--ink-soft)}
 hr.soft{border:none;border-top:1px solid var(--line-soft);margin:30px 0}
 .footer{max-width:var(--maxw);margin:0 auto;padding:30px 22px 70px;color:var(--ink-faint);font-size:13.5px;border-top:1px solid var(--line)}.footer a{color:var(--ink-soft)}
-.backtotop{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:9px 14px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}.backtotop.show{opacity:1;pointer-events:auto}
 b.hl{color:#8fd9c9}
 .filepath{font-family:var(--mono);font-size:12.5px;color:#8fd9c9;background:rgba(25,184,154,.08);border:1px solid rgba(25,184,154,.25);border-radius:6px;padding:1px 6px;white-space:nowrap}
-.pnum{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;font-family:var(--mono);font-weight:800;font-size:13px;flex:0 0 auto}
-.p1{background:rgba(91,141,239,.16);color:#9cc0ff}.p2{background:rgba(25,184,154,.16);color:#7fe3cf}
-.p3{background:rgba(240,167,60,.16);color:#ffce86}.p4{background:rgba(239,91,110,.16);color:#f6a2ad}.p5{background:rgba(169,116,240,.16);color:#cdb1f7}
-.phead{display:flex;gap:12px;align-items:center;margin:0 0 4px}.phead h3{margin:0}
-.lev{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:999px}
-.lev.high{background:rgba(62,207,142,.14);color:#7ee3b4}.lev.mid{background:rgba(240,167,60,.14);color:#ffce86}.lev.top{background:rgba(169,116,240,.16);color:#cdb1f7}
-.deck{display:flex;flex-direction:column;gap:6px;margin:8px 0 2px}
-.deck .row{display:flex;gap:8px;font-size:14px}.deck .k{flex:0 0 116px;color:var(--ink-faint);font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+.svgwrap{overflow-x:auto}
 </style>
 </head>
 <body>
 
 <header class="hero">
   <div class="hero-inner">
-    <div class="eyebrow">PolarTie SmartForm · problem analysis · basis for discussion</div>
-    <h1>Filling long forms by voice</h1>
+    <div class="eyebrow">PolarTie SmartForm × SOPilot · architecture &amp; findings · for review</div>
+    <h1>Filling long medical forms by voice</h1>
     <p class="lede">SmartForm is a PolarTie robot that helps a person complete long, conditional medical forms — like a
-      <b>271-field</b> workers‑comp questionnaire — by voice, in any language. This is a read of how it works today and
-      the <b>five problems</b> PolarTie needs solved, mapped to where SOPilot could help and the <b>three ways</b> we
-      could engage.</p>
-    <div class="byline">Source: <a href="https://github.com/PolarTie/pt-forms-management" target="_blank" rel="noopener">pt-forms-management</a>
-      (<span class="mono">mcp/forms_mcp_server.py</span>, <span class="mono">mcp/agent_prompt.md</span>, <span class="mono">FORM_FIELDS.md</span>) · a live example: the QME “Injured Worker Questionnaire”</div>
+      <b>269-field</b> workers’-comp questionnaire — by voice, in any language. This document describes the
+      <b>proposed architecture</b> for running it with SOPilot, and <b>what we measured</b>, so PolarTie can decide what to
+      adopt. It reflects the current, confirmed design — no historical detours.</p>
+    <div class="byline">pt-forms source: <a href="https://github.com/PolarTie/pt-forms-management" target="_blank" rel="noopener">pt-forms-management</a>
+      · SOPilot work on branch <span class="mono">feature/smartform-engine</span> · example form: the QME “Injured Worker Questionnaire”</div>
     <div class="hero-tags">
-      <span class="tag">1 · <b>navigation</b></span>
-      <span class="tag">2 · <b>answering</b></span>
-      <span class="tag">3 · <b>state / edits</b></span>
-      <span class="tag">4 · <b>dependencies</b></span>
-      <span class="tag">5 · <b>32k context</b></span>
-      <span class="tag">options: <b>A / B / C</b></span>
+      <span class="tag">proven: <b>edit-propagation fix</b></span>
+      <span class="tag">candidate: <b>constraint-graph Studio</b></span>
+      <span class="tag">deterministic gating</span>
+      <span class="tag">strong supervisor</span>
+      <span class="tag">repeaters</span>
     </div>
   </div>
 </header>
@@ -106,1293 +97,323 @@ b.hl{color:#8fd9c9}
 <nav class="toc" aria-label="Contents">
   <div class="tl-title">In this doc</div>
   <ol>
-    <li><a href="#valuemap"><b>★ Bottom line — SOPilot's value</b></a></li>
-    <li><a href="#what">What SmartForm is</a></li>
-    <li><a href="#arch">How it works today</a></li>
-    <li><a href="#insight">The one core insight</a></li>
-    <li><a href="#p1">Problem 1 — navigation</a></li>
-    <li><a href="#p2">Problem 2 — answering</a></li>
-    <li><a href="#p34">Problems 3 &amp; 4 — state &amp; sync</a></li>
-    <li><a href="#p5">Problem 5 — 32k context</a></li>
-    <li><a href="#leverage">Where SOPilot helps</a></li>
-    <li><a href="#options">Three ways to engage</a></li>
-    <li><a href="#solution">Proposed solution ★</a></li>
-    <li><a href="#integration">Reuse, new &amp; integration</a></li>
-    <li><a href="#implementation">How the SOP flow works</a></li>
-    <li><a href="#transitions">FAQ: the 3 transition mechanisms</a></li>
-    <li><a href="#navigation">FAQ: navigation — which mechanism</a></li>
-    <li><a href="#status">Built &amp; proven</a></li>
-    <li><a href="#measurement">Why deterministic gating</a></li>
-    <li><a href="#instage">In-stage LLM nav &amp; authoring cost</a></li>
-    <li><a href="#completion">Robot accuracy (end-to-end)</a></li>
-    <li><a href="#answercapture">Robot accuracy (answer-capture)</a></li>
-    <li><a href="#headtohead">Head-to-head: Original vs SOPilot</a></li>
-    <li><a href="#repeaters">Repeaters (repeating groups)</a></li>
-    <li><a href="#candidate">Candidate value: config-driven authoring</a></li>
-    <li><a href="#next">Status &amp; next steps</a></li>
+    <li><a href="#value"><b>★ What SOPilot adds</b></a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#pipeline">Offline: form → SOP</a></li>
+    <li><a href="#runtime">Runtime: one turn</a></li>
+    <li><a href="#reconcile">Edit-propagation (reconcile)</a></li>
+    <li><a href="#repeaters">Repeaters</a></li>
+    <li><a href="#integration">Integration with pt-forms</a></li>
+    <li><a href="#evidence">What we measured</a></li>
+    <li><a href="#studio">Constraint-graph Studio</a></li>
+    <li><a href="#next">What to adopt &amp; next steps</a></li>
   </ol>
 </nav>
 
 <main>
 <article>
 
-<!-- 1 -->
-<!-- valuemap -->
-<section id="valuemap">
-  <div class="kicker">Read this first — the bottom line</div>
-  <h2>SOPilot’s added value in SmartForm — the clean mapping</h2>
-  <p class="lead-p">After measuring every dimension, most of what pt-forms does is already strong, so SOPilot is an
-  <b>add-on, not a replacement</b>. There are exactly <b>two</b> reasons to adopt it for SmartForm.</p>
+<!-- 1 · VALUE -->
+<section id="value">
+  <div class="kicker">The bottom line</div>
+  <h2>What SOPilot adds to SmartForm</h2>
+  <p class="lead-p">pt-forms already does most of the job well. SOPilot is therefore an <b>add-on, not a replacement</b> — and
+  there are exactly <b>two</b> reasons to adopt it for SmartForm.</p>
 
-  <div class="tablewrap"><table>
-    <thead><tr><th>Capability</th><th>pt-forms today</th><th>With SOPilot</th><th>Verdict</th><th>Adopt?</th></tr></thead>
-    <tbody>
-      <tr><td>Next-field / skip logic</td><td>deterministic, works</td><td>deterministic (<span class="mono">constraints.py</span>)</td><td>parity</td><td>No</td></tr>
-      <tr><td>NL navigation (“go to my age”)</td><td>GPT-based, works</td><td>—</td><td>parity</td><td>No</td></tr>
-      <tr><td>Answer capture / coercion</td><td>weak model, works</td><td>strong supervisor</td><td>parity <span class="small">(measured)</span></td><td>No</td></tr>
-      <tr><td>Judgment: alerts · contradictions · derived values</td><td>not built</td><td>LLM supervisor does it</td><td>LLM needed (either side)</td><td>Maybe</td></tr>
-      <tr><td>32k context, long calls</td><td>server-authoritative</td><td>same</td><td>parity</td><td>No</td></tr>
-      <tr style="background:rgba(25,184,154,.10)"><td><b>Backward edit-propagation</b></td><td><b style="color:#e0574f">leaks stale answers (61)</b></td><td><b style="color:#19b89a">reconcile → 0</b></td><td><b>SOPilot wins — proven</b></td><td><b style="color:#19b89a">YES</b></td></tr>
-      <tr style="background:rgba(91,141,239,.08)"><td><b>Authoring/maintenance of the 269-rule graph</b></td><td><span class="mono">fields.json</span> + builder + code</td><td><b>constraint-graph Studio</b>: visual + AI-edit + contradiction-check + impact + reconcile</td><td><b>candidate</b> (product value)</td><td><b style="color:#5b8def">Maybe</b></td></tr>
-    </tbody>
-  </table></div>
-
-  <div class="grid g3" style="margin:16px 0">
-    <div class="card"><span class="pill win">Reason 1 — proven, ship now</span>
-      <p class="small" style="margin:8px 0 0"><b>Reconcile.</b> pt-forms has a real medical data-integrity bug today: correct an
-      earlier answer and now-hidden fields keep stale answers that print on the PDF. SOPilot fixes it (<b>61 → 0</b>, ~30 ms) as a
-      <b>thin add-on</b> — pt-forms keeps its engine.</p></div>
-    <div class="card"><span class="pill b">Reason 2 — candidate</span>
-      <p class="small" style="margin:8px 0 0"><b>Constraint-graph Studio.</b> Make the 269-field dependency graph <b>visible,
-      AI-editable, contradiction-checked, impact-analyzable</b> — cheaper &amp; safer to build/maintain, with an audit trail for
-      medical governance. Weigh vs their existing builder.</p></div>
-    <div class="card"><span class="pill a">What it does NOT add</span>
-      <p class="small" style="margin:8px 0 0">Navigation, answer-capture, context — all <b>parity</b>. SOPilot is <b>not</b> a
-      replacement for the working engine. <span class="small">(Separate business angle: one platform across PolarTie’s other robots.)</span></p></div>
-  </div>
-</section>
-
-<section id="what">
-  <div class="kicker">The use case</div>
-  <h2>What SmartForm is</h2>
-  <p class="lead-p">A person needs to fill a long medical form — a QME “Injured Worker Questionnaire” runs to
-  <b>271 fields</b> across ~30 sections. SmartForm does it as a <b>conversation</b>: the robot asks one question, the
-  person answers by voice (in any language), and the answer is translated, validated and written into the form on screen.</p>
-  <p>The form is not a flat list — it's a <b>dependency graph</b>. Whole branches appear or vanish based on earlier
-  answers:</p>
-  <div class="tablewrap"><table>
-    <thead><tr><th>If the person…</th><th>…then SmartForm</th></tr></thead>
-    <tbody>
-      <tr><td>says they have <b>no attorney</b></td><td>skips “attorney's name”</td></tr>
-      <tr><td>says they were <b>not admitted</b> to hospital</td><td>skips “how long admitted / what was wrong”</td></tr>
-      <tr><td>is <b>4 years old</b></td><td>never asks “how many children”</td></tr>
-      <tr><td>wants to <b>add another</b> doctor / lifted object / symptom</td><td>loops the whole sub‑section again (a “repeater”)</td></tr>
-      <tr><td>later <b>changes their mind</b> on an earlier answer</td><td>…must re-open the right branch — this is where it gets hard</td></tr>
-    </tbody>
-  </table></div>
-  <p>Add to that: relative dates (“the same day I got injured”), transliteration of names, an up-front security check,
-  section/info/signature cards, and doing all of it over a <b>voice model with a 32k context window</b>. Those pressures
-  are the five problems below.</p>
-</section>
-
-<!-- 2 -->
-<section id="arch">
-  <div class="kicker">The lay of the land</div>
-  <h2>How it works today</h2>
-  <p>The design is deliberate and, importantly, <b>the same shape SOPilot uses</b>: a <b>server-authoritative state
-  machine</b> exposes a <b>minimal, one-field-at-a-time</b> interface to a stateless voice agent. The agent's own prompt
-  says it plainly:</p>
-  <p class="pull">“You are a minimal forms agent. The MCP server handles navigation, validation, skip logic… Your job:
-  ask the question, collect the answer, and send it back.”</p>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 300" role="img" aria-label="SmartForm architecture and one turn">
-      <defs>
-        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
-        <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5b8def"/></marker>
-        <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#19b89a"/></marker>
-        <linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(169,116,240,.34)"/><stop offset="1" stop-color="rgba(169,116,240,.14)"/></linearGradient>
-        <linearGradient id="gm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(91,141,239,.34)"/><stop offset="1" stop-color="rgba(91,141,239,.14)"/></linearGradient>
-        <linearGradient id="gs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(25,184,154,.32)"/><stop offset="1" stop-color="rgba(25,184,154,.13)"/></linearGradient>
-      </defs>
-      <style>
-        .bx{rx:10;stroke-width:2}.t{fill:#fff;font:700 12.5px "Segoe UI",sans-serif;text-anchor:middle}
-        .s{fill:#e7ebf3;font:9.5px var(--mono),monospace;text-anchor:middle}
-        .lb{font:700 9.5px "Segoe UI",sans-serif;text-anchor:middle}
-      </style>
-      <rect class="bx" x="18" y="120" width="150" height="66" fill="url(#gv)" stroke="#a974f0"/>
-      <text class="t" x="93" y="146">🎙 Voice agent</text><text class="s" x="93" y="163">minimal · 1 field/turn</text><text class="s" x="93" y="176">(pt_ai_agent_mcp)</text>
-      <rect class="bx" x="300" y="120" width="170" height="66" fill="url(#gm)" stroke="#5b8def"/>
-      <text class="t" x="385" y="146">MCP forms server</text><text class="s" x="385" y="163">nav · skip-logic · state</text><text class="s" x="385" y="176">Python / FastMCP</text>
-      <rect class="bx" x="600" y="52" width="146" height="60" fill="url(#gs)" stroke="#19b89a"/>
-      <text class="t" x="673" y="76">Laravel API</text><text class="s" x="673" y="92">forms · submissions</text><text class="s" x="673" y="104">MySQL</text>
-      <rect class="bx" x="600" y="196" width="146" height="60" fill="#1b1f2a" stroke="#39425a"/>
-      <text class="t" x="673" y="220">Browser form</text><text class="s" x="673" y="236">Vue · live via SSE</text>
-      <!-- flows -->
-      <path d="M168,142 C230,132 250,138 300,146" fill="none" stroke="#a974f0" stroke-width="2.4" marker-end="url(#ar)"/><text class="lb" x="234" y="126" fill="#cdb1f7">forms_navigate / answer</text>
-      <path d="M300,164 C250,176 230,172 168,166" fill="none" stroke="#5b8def" stroke-width="2.4" marker-end="url(#ab)"/><text class="lb" x="234" y="192" fill="#9cc0ff">“Ask the user: …” (one field)</text>
-      <path d="M470,140 C540,120 560,100 600,90" fill="none" stroke="#19b89a" stroke-width="2.2" marker-end="url(#ag)"/><text class="lb" x="548" y="112" fill="#7fe3cf">get-fields / set-fields</text>
-      <path d="M470,168 C540,190 560,210 600,222" fill="none" stroke="#19b89a" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#ag)"/><text class="lb" x="548" y="210" fill="#7fe3cf">Redis → SSE (live)</text>
-    </svg>
-    <figcaption><b>Server owns the brain; the agent stays tiny.</b> Each tool call returns <b>exactly one field</b>; the
-      Laravel API is the store and pushes live updates to the on-screen form over SSE.</figcaption>
-  </div></figure>
-
-  <div class="callout info"><div class="clabel">◆ The dependency logic, concretely</div>
-    Each field can carry a <span class="mono">FieldCondition</span> — a sandboxed boolean expression like
-    <span class="mono">isYes({surgery})</span> or <span class="mono">values[{age}] &gt;= 18</span> — evaluated
-    server-side (<span class="filepath">forms_mcp_server.py:474</span>). A field whose condition is false is
-    <b>skipped and stored as “not applicable”</b>, and the agent is simply never handed it. (There's also a second, fuzzy
-    natural-language <span class="mono">IF/THEN</span> rule layer — two skip engines to keep in mind.)
-  </div>
-</section>
-
-<!-- 3 -->
-<section id="insight">
-  <div class="kicker">Why the five problems exist</div>
-  <h2>The one core insight</h2>
-  <p class="lead-p">All five problems are consequences of a single fact:</p>
-  <p class="pull">A form is a <b>stateful dependency graph</b> that is far too big for a <b>32k voice model</b> to hold —
-  so the state must live in an engine, and the agent must stay small.</p>
-  <p>PolarTie already made the right structural move (server-authoritative state + minimal agent). That disposes of the
-  naïve version of each problem. What remains is the <b>hard residual</b> in each — and that residual is exactly where a
-  formal constraint-graph + supervisor (what SOPilot is) has something to add.</p>
-</section>
-
-<hr class="soft">
-
-<!-- P1 -->
-<section id="p1">
-  <div class="phead"><span class="pnum p1">1</span><h3>Navigation</h3><span class="lev high">SOPilot leverage: high</span><span class="pill a" style="margin-left:auto">solve first</span></div>
-  <p class="small" style="margin-top:0">Move to any field by meaning or position, in any language — “fix my age”, “back to my address”, “two back”, “next unanswered”, “question 5”.</p>
-  <div class="deck">
-    <div class="row"><div class="k">Today</div><div><span class="mono">forms_navigate(request, current_field_id)</span> → the server <b>matches on question text</b> (<span class="filepath">_resolve_field_id_by_question :342</span>) and steps over skipped fields.</div></div>
-    <div class="row"><div class="k">Hard residual</div><div>paraphrase / <b>multilingual</b> matching; “where I said <i>Ryanair</i>” (match by <b>answer content</b>); <b>near-duplicate</b> ambiguity (~20× “hours per day you X”; “doctor's name” in 3 sections + a repeater); <b>repeater-instance</b> jumps (“the 2nd object's weight”); relative moves over a <b>sparse/looping</b> graph + <b>display-number vs internal-id</b> confusion; ~1s latency + voice-friendly one-question disambiguation.</div></div>
-    <div class="row"><div class="k">SOPilot fit</div><div>a <b>built analog</b>: the intake/switch <b>router</b> (semantic intent→graph node, multilingual, ASR-robust, per-turn) is a better resolver; a <b>semantic field index</b> (question + alt-name + current value, confidence-scored) improves precision + disambiguation.</div></div>
-    <div class="row" style="background:rgba(240,167,60,.08);border-radius:8px"><div class="k">Verdict ≈</div><div><b>Parity — premise was wrong.</b> On reading the code, <span class="mono">forms_navigate</span> already resolves jumps with <b>GPT</b> (<span class="mono">_gpt_pick_field</span>, any language, ambiguity handling) — <b>not</b> text-matching. Our semantic router isn’t part of the agreed SOP design and <b>underperformed</b> pt-forms’ GPT navigator in a quick test. <b>No SOP added value here; pt-forms handles navigation well.</b></div></div>
-  </div>
-</section>
-
-<!-- P2 -->
-<section id="p2">
-  <div class="phead"><span class="pnum p2">2</span><h3>Question answering</h3><span class="lev mid">SOPilot leverage: moderate</span></div>
-  <p class="small" style="margin-top:0">Turn messy voice/ASR input into the field's validated value.</p>
-  <div class="deck">
-    <div class="row"><div class="k">Today</div><div>the LLM agent does it, guided per-field by an <span class="mono">Answer format:</span> line + prompt rules — date normalisation (incl. relative &amp; “same day as the injury”), transliteration, option-matching, <span class="mono">unknown</span>/<span class="mono">not applicable</span>; the server re-asks on validation error; <span class="mono">#alert</span> for alert conditions.</div></div>
-    <div class="row"><div class="k">Hard residual</div><div>robustness under ASR noise; cross-field derivations; <b>alert recognition</b> is fragile in a “minimal” agent; long free-text read-back/confirm.</div></div>
-    <div class="row"><div class="k">SOPilot fit</div><div>per-turn steering could inject stronger per-field validation + <b>precedent</b> (“how prior callers answered this field”); advisory mode fits the voice latency budget.</div></div>
-    <div class="row" style="background:rgba(240,167,60,.08);border-radius:8px"><div class="k">Verdict ≈</div><div><b>Parity — measured.</b> We built the strong-supervisor <span class="mono">/formflow/interpret</span> step and A/B’d it vs the weak model + pt-forms’ rule-based normalizer over 31 realistic + hard cases (slang, unit conversion, multilingual, relative dates): <b>both 100%</b>. gpt-4o-mini is already good enough; the strong model matches but <b>doesn’t beat</b> it. <b>Not a differentiator.</b></div></div>
-  </div>
-</section>
-
-<!-- P3/4 -->
-<section id="p34">
-  <div class="phead"><span class="pnum p4">3·4</span><h3>State &amp; sync — remember, edit, propagate</h3><span class="lev top">SOPilot leverage: highest</span></div>
-  <p class="small" style="margin-top:0">Remembering answers, letting the person <b>change their mind</b>, and keeping the dependency graph consistent. These two are really <b>one</b> problem.</p>
-  <p>Forward skip-logic (“don't ask children if age = 4”) the server already does. The genuinely hard part is <b>backward
-  propagation when an earlier answer changes</b>:</p>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 230" role="img" aria-label="Edit propagation on a changed answer">
-      <defs>
-        <marker id="e1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#f0a73c"/></marker>
-        <marker id="e2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ef5b6e"/></marker>
-        <marker id="e3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#3ecf8e"/></marker>
-      </defs>
-      <style>.n{rx:9;stroke-width:2}.nt{fill:#fff;font:700 11.5px "Segoe UI",sans-serif;text-anchor:middle}.ns{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}.el{font:700 9.5px "Segoe UI",sans-serif;text-anchor:middle}</style>
-      <rect class="n" x="20" y="92" width="176" height="52" fill="rgba(240,167,60,.18)" stroke="#f0a73c"/>
-      <text class="nt" x="108" y="113">✎ answer changes</text><text class="ns" x="108" y="130">attorney: Yes → No</text>
-      <rect class="n" x="256" y="92" width="176" height="52" fill="rgba(91,141,239,.18)" stroke="#5b8def"/>
-      <text class="nt" x="344" y="113">re-evaluate graph</text><text class="ns" x="344" y="130">which fields are visible now?</text>
-      <rect class="n" x="500" y="20" width="240" height="46" fill="rgba(239,91,110,.16)" stroke="#ef5b6e"/>
-      <text class="nt" x="620" y="39" fill="#f6c0c7">invalidate now-moot answers</text><text class="ns" x="620" y="55">“attorney's name” → not applicable</text>
-      <rect class="n" x="500" y="92" width="240" height="46" fill="rgba(62,207,142,.14)" stroke="#3ecf8e"/>
-      <text class="nt" x="620" y="111" fill="#a8f0cf">re-surface newly-required</text><text class="ns" x="620" y="127">a branch that was skipped is now asked</text>
-      <rect class="n" x="500" y="164" width="240" height="46" fill="#1b1f2a" stroke="#39425a"/>
-      <text class="nt" x="620" y="183">detect contradictions</text><text class="ns" x="620" y="199">alert / conflict across answers</text>
-      <line x1="196" y1="118" x2="255" y2="118" stroke="#f0a73c" stroke-width="2.4" marker-end="url(#e1)"/>
-      <path d="M432,110 C466,96 470,60 500,46" fill="none" stroke="#ef5b6e" stroke-width="2.2" marker-end="url(#e2)"/>
-      <line x1="432" y1="118" x2="499" y2="115" stroke="#3ecf8e" stroke-width="2.2" marker-end="url(#e3)"/>
-      <path d="M432,126 C466,140 470,176 500,187" fill="none" stroke="#8a93a8" stroke-width="2" marker-end="url(#e1)"/>
-    </svg>
-    <figcaption><b>The crux.</b> A single late edit can invalidate collected answers, re-open skipped branches, and create
-      contradictions. Doing this <b>principledly</b> — not ad-hoc — is exactly what a formal constraint graph is for.</figcaption>
-  </div></figure>
-  <div class="deck">
-    <div class="row"><div class="k">Today</div><div>the server stores answers (<span class="mono">submissions.data</span>), resumes from a saved-answers block, and supports a requested-changes revision walk. Skip-logic appears to run <b>forward</b>.</div></div>
-    <div class="row"><div class="k">Open question</div><div>does the server already do <b>backward</b> edit-propagation (invalidate + re-surface), or only forward? This decides how big #3/#4 really is.</div></div>
-    <div class="row"><div class="k">SOPilot fit</div><div><b>this is SOPilot.</b> The constraint-graph engine (requires / conflicts / enum, evaluated over state) does forward + backward + conflicts, <b>plus authoring &amp; verification tooling</b> for the dependency graph — a real pain for 271-field forms with two overlapping skip engines.</div></div>
-    <div class="row" style="background:rgba(25,184,154,.12);border-radius:8px"><div class="k" style="color:#7ee0cd">Verdict ✓</div><div><b>SOLVED — the one proven win.</b> Confirmed in code that pt-forms does <b>not</b> propagate backward (a now-hidden field keeps its stale answer, which prints on the PDF). We built <span class="mono">/formflow/reconcile</span> (constraints.py recomputes visibility and voids answered-but-hidden fields to a fixpoint, so cascades resolve). Head-to-head on the real form: <b>Original leaked 61 stale answers → SOPilot 0</b>, at ~30 ms. <span class="small">(Not exclusive tech — pt-forms could add the same reconcile — but the gap is real, sized, and closed.)</span></div></div>
-  </div>
-</section>
-
-<!-- P5 -->
-<section id="p5">
-  <div class="phead"><span class="pnum p5">5</span><h3>Realtime voice context — the 32k wall</h3><span class="lev high">SOPilot leverage: high</span></div>
-  <p class="small" style="margin-top:0">The voice model has a ~32k token window. A 271-field form and a 30–60 minute call don't fit.</p>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 190" role="img" aria-label="The 32k context problem: solved half and open half">
-      <style>.bb{rx:9;stroke-width:2}.bt{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}.bs{fill:#e7ebf3;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}</style>
-      <rect class="bb" x="20" y="30" width="350" height="130" fill="rgba(62,207,142,.10)" stroke="rgba(62,207,142,.5)"/>
-      <text class="bt" x="195" y="52" fill="#a8f0cf">(a) form too big for the prompt</text>
-      <text class="bs" x="195" y="74">✔ already solved</text>
-      <text class="bs" x="195" y="94">one field at a time · server holds all 271</text>
-      <text class="bs" x="195" y="112">the agent never sees the whole form</text>
-      <rect class="bb" x="90" y="126" width="210" height="22" fill="rgba(62,207,142,.14)" stroke="rgba(62,207,142,.5)"/>
-      <text class="bs" x="195" y="141" fill="#a8f0cf">context stays tiny &amp; flat ▁▁▁▁▁</text>
-      <rect class="bb" x="390" y="30" width="350" height="130" fill="rgba(239,91,110,.09)" stroke="rgba(239,91,110,.5)"/>
-      <text class="bt" x="565" y="52" fill="#f6c0c7">(b) long call's transcript grows</text>
-      <text class="bs" x="565" y="74">✖ still open</text>
-      <text class="bs" x="565" y="94">turns accumulate over a 30–60 min call</text>
-      <text class="bs" x="565" y="112">until the window blows — even 1 field/turn</text>
-      <path d="M410,146 L430,140 L450,144 L470,134 L490,138 L510,126 L530,132 L550,118 L570,124 L590,108 L610,116 L630,98 L650,104 L670,86 L690,92 L710,72" fill="none" stroke="#ef5b6e" stroke-width="2"/>
-    </svg>
-    <figcaption><b>Two halves.</b> The “form too big” half is already handled by one-field-at-a-time; the open half is a
-      long call's <b>growing transcript</b>.</figcaption>
-  </div></figure>
-  <div class="deck">
-    <div class="row"><div class="k">The fix</div><div>because the <b>server is the source of truth</b>, the voice model's history is <b>disposable</b>: aggressive sliding-window / compaction, periodic session re-init that reloads only <span class="mono">guidelines + current field + a compact answers-so-far summary</span>, and a lean, stable system prompt.</div></div>
-    <div class="row"><div class="k">SOPilot fit</div><div>SOPilot's whole thesis — <b>hold state in the engine, keep the responder context minimal, assemble only what this turn needs</b> — is precisely this mitigation; it could own the per-turn context block + the answers-so-far summary + compaction triggers.</div></div>
-    <div class="row" style="background:rgba(240,167,60,.08);border-radius:8px"><div class="k">Verdict ≈</div><div><b>Parity — and 32k didn’t even bind.</b> For this form the whole-form catalog is only <b>~4.7k tokens</b>, so a 32k window never overflows; the naive model’s errors were <b>reasoning</b>, not context. And <b>both</b> systems are already support-authoritative — the weak model only relays and sees one field/instruction — so context stays tiny in each. (a) is solved in both; (b) long-call transcript growth is real but the <b>server-authoritative design (pt-forms and SOP alike)</b> makes history disposable. <b>Not a SOP differentiator.</b></div></div>
-  </div>
-</section>
-
-<hr class="soft">
-
-<!-- leverage -->
-<section id="leverage">
-  <div class="kicker">At a glance</div>
-  <h2>Where SOPilot helps most</h2>
-  <div class="tablewrap"><table>
-    <thead><tr><th>#</th><th>Problem</th><th>Handled today</th><th>Leverage <span class="small">(initial guess)</span></th><th>Measured verdict</th></tr></thead>
-    <tbody>
-      <tr><td><span class="pnum p1" style="width:20px;height:20px;font-size:11px">1</span></td><td>Navigation</td><td>server <b>GPT</b> resolver + skip-stepping</td><td><span class="lev high">high</span> router + field index</td><td><b style="color:#f0a73c">≈ parity</b> — pt-forms already GPT-based; premise was wrong</td></tr>
-      <tr><td><span class="pnum p2" style="width:20px;height:20px;font-size:11px">2</span></td><td>Answer quality</td><td>LLM agent + <span class="mono">Answer format:</span></td><td><span class="lev mid">moderate</span> steering + precedent</td><td><b style="color:#f0a73c">≈ parity</b> — both 100% (measured)</td></tr>
-      <tr><td><span class="pnum p4" style="width:20px;height:20px;font-size:11px">3·4</span></td><td>State + dependencies</td><td>forward skip only</td><td><span class="lev top">highest</span> this is SOPilot</td><td><b style="color:#19b89a">✓ SOLVED</b> — reconcile: 61 leaks → 0</td></tr>
-      <tr><td><span class="pnum p5" style="width:20px;height:20px;font-size:11px">5</span></td><td>32k context</td><td>one field at a time (a)</td><td><span class="lev high">high</span> minimal-context thesis</td><td><b style="color:#f0a73c">≈ parity</b> — both minimal-context; 32k never bound</td></tr>
-    </tbody>
-  </table></div>
-  <p class="small"><b>The honest reckoning (initial guess → measured):</b> the leverage we expected on <b>1</b> and <b>5</b> didn’t
-  materialize — pt-forms was already stronger than assumed (GPT navigation; server-authoritative minimal context). <b>2</b> is
-  parity (the weak model is good enough). <b>Only 3·4 (backward edit-propagation) turned into a proven, measured win</b> — which
-  is exactly where we called the leverage “highest.” Everything else is parity or an authoring/governance judgement, not accuracy.</p>
-</section>
-
-<!-- options -->
-<section id="options">
-  <div class="kicker">The engagement decision</div>
-  <h2>Three ways SOPilot could plug in</h2>
-  <p>Orthogonal to <i>which problem we fix first</i>, this decides <b>who runs the code</b>.</p>
-
-  <div class="callout ok"><div class="clabel">◆ Resolved — C (hybrid), and measurement narrowed the scope</div>
-    We chose <b>C · hybrid</b>: pt-forms keeps the working flow; SOPilot inserts only where it measurably helps. Then the
-    measurements narrowed that sharply — the per-problem map below was the <i>initial</i> plan. The <b>proven</b> insertion point
-    is <b>#3·4 (edit-propagation → the <span class="mono">reconcile</span> step)</b>. <b>#1, #2 and #5 came out parity</b>
-    (pt-forms was already strong), so there is <b>nothing to insert</b> there. Config-driven authoring/governance is a separate
-    <b>candidate</b> value. So read the table below as “what we considered,” and the <a href="#leverage">reckoning</a> +
-    <a href="#headtohead">head-to-head</a> as “what actually landed.”</div>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 250" role="img" aria-label="Three engagement options: where SOPilot sits">
-      <style>
-        .ob{rx:9;stroke-width:2}.ot{fill:#fff;font:700 11.5px "Segoe UI",sans-serif;text-anchor:middle}
-        .os{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}.oh{font:800 11px "Segoe UI",sans-serif;text-anchor:middle}
-        .ln{stroke:#8a93a8;stroke-width:1.8;fill:none}
-      </style>
-      <!-- Option A -->
-      <text class="oh" x="128" y="24" fill="#cdb1f7">A · SOPilot owns it</text>
-      <rect class="ob" x="30" y="36" width="196" height="30" fill="rgba(169,116,240,.10)" stroke="#39425a"/><text class="os" x="128" y="55" style="font-size:10px;fill:#aab3c5">voice agent</text>
-      <rect class="ob" x="30" y="76" width="196" height="52" fill="rgba(169,116,240,.30)" stroke="#a974f0"/><text class="ot" x="128" y="97">SOPilot engine</text><text class="os" x="128" y="113">nav · graph · state · context</text>
-      <rect class="ob" x="30" y="138" width="196" height="30" fill="rgba(25,184,154,.14)" stroke="#39425a"/><text class="os" x="128" y="157" style="font-size:10px;fill:#aab3c5">pt-forms: store · PDF · SSE</text>
-      <line class="ln" x1="128" y1="66" x2="128" y2="76"/><line class="ln" x1="128" y1="128" x2="128" y2="138"/>
-      <!-- Option B -->
-      <text class="oh" x="380" y="24" fill="#7fe3cf">B · advisory</text>
-      <rect class="ob" x="282" y="36" width="196" height="30" fill="rgba(25,184,154,.10)" stroke="#39425a"/><text class="os" x="380" y="55" style="font-size:10px;fill:#aab3c5">voice agent</text>
-      <rect class="ob" x="282" y="76" width="196" height="52" fill="rgba(25,184,154,.22)" stroke="#19b89a"/><text class="ot" x="380" y="97">pt-forms server</text><text class="os" x="380" y="113">they build our ideas in</text>
-      <rect class="ob" x="282" y="138" width="196" height="30" fill="#1b1f2a" stroke="#39425a"/><text class="os" x="380" y="157" style="font-size:10px;fill:#aab3c5">store · PDF · SSE</text>
-      <line class="ln" x1="380" y1="66" x2="380" y2="76"/><line class="ln" x1="380" y1="128" x2="380" y2="138"/>
-      <rect class="ob" x="300" y="188" width="160" height="30" fill="rgba(91,141,239,.10)" stroke="#5b8def" stroke-dasharray="5 3"/><text class="os" x="380" y="207" style="fill:#9cc0ff">SOPilot: design only</text>
-      <path class="ln" d="M380,188 L380,168" stroke="#5b8def" stroke-dasharray="5 3"/>
-      <!-- Option C -->
-      <text class="oh" x="632" y="24" fill="#9cc0ff">C · hybrid ★</text>
-      <rect class="ob" x="534" y="36" width="196" height="30" fill="rgba(91,141,239,.10)" stroke="#39425a"/><text class="os" x="632" y="55" style="font-size:10px;fill:#aab3c5">voice agent</text>
-      <rect class="ob" x="534" y="76" width="94" height="52" fill="rgba(91,141,239,.28)" stroke="#5b8def"/><text class="ot" x="581" y="95" style="font-size:10.5px">SOPilot</text><text class="os" x="581" y="111" style="font-size:8px">router · graph</text>
-      <rect class="ob" x="636" y="76" width="94" height="52" fill="rgba(25,184,154,.22)" stroke="#19b89a"/><text class="ot" x="683" y="95" style="font-size:10.5px">pt-forms</text><text class="os" x="683" y="111" style="font-size:8px">store · PDF</text>
-      <rect class="ob" x="534" y="138" width="196" height="30" fill="#1b1f2a" stroke="#39425a"/><text class="os" x="632" y="157" style="font-size:10px;fill:#aab3c5">shared answer store</text>
-      <line class="ln" x1="632" y1="66" x2="632" y2="76"/><line class="ln" x1="581" y1="128" x2="620" y2="138"/><line class="ln" x1="683" y1="128" x2="644" y2="138"/>
-      <line class="ln" x1="628" y1="102" x2="636" y2="102" stroke="#8a93a8"/>
-    </svg>
-    <figcaption><b>Where the brain lives.</b> A = SOPilot is the engine · B = we hand over designs, PolarTie builds them ·
-      C = SOPilot plugs in where it's strongest, pt-forms keeps what already works.</figcaption>
-  </div></figure>
-
-  <div class="grid g3" style="margin:16px 0">
-    <div class="card"><span class="pill ctrl">A · SOPilot owns it</span>
-      <p class="small" style="margin:8px 0 6px;color:var(--ink)">SOPilot is the brain behind the robot.</p>
-      <p class="small" style="margin:0"><b>+</b> cleanest fit for 1/3/4/5; one engine; PolarTie gains a reusable platform.<br><b>–</b> biggest lift; must port the whole form model &amp; interop with a large working system; PolarTie cedes the core loop.</p></div>
-    <div class="card"><span class="pill b">B · advisory</span>
-      <p class="small" style="margin:8px 0 6px;color:var(--ink)">We give the designs; they build them in pt-forms.</p>
-      <p class="small" style="margin:0"><b>+</b> lowest lift/risk; PolarTie keeps full control; fast for self-contained fixes.<br><b>–</b> no SOPilot footprint; ideas may land partially; harder to reuse across their robots.</p></div>
-    <div class="card"><span class="pill a">C · hybrid ★</span>
-      <p class="small" style="margin:8px 0 6px;color:var(--ink)">SOPilot where it's strongest; pt-forms keeps the rest.</p>
-      <p class="small" style="margin:0"><b>+</b> best value/risk; keep the working 80%, insert SOPilot for #1/#3/#4/#5; incremental, testable.<br><b>–</b> two systems to integrate — needs crisp contracts &amp; one source of truth for answers.</p></div>
+  <div class="grid g2" style="margin:16px 0">
+    <div class="card"><span class="pill win">Reason 1 — proven, ship-now</span>
+      <p style="margin:10px 0 0"><b>Edit-propagation fix (“reconcile”).</b> Today, when a patient <b>corrects an earlier answer</b>,
+      any field that becomes hidden keeps its now-invalid answer — and it prints on the PDF. SOPilot’s constraint engine
+      recomputes visibility and voids those stale answers. On the real form this closed <b style="color:var(--ok)">61 stale
+      answers → 0</b>, in ~30&nbsp;ms, as a thin add-on that leaves pt-forms’ engine intact.</p></div>
+    <div class="card"><span class="pill a">Reason 2 — candidate, evaluate</span>
+      <p style="margin:10px 0 0"><b>Constraint-graph Studio.</b> Authoring &amp; maintaining a 269-field dependency graph is hard
+      and risky. SOPilot makes it <b>visible, AI-editable, contradiction-checked, and traceable</b> — cheaper and safer to
+      build and maintain, with an audit trail for medical governance. Built and in the SOPilot UI; weigh it against pt-forms’
+      existing builder.</p></div>
   </div>
 
   <div class="tablewrap"><table>
-    <thead><tr><th>Problem</th><th>A — SOPilot all</th><th>B — advisory</th><th>C — hybrid</th></tr></thead>
+    <thead><tr><th>Capability</th><th>pt-forms today</th><th>With SOPilot</th><th>Verdict</th></tr></thead>
     <tbody>
-      <tr><td>1 Navigation</td><td>SOPilot router is the resolver</td><td>give them the field-index design</td><td><b>router beside <span class="mono">forms_navigate</span></b></td></tr>
-      <tr><td>2 Answer quality</td><td>SOPilot steers every turn</td><td>validation guidance</td><td>optional per-field steering</td></tr>
-      <tr><td>3·4 State + deps</td><td>SOPilot graph owns state</td><td>the recompute algorithm</td><td><b>graph called on edits</b></td></tr>
-      <tr><td>5 32k context</td><td>SOPilot assembles all context</td><td>the compaction scheme</td><td>SOPilot owns the context block</td></tr>
+      <tr><td>Next-field / skip logic</td><td>deterministic, works</td><td>deterministic (<span class="mono">constraints.py</span>)</td><td>parity</td></tr>
+      <tr><td>NL navigation (“go to my age”)</td><td>GPT-based, works</td><td>—</td><td>parity</td></tr>
+      <tr><td>Answer capture / coercion</td><td>works</td><td>strong supervisor</td><td>parity (measured)</td></tr>
+      <tr><td>Long-call context (32k)</td><td>server-authoritative</td><td>same</td><td>parity</td></tr>
+      <tr style="background:rgba(62,207,142,.08)"><td><b>Backward edit-propagation</b></td><td><b style="color:var(--danger)">leaks stale answers</b></td><td><b style="color:var(--ok)">reconcile → 0</b></td><td><b>SOPilot — proven</b></td></tr>
+      <tr style="background:rgba(91,141,239,.06)"><td><b>Authoring &amp; maintenance of the rule graph</b></td><td>files + builder + code</td><td><b>constraint-graph Studio</b></td><td><b>SOPilot — candidate</b></td></tr>
     </tbody>
   </table></div>
+  <p class="small">Navigation, answer-capture, and context handling are <b>parity</b> — pt-forms already does them well, so
+  SOPilot doesn’t replace the working engine. (Separately, SOPilot is one reusable platform across PolarTie’s other robots —
+  a business argument, not a SmartForm-technical one.)</p>
 </section>
 
-<!-- solution -->
-<section id="solution">
-  <div class="kicker">The direction we chose ★</div>
-  <h2>Proposed solution — a strong supervisor + grouped playbooks</h2>
-  <p class="lead-p">The reframe: the five problems share one cause — <b>the realtime voice model is weak and has a 32k
-  window.</b> So stop engineering around it: <b>move the thinking to a strong text model</b> and hand the realtime model only
-  compact, prepared instructions. That is exactly SOPilot's core pattern — a strong supervisor steering a weak responder per turn.</p>
+<!-- 2 · ARCHITECTURE -->
+<section id="architecture">
+  <div class="kicker">How it works</div>
+  <h2>Architecture — one principle, four roles</h2>
+  <p class="lead-p">A form is a <b>deterministic, value-gated state machine</b>: fields plus show-if conditions
+  (<span class="mono">isYes({Q26})</span>, <span class="mono">values[{age}] &gt;= 18</span>). The design follows one rule:</p>
+  <p class="pull">Keep the <b>decision</b> (which question is next) deterministic. Use the language model only for
+  <b>language and judgment</b> — never to decide navigation.</p>
 
-  <div class="callout caveat"><div class="clabel">◆ Built &amp; measured since — an honest update</div>
-    We built this and A/B’d it. The architecture is sound and shipped, but it did <b>not</b> turn all five problems into SOP wins.
-    On <b>navigation, answer-capture and context</b> pt-forms was already strong, and the measured result is <b>parity</b>. The
-    reframe’s genuine, <b>proven</b> payoff is <b>backward edit-propagation</b> — the <span class="mono">reconcile</span> step
-    (61 leaked answers → 0). See <a href="#measurement">measurement</a>, <a href="#headtohead">head-to-head</a>, and the
-    <a href="#leverage">reckoning</a> for the numbers. The sections below describe the architecture as built.</div>
-
-  <div class="callout key"><div class="clabel">◆ The enabler PolarTie already has</div>
-    In the real app the user clicks <b>Next / Prev</b> to advance — so the realtime model's latency is <b>not</b> on the
-    critical path. That click is a generous window in which a strong supervisor can read the whole situation and return a
-    prepared instruction. It's the SOPilot supervisor window, handed to us for free.</p>
-  </div>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 250" role="img" aria-label="Root-cause reframe: weak realtime model vs strong supervisor">
-      <defs>
-        <marker id="sa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5b8def"/></marker>
-        <marker id="sg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#3ecf8e"/></marker>
-      </defs>
-      <style>
-        .bx{rx:9;stroke-width:2}.t{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}
-        .s{fill:#e7ebf3;font:9.5px var(--mono),monospace;text-anchor:middle}
-        .h{font:800 11px "Segoe UI",sans-serif;text-anchor:middle}
-      </style>
-      <!-- BEFORE -->
-      <text class="h" x="196" y="22" fill="#f6a2ad">TODAY — everything on the weak model</text>
-      <rect class="bx" x="40" y="34" width="312" height="40" fill="rgba(239,91,110,.10)" stroke="rgba(239,91,110,.5)"/>
-      <text class="s" x="196" y="52" style="fill:#f6c0c7">281 fields + rules + all answers</text><text class="s" x="196" y="66" style="fill:#f6c0c7">…crammed into a 32k voice model</text>
-      <rect class="bx" x="96" y="92" width="200" height="40" fill="rgba(239,91,110,.18)" stroke="#ef5b6e"/>
-      <text class="t" x="196" y="112">🎙 realtime model</text><text class="s" x="196" y="126">overflows · loses state · mis-navigates</text>
-      <text class="s" x="196" y="150" style="fill:#f6a2ad;font-size:11px">✖ nav · state · sync · context all break</text>
-      <!-- AFTER -->
-      <text class="h" x="576" y="22" fill="#7ee3b4">PROPOSED — strong model holds it</text>
-      <rect class="bx" x="420" y="34" width="300" height="40" fill="rgba(62,207,142,.10)" stroke="rgba(62,207,142,.5)"/>
-      <text class="t" x="570" y="52" style="font-size:11px">🧠 strong supervisor (big context)</text><text class="s" x="570" y="66">holds form + rules + state</text>
-      <rect class="bx" x="440" y="150" width="260" height="40" fill="rgba(91,141,239,.18)" stroke="#5b8def"/>
-      <text class="t" x="570" y="170">🎙 realtime model</text><text class="s" x="570" y="184">just speaks the prepared line</text>
-      <line x1="570" y1="74" x2="570" y2="149" stroke="#3ecf8e" stroke-width="2.4" marker-end="url(#sg)"/>
-      <text class="s" x="640" y="116" style="fill:#a8f0cf">compact instruction</text>
+  <figure><div class="fig svgwrap">
+    <svg viewBox="0 0 760 250" role="img" aria-label="Roles and ownership">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.bx{rx:10;stroke-width:1.7}.t{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}.s{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}.h{font:800 11px "Segoe UI",sans-serif;text-anchor:middle}</style>
+      <text class="h" x="150" y="20" fill="#ffce86">pt-forms — source of truth</text>
+      <rect class="bx" x="20" y="30" width="260" height="86" fill="rgba(240,167,60,.10)" stroke="#f0a73c"/>
+      <text class="s" x="150" y="52">form definitions (fields.json)</text>
+      <text class="s" x="150" y="70">answers (submissions.data)</text>
+      <text class="s" x="150" y="88">browser UI · voice agent</text>
+      <text class="s" x="150" y="106">get-fields / set-fields</text>
+      <text class="h" x="560" y="20" fill="#9cc0ff">SOPilot — structure · engine · supervisor</text>
+      <rect class="bx" x="320" y="30" width="200" height="86" fill="rgba(91,141,239,.12)" stroke="#5b8def"/>
+      <text class="t" x="420" y="52">SOP (structure)</text><text class="s" x="420" y="70">stages · playbooks</text><text class="s" x="420" y="88">+ map index</text><text class="s" x="420" y="106">(reused SOPilot model)</text>
+      <rect class="bx" x="536" y="30" width="204" height="40" fill="rgba(25,184,154,.14)" stroke="#19b89a"/>
+      <text class="t" x="638" y="49">constraints.py</text><text class="s" x="638" y="63">the deterministic engine</text>
+      <rect class="bx" x="536" y="76" width="204" height="40" fill="rgba(169,116,240,.16)" stroke="#a974f0"/>
+      <text class="t" x="638" y="95">strong supervisor</text><text class="s" x="638" y="109">phrasing · judgment</text>
+      <!-- boundary -->
+      <line x1="280" y1="73" x2="319" y2="73" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#ar)"/>
+      <line x1="319" y1="86" x2="280" y2="86" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#ar)"/>
+      <text class="s" x="300" y="128" fill="#8a93a8">get/set-fields</text>
+      <!-- who-decides band -->
+      <rect class="bx" x="20" y="150" width="720" height="78" fill="#161922" stroke="#2c3346"/>
+      <text class="h" x="380" y="170" fill="#c9d3e6">who decides what</text>
+      <text class="s" x="180" y="192" fill="#7ee3b4">constraints.py → which field is next</text>
+      <text class="s" x="180" y="210" fill="#7ee3b4">(gating · deterministic · exact)</text>
+      <text class="s" x="420" y="192" fill="#cdb1f7">SOP → structure the engine reads</text>
+      <text class="s" x="420" y="210" fill="#cdb1f7">(not a navigator)</text>
+      <text class="s" x="620" y="192" fill="#9cc0ff">LLM → phrases the turn</text>
+      <text class="s" x="620" y="210" fill="#9cc0ff">+ judgment (alerts, coercion)</text>
     </svg>
-    <figcaption><b>The whole strategy in one picture.</b> Don't fit the form into the weak model — keep it in a strong
-      supervisor and hand the realtime model one prepared line at a time.</figcaption>
+    <figcaption><b>Ownership is clean.</b> pt-forms keeps the form, the answers, the UI and the voice agent. SOPilot adds
+      structure (SOP), the deterministic gating engine, and the strong supervisor. They meet only through
+      <span class="mono">get-fields</span> / <span class="mono">set-fields</span>.</figcaption>
   </div></figure>
 
-  <h3>How it's built — mostly reuse</h3>
-  <p>Four things SOPilot (or PolarTie) already has, plus one small pipeline:</p>
-  <div class="tablewrap"><table>
-    <thead><tr><th>Piece</th><th>Role</th><th>New?</th></tr></thead>
-    <tbody>
-      <tr><td><span class="pill ctrl">SOP</span></td><td><b>Structure &amp; storage</b> — each dependency group = a stage; its <b>playbook</b> (questions + transition rules) = the stage's prompt block. Versioned, visible in the Studio. Driven <b>deterministically</b> (current field → its group), <b>not</b> the SOP classifier.</td><td>reuse</td></tr>
-      <tr><td><span class="pill b">Supervisor</span></td><td><b>Reasoning</b> — the strong model, per Next/Prev turn, reads the stage playbook + the relevant answers and returns a compact instruction for the realtime model.</td><td>reuse</td></tr>
-      <tr><td><span class="pill a">constraints.py</span></td><td><b>Guaranteed gating</b> — deterministically enforces each field's <span class="mono">FieldCondition</span> so a field is never surfaced when its condition is false, whatever the model says (belt-and-suspenders).</td><td>reuse (built)</td></tr>
-      <tr><td><span class="pill c">pt-forms</span></td><td><b>Answers</b> — the source of truth (<span class="mono">submissions.data</span>) + the browser UI. The supervisor reads the answers; only the current group's + referenced deps are sent (context stays tight).</td><td>reuse</td></tr>
-      <tr><td><span class="pill win">grouping</span></td><td><b>The one new step</b> — offline, once: derive the groups from the dependency graph and emit the form SOP + draft playbooks.</td><td>new (offline)</td></tr>
-    </tbody>
-  </table></div>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 250" role="img" aria-label="The runtime turn loop">
-      <defs><marker id="rl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
-      <style>.b2{rx:9;stroke-width:2}.t2{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}.s2{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}.l2{font:700 9.5px "Segoe UI",sans-serif;text-anchor:middle;fill:#c9d3e6}</style>
-      <rect class="b2" x="30" y="100" width="150" height="56" fill="rgba(91,141,239,.22)" stroke="#5b8def"/>
-      <text class="t2" x="105" y="123">🎙 realtime</text><text class="s2" x="105" y="140">speak · capture answer</text>
-      <rect class="b2" x="300" y="96" width="180" height="64" fill="rgba(25,184,154,.22)" stroke="#19b89a"/>
-      <text class="t2" x="390" y="120">🧠 supervisor (strong)</text><text class="s2" x="390" y="136">reads playbook + answers</text><text class="s2" x="390" y="150">→ prepares next instruction</text>
-      <rect class="b2" x="560" y="34" width="170" height="46" fill="rgba(91,141,239,.12)" stroke="#5b8def"/>
-      <text class="t2" x="645" y="53" style="font-size:11px">constraints.py</text><text class="s2" x="645" y="69">enforce FieldCondition</text>
-      <rect class="b2" x="560" y="118" width="170" height="46" fill="rgba(240,167,60,.14)" stroke="#f0a73c"/>
-      <text class="t2" x="645" y="137" style="font-size:11px">pt-forms answers</text><text class="s2" x="645" y="153">source of truth</text>
-      <rect class="b2" x="300" y="196" width="180" height="34" fill="rgba(169,116,240,.14)" stroke="#a974f0"/>
-      <text class="s2" x="390" y="217" style="font-size:10px;fill:#e6d8ff">form SOP · current stage's playbook</text>
-      <!-- flows -->
-      <path d="M180,120 C230,110 250,116 300,122" fill="none" stroke="#8a93a8" stroke-width="2.2" marker-end="url(#rl)"/>
-      <text class="l2" x="240" y="104">Next ▶ (window)</text>
-      <path d="M300,148 C250,158 230,152 180,142" fill="none" stroke="#8a93a8" stroke-width="2.2" marker-end="url(#rl)"/>
-      <text class="l2" x="240" y="172">compact instruction</text>
-      <line x1="480" y1="118" x2="559" y2="70" stroke="#5b8def" stroke-width="2" marker-end="url(#rl)"/>
-      <line x1="480" y1="140" x2="559" y2="140" stroke="#f0a73c" stroke-width="2" marker-end="url(#rl)"/>
-      <line x1="390" y1="196" x2="390" y2="160" stroke="#a974f0" stroke-width="2" marker-end="url(#rl)"/>
-    </svg>
-    <figcaption><b>One turn.</b> User answers → clicks Next (the latency-tolerant window) → the strong supervisor reads the
-      current stage's playbook + the relevant answers, <span style="color:#9cc0ff">constraints.py</span> enforces the
-      skip-logic, and a compact instruction goes back for the realtime model to speak.</figcaption>
-  </div></figure>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 150" role="img" aria-label="Offline grouping pipeline">
-      <defs><marker id="pl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#a974f0"/></marker></defs>
-      <style>.b3{rx:10;stroke-width:2}.t3{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}.s3{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}</style>
-      <rect class="b3" x="14" y="46" width="150" height="58" fill="#1b1f2a" stroke="#39425a"/>
-      <text class="t3" x="89" y="70">fields.json</text><text class="s3" x="89" y="86">281 fields · 143 conds</text>
-      <rect class="b3" x="206" y="46" width="150" height="58" fill="rgba(91,141,239,.18)" stroke="#5b8def"/>
-      <text class="t3" x="281" y="70">dependency graph</text><text class="s3" x="281" y="86">who gates whom</text>
-      <rect class="b3" x="398" y="46" width="150" height="58" fill="rgba(25,184,154,.18)" stroke="#19b89a"/>
-      <text class="t3" x="473" y="70">cohesive groups</text><text class="s3" x="473" y="86">deps kept together</text>
-      <rect class="b3" x="590" y="46" width="156" height="58" fill="rgba(169,116,240,.22)" stroke="#a974f0"/>
-      <text class="t3" x="668" y="66">form SOP</text><text class="s3" x="668" y="82">stages = groups</text><text class="s3" x="668" y="95">+ draft playbooks</text>
-      <line x1="164" y1="75" x2="205" y2="75" stroke="#a974f0" stroke-width="2.4" marker-end="url(#pl)"/>
-      <line x1="356" y1="75" x2="397" y2="75" stroke="#a974f0" stroke-width="2.4" marker-end="url(#pl)"/>
-      <line x1="548" y1="75" x2="589" y2="75" stroke="#a974f0" stroke-width="2.4" marker-end="url(#pl)"/>
-      <text class="s3" x="380" y="128" style="fill:#7b8499">offline · once · admin refines the result</text>
-    </svg>
-    <figcaption><b>The one new step (offline).</b> Derive groups from the dependency graph and emit a form SOP whose stages
-      are the groups, each with a draft playbook — then an admin refines it.</figcaption>
-  </div></figure>
-
-  <h3>Locked decisions</h3>
-  <div class="deck">
-    <div class="row"><div class="k">Enforcement</div><div>The strong model <b>reasons</b> from the playbook; <span class="mono">constraints.py</span> <b>deterministically enforces</b> skip-logic. Belt-and-suspenders — safe for medical forms.</div></div>
-    <div class="row"><div class="k">State</div><div><b>Reuse pt-forms' answers</b> (source of truth); the supervisor is <b>sent</b> the relevant subset each turn. No new answer store; current stage derives from the current field.</div></div>
-    <div class="row"><div class="k">Grouping</div><div><b>Auto-derived from the dependency graph, offline, once</b> — stored as stages in a form SOP; admin refines.</div></div>
-  </div>
-
-  <div class="callout ok"><div class="clabel">◆ Why this dissolves the five problems</div>
-    <b>Navigation</b> — the supervisor resolves "go to X" against the current group; jumps just load another stage.
-    <b>Answering</b> — a strong model interprets the answer with the playbook's guidance. <b>State &amp; sync</b> — the
-    supervisor recomputes from the full answer set; <span class="mono">constraints.py</span> guarantees consistency.
-    <b>32k</b> — the form never enters the realtime context; only a compact per-turn instruction does. And crucially,
-    <b>the SOP model is untouched</b> — we reuse it for structure, never bending its probabilistic runtime.</div>
+  <div class="callout key"><div class="clabel">◆ The one thing to remember</div>
+    <b>constraints.py decides navigation</b> — within a stage and across stages — by evaluating the form’s own conditions.
+    The <b>SOP is passive structure</b> the engine reads (stages give the supervisor a small, relevant context; they don’t
+    navigate). The <b>LLM never decides which field is next</b>; it phrases the question and handles judgment. This is why the
+    mechanisms compose instead of competing.</div>
 </section>
 
-<!-- integration -->
-<section id="integration">
-  <div class="kicker">The honest engineering ledger</div>
-  <h2>What we reused, what we added, how they integrate</h2>
-  <p class="lead-p">Almost everything is reuse. The design deliberately keeps PolarTie's working system intact and adds a
-  thin supervisor layer — here's the exact split.</p>
-
-  <div class="grid g3" style="margin:16px 0">
-    <div class="card"><span class="pill c">Reused — PolarTie (pt-forms)</span>
-      <ul class="small" style="margin:8px 0 0;padding-left:18px">
-        <li>The <b>form definitions</b> (<span class="mono">fields.json</span>: questions, <span class="mono">FieldCondition</span>s, options, sections) — the input we ingest.</li>
-        <li>The <b>answer store</b> (<span class="mono">submissions.data</span>) — the single source of truth.</li>
-        <li>pt-forms' own <b>deterministic form engine</b> + <b>browser UI</b> — unchanged.</li>
-        <li>The <b>realtime voice agent</b> + the <b>Next/Prev</b> turn boundary (our latency window).</li>
-        <li>The <span class="mono">pt_ai_agent_mcp</span> <b>supervisor seam</b> — to deliver the prepared instruction.</li>
-      </ul></div>
-    <div class="card"><span class="pill ctrl">Reused — SOPilot</span>
-      <ul class="small" style="margin:8px 0 0;padding-left:18px">
-        <li>The <b>SOP model</b> (<span class="mono">TaskDefinition</span>, <span class="mono">Sop</span>/<span class="mono">SopVersion</span>) — stages = groups; structure, versioning, Studio visibility.</li>
-        <li><b>Prompt blocks</b> (D-7) — the playbooks, flow block &amp; map block; versioned + editable in the Studio.</li>
-        <li>The <b>supervisor pattern</b> — a strong model preparing a compact per-turn instruction.</li>
-        <li>The <b>strong model</b> (<span class="mono">builder_model</span>), tenancy/scoping, and block resolution (<span class="mono">resolve_published_blocks</span>).</li>
-      </ul></div>
-    <div class="card"><span class="pill win">Newly added</span>
-      <ul class="small" style="margin:8px 0 0;padding-left:18px">
-        <li><b><span class="mono">constraints.py</span></b> — the canonical server-side constraint engine (value conditions) both forms and config lacked.</li>
-        <li><b><span class="mono">form_to_sop.py</span></b> — the offline grouping pipeline (form → grouped SOP + blocks).</li>
-        <li>The <b>stage↔field map block</b> — the deterministic driver's index.</li>
-        <li><b><span class="mono">/formflow/prepare</span></b> — the supervisor endpoint (deterministic driver + strong-model prep).</li>
-      </ul></div>
-  </div>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 280" role="img" aria-label="Integration boundary between pt-forms and SOPilot">
-      <defs>
-        <marker id="ia" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
-        <marker id="ip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#a974f0"/></marker>
-      </defs>
-      <style>
-        .lane{rx:12;stroke-width:1.4}.lh{font:800 12px "Segoe UI",sans-serif;text-anchor:middle}
-        .bx{rx:9;stroke-width:1.6}.t{fill:#fff;font:700 11px "Segoe UI",sans-serif;text-anchor:middle}
-        .s{fill:#e7ebf3;font:8.5px var(--mono),monospace;text-anchor:middle}.l{font:700 9px "Segoe UI",sans-serif;text-anchor:middle}
-      </style>
-      <!-- lanes -->
-      <rect class="lane" x="14" y="34" width="352" height="230" fill="rgba(240,167,60,.05)" stroke="rgba(240,167,60,.45)"/>
-      <rect class="lane" x="394" y="34" width="352" height="230" fill="rgba(169,116,240,.05)" stroke="rgba(169,116,240,.45)"/>
-      <text class="lh" x="190" y="26" fill="#ffce86">PolarTie — pt-forms (kept)</text>
-      <text class="lh" x="570" y="26" fill="#cdb1f7">SOPilot — supervisor (added/reused)</text>
-      <!-- pt-forms boxes -->
-      <rect class="bx" x="30" y="48" width="150" height="34" fill="#2a2114" stroke="#f0a73c"/><text class="t" x="105" y="69">fields.json (form defs)</text>
-      <rect class="bx" x="30" y="150" width="150" height="40" fill="#2a2114" stroke="#f0a73c"/><text class="t" x="105" y="167">🎙 realtime agent</text><text class="s" x="105" y="182">+ Next/Prev · browser UI</text>
-      <rect class="bx" x="200" y="150" width="150" height="40" fill="#2a2114" stroke="#f0a73c"/><text class="t" x="275" y="167">answers store</text><text class="s" x="275" y="182">submissions.data (truth)</text>
-      <!-- SOPilot boxes -->
-      <rect class="bx" x="410" y="48" width="320" height="40" fill="rgba(169,116,240,.18)" stroke="#a974f0"/><text class="t" x="570" y="65">form SOP + playbook/flow/map blocks</text><text class="s" x="570" y="80">SOP model + prompt blocks (reused) · map (new)</text>
-      <rect class="bx" x="410" y="150" width="200" height="52" fill="rgba(25,184,154,.20)" stroke="#19b89a"/><text class="t" x="510" y="170">/formflow/prepare</text><text class="s" x="510" y="185">supervisor loop (new)</text><text class="s" x="510" y="196">strong model (reused)</text>
-      <rect class="bx" x="628" y="150" width="102" height="52" fill="rgba(91,141,239,.18)" stroke="#5b8def"/><text class="t" x="679" y="170">constraints</text><text class="s" x="679" y="185">.py gating</text><text class="s" x="679" y="196">(new)</text>
-      <!-- offline pipeline -->
-      <path d="M180,65 C300,65 320,60 409,66" fill="none" stroke="#a974f0" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#ip)"/>
-      <text class="l" x="300" y="52" fill="#cdb1f7">OFFLINE: form_to_sop pipeline (once)</text>
-      <!-- runtime call -->
-      <path d="M180,164 C300,150 340,150 409,168" fill="none" stroke="#8a93a8" stroke-width="2.2" marker-end="url(#ia)"/>
-      <text class="l" x="300" y="140" fill="#c9d3e6">RUNTIME: prepare(current_field, answers)</text>
-      <path d="M409,182 C340,196 300,196 181,180" fill="none" stroke="#8a93a8" stroke-width="2.2" marker-end="url(#ia)"/>
-      <text class="l" x="300" y="212" fill="#c9d3e6">← one compact instruction</text>
-      <!-- supervisor reads blocks + constraints -->
-      <line x1="510" y1="150" x2="540" y2="90" stroke="#a974f0" stroke-width="1.6" marker-end="url(#ip)"/>
-      <line x1="610" y1="176" x2="627" y2="176" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#ia)"/>
-      <!-- agent writes answers -->
-      <line x1="180" y1="176" x2="199" y2="176" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#ia)"/>
-      <text class="l" x="190" y="205" fill="#7b8499">writes answers</text>
-    </svg>
-    <figcaption><b>Two meeting points.</b> <span style="color:#cdb1f7">Offline</span>: the pipeline ingests pt-forms'
-      definitions into a SOPilot SOP + blocks. <span style="color:#c9d3e6">Runtime</span>: pt-forms' realtime agent calls
-      <span class="mono">/formflow/prepare</span> with the current field + answers; SOPilot reads the stage's block, gates
-      with <span class="mono">constraints.py</span>, and returns one prepared line. Answers stay in pt-forms.</figcaption>
-  </div></figure>
-
-  <div class="callout key"><div class="clabel">◆ The boundary in one line</div>
-    <b>pt-forms owns</b> the form definitions, the answers, the browser UI and the realtime voice agent.
-    <b>SOPilot owns</b> the grouped playbooks (structure), the deterministic gating, and the strong per-turn supervisor.
-    They meet exactly twice: <b>once offline</b> (ingest defs → SOP) and <b>once per turn</b> (prepare call). No shared
-    database, no duplicated answer store.</div>
-</section>
-
-<!-- implementation -->
-<section id="implementation">
-  <div class="kicker">How the SOP deterministic flow works</div>
-  <h2>The flow in detail — three stored artifacts, one engine, one endpoint</h2>
-  <p class="lead-p">Everything the runtime needs is <b>stored as ordinary SOPilot objects</b> (a SOP + prompt blocks), read
-  by a <b>deterministic driver</b> that calls a <b>strong model only to phrase</b> each turn. Here is exactly what each piece
-  is and how they interlock.</p>
-
-  <h3>1 · What is stored (built once, offline, by <span class="mono">scripts/form_to_sop.py</span>)</h3>
-  <div class="grid g3" style="margin:12px 0">
-    <div class="card"><span class="pill ctrl">The form SOP</span>
-      <p class="small" style="margin:8px 0 0">A <span class="mono">TaskDefinition</span> whose <b>20 stages</b> are the
-      dependency-cohesive question groups — each an <span class="mono">agent_action</span> referencing its playbook block.
-      Versioned (<span class="mono">Sop/SopVersion</span>), visible &amp; editable in the <b>Studio</b>. Edges are
-      <span class="mono">both</span> — the user may jump to any stage, no forced order.</p></div>
-    <div class="card"><span class="pill ctrl">Playbook blocks</span>
-      <p class="small" style="margin:8px 0 0">One <b>prompt block per stage</b> = its questions + show-if rules + how to coerce
-      answers (dates, names, “don’t know”). Plus one global <span class="mono">__flow__</span> block = the supervisor’s
-      standing instructions. First-class, versioned, reviewable — <b>authors edit the playbook, not code</b>.</p></div>
-    <div class="card"><span class="pill ctrl">The map block</span>
-      <p class="small" style="margin:8px 0 0">A JSON <span class="mono">__map__</span> block: the stage order, and for every
-      field <span class="mono">{name, id, label, cond}</span>. This is the <b>deterministic index</b> — O(1) field→stage, and
-      the <span class="mono">id</span> is the pt-forms <span class="mono">get-fields</span> id, so live answers bind with no guesswork.</p></div>
-  </div>
-
-  <h3>2 · The deterministic engine (<span class="mono">constraints.py</span>)</h3>
-  <p class="small"><span class="mono">evaluate_condition(cond, answers)</span> is a <b>sandboxed evaluator</b> of the form’s own
-  show-if grammar (<span class="mono">isYes/isNo/values[{…}]</span> + comparisons; a missing answer ⇒ false; numeric strings
-  coerced). <span class="mono">_visible_unanswered(…)</span> walks the stages <b>in order</b>, skips any field whose condition
-  is false, and returns the <b>first visible, unanswered field</b> — <b>crossing into a later stage</b> (or an earlier one, if
-  the user went back) when the current stage is exhausted. This is the whole “which question is next?” decision — no model.</p>
-
-  <h3>3 · The runtime loop (<span class="mono">POST /formflow/prepare</span>, one call per Next/Prev)</h3>
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 250" role="img" aria-label="prepare() internals">
-      <style>
-        .bx{rx:9;stroke-width:1.6}.t{fill:#fff;font:700 11px "Segoe UI",sans-serif;text-anchor:middle}
-        .s{fill:#e7ebf3;font:8.5px var(--mono),monospace;text-anchor:middle}
-        .st{font:700 9px "Segoe UI",sans-serif;text-anchor:middle;fill:#8a93a8}
-      </style>
-      <defs><marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
-      <rect class="bx" x="14" y="60" width="120" height="46" fill="#2a2114" stroke="#f0a73c"/><text class="t" x="74" y="80">pt-forms</text><text class="s" x="74" y="94">get-fields → answers</text>
-      <rect class="bx" x="170" y="60" width="120" height="46" fill="rgba(169,116,240,.18)" stroke="#a974f0"/><text class="t" x="230" y="80">map block</text><text class="s" x="230" y="94">field → stage (id↔name)</text>
-      <rect class="bx" x="326" y="60" width="128" height="46" fill="rgba(91,141,239,.18)" stroke="#5b8def"/><text class="t" x="390" y="78">constraints.py</text><text class="s" x="390" y="92">next VISIBLE unanswered</text>
-      <rect class="bx" x="490" y="44" width="120" height="34" fill="rgba(25,184,154,.15)" stroke="#19b89a"/><text class="t" x="550" y="65">target stage’s</text>
-      <rect class="bx" x="490" y="84" width="120" height="34" fill="rgba(25,184,154,.15)" stroke="#19b89a"/><text class="s" x="550" y="105">playbook + __flow__</text>
-      <rect class="bx" x="646" y="60" width="100" height="46" fill="rgba(25,184,154,.25)" stroke="#19b89a"/><text class="t" x="696" y="80">strong model</text><text class="s" x="696" y="94">phrases 1 line</text>
-      <line x1="134" y1="83" x2="169" y2="83" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#pa)"/>
-      <line x1="290" y1="83" x2="325" y2="83" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#pa)"/>
-      <line x1="454" y1="83" x2="489" y2="83" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#pa)"/>
-      <line x1="610" y1="83" x2="645" y2="83" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#pa)"/>
-      <!-- bounded window / cross-stage -->
-      <rect x="326" y="150" width="284" height="66" rx="10" fill="none" stroke="#19b89a" stroke-dasharray="5 4"/>
-      <text class="st" x="468" y="168" fill="#7ee0cd">the bounded window</text>
-      <text class="s" x="468" y="186" fill="#c9d3e6">constraints.py moves the pointer across stages;</text>
-      <text class="s" x="468" y="200" fill="#c9d3e6">only the TARGET stage’s playbook is loaded (~550 tok)</text>
-      <line x1="390" y1="106" x2="390" y2="149" stroke="#19b89a" stroke-width="1.4" marker-end="url(#pa)"/>
-      <line x1="550" y1="149" x2="550" y2="117" stroke="#19b89a" stroke-width="1.4" marker-end="url(#pa)"/>
-      <text class="s" x="696" y="150" fill="#8a93a8">↓ returns to pt-forms:</text>
-      <text class="s" x="696" y="164" fill="#c9d3e6">one instruction to speak</text>
-    </svg>
-    <figcaption><b>a</b> read answers from pt-forms → <b>b</b> current field → its stage <i>(a map lookup, not a nav step)</i> →
-    <b>c</b> next visible unanswered field via <span class="mono">constraints.py</span> (<b>may land in another stage</b>) →
-    <b>d</b> load <i>that</i> stage’s playbook + the flow block → <b>e</b> strong model phrases one line → <b>f</b> return;
-    answers never leave pt-forms.</figcaption>
-  </div></figure>
-
-  <div class="callout info"><div class="clabel">◆ Which part actually navigates? (a common misread)</div>
-    <b>All navigation — within a stage <i>and</i> across stages — is <span class="mono">constraints.py</span></b> (step c). The
-    stage boundary is <b>not</b> a navigation boundary; the engine crosses it transparently. The map/SOP does <b>no</b> navigating:
-    it’s a <b>passive index</b> (field → stage → playbook) consulted in steps <b>b</b> and <b>d</b> only to load the right playbook
-    for <i>phrasing</i>, plus the <b>ordered field list</b> the engine walks (that order is just the form’s field order — the same
-    data pt-forms has). This is why “SOP is not the navigation engine” and “the flow uses the SOP” are both true: the engine
-    <b>decides</b>; the SOP is the <b>phone book it consults</b>. The SOP’s own transition mechanism (LLM + edges) is off.</div>
-
-  <div class="callout key"><div class="clabel">◆ Bounded context — with stage-to-stage jumps</div>
-    The supervisor <b>never sees the whole form</b> — only the playbook of the stage the next question lives in (~550 tokens).
-    Crucially, that window <b>follows the deterministic pointer across stage boundaries</b>: when gating skips to a field in a
-    later group, or the user jumps back to an earlier one, <span class="mono">prepare</span> resolves the <b>target</b> stage and
-    loads <b>its</b> playbook. So the context stays ~one stage no matter where in the 20-stage form the answer flow moves.</div>
-
-  <h3>4 · A concrete turn</h3>
-  <div class="callout ok"><div class="clabel">◆ Worked example</div>
-    User just answered <span class="mono">Q39 “Did you go to the hospital?” → No</span>. <b>prepare</b>: get-fields says Q39=No;
-    map puts Q39 in <i>History of Treatment</i>; <span class="mono">constraints.py</span> finds Q40–Q43 all gated
-    <span class="mono">isYes({Q39})</span> ⇒ hidden, exhausts the stage, and returns the next visible field — <b>Q45 in the next
-    stage</b>. <b>prepare</b> loads <i>History of Treatment (part 2)</i>’s playbook (not the whole form) and the strong model
-    returns one line: <i>“Please describe the treatment you received.”</i> One deterministic hop across a stage boundary; one
-    bounded phrasing call.</div>
-
-  <h3>5 · Honestly, what this adds over pt-forms</h3>
-  <div class="tablewrap"><table>
-    <thead><tr><th>Capability</th><th>pt-forms today</th><th>SOP flow</th></tr></thead>
-    <tbody>
-      <tr><td>Skip-logic gating</td><td>deterministic, server-side (<span class="mono">_compute_next_field</span>)</td><td><b>parity</b> — same principle, <span class="mono">constraints.py</span></td></tr>
-      <tr><td>NL navigation (jumps)</td><td>GPT over the whole form (<span class="mono">_gpt_pick_field</span>)</td><td>not a new mechanism (out of scope)</td></tr>
-      <tr><td><b>Authoring / structure</b></td><td><span class="mono">fields.json</span> + <span class="mono">.md</span> rules + server code</td><td><b>versioned SOP + per-stage playbooks, edited in the Studio</b></td></tr>
-      <tr><td><b>Per-turn model context</b></td><td>whole-form GPT per navigation</td><td><b>one stage’s playbook (~550 tok)</b></td></tr>
-      <tr><td>Backward edit-propagation</td><td>forward skip; stale now-hidden answers not obviously cleared <span class="small">(to verify)</span></td><td>constraint-graph recompute — <b>candidate</b>, not built</td></tr>
-    </tbody>
-  </table></div>
-  <p class="small">The honest differentiation is <b>authoring/structure and bounded per-turn context</b> — not gating or
-  navigation, which pt-forms already handles well. Edit-propagation is the one place a real correctness gap <i>may</i> exist.</p>
-</section>
-
-<!-- transitions -->
-<section id="transitions">
-  <div class="kicker">Architecture FAQ — a question PolarTie will ask</div>
-  <h2>Three “transition” mechanisms — how they fit together</h2>
-  <p class="lead-p">pt-forms has deterministic field transitions; SOPilot’s SOP has stage transitions steered by an LLM; and
-  SOPilot also has the <span class="mono">constraints.py</span> rule engine. They look overlapping. They aren’t — because two
-  different things are being conflated: <b>structure</b> and the <b>transition engine</b>.</p>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 300" role="img" aria-label="Structure vs pluggable transition engine">
-      <style>.bx{rx:9;stroke-width:1.8}.t{fill:#fff;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}
-        .s{fill:#e7ebf3;font:9px var(--mono),monospace;text-anchor:middle}.h{font:800 11px "Segoe UI",sans-serif;text-anchor:middle}
-        .note{fill:#8a93a8;font:9.5px "Segoe UI",sans-serif;text-anchor:middle}</style>
-      <!-- structure layer -->
-      <rect class="bx" x="30" y="30" width="700" height="56" fill="rgba(169,116,240,.14)" stroke="#a974f0"/>
-      <text class="h" x="380" y="52" fill="#cdb1f7">STRUCTURE — the SOP (shared container)</text>
-      <text class="s" x="380" y="72">stages = question groups · playbooks = prompt blocks · versioned in the Studio</text>
-      <!-- transition engine layer: two pluggable options -->
-      <text class="h" x="380" y="118" fill="#c9d3e6">TRANSITION ENGINE — pluggable: pick by problem shape</text>
-      <rect class="bx" x="30" y="132" width="345" height="96" fill="rgba(25,184,154,.12)" stroke="#19b89a"/>
-      <text class="t" x="202" y="154">DETERMINISTIC</text>
-      <text class="s" x="202" y="172">constraints.py  ≡  pt-forms FieldConditions</text>
-      <text class="s" x="202" y="188">evaluate show-if → next field (exact)</text>
-      <text class="note" x="202" y="210">for FORMS · value-gated state machine</text>
-      <rect class="bx" x="395" y="132" width="335" height="96" fill="rgba(91,141,239,.12)" stroke="#5b8def"/>
-      <text class="t" x="562" y="154">PROBABILISTIC</text>
-      <text class="s" x="562" y="172">LLM + trajectory predictor</text>
-      <text class="s" x="562" y="188">SOP edges carry NO conditions</text>
-      <text class="note" x="562" y="210">for CONVERSATIONS · no rule for “what next”</text>
-      <!-- SmartForm selection -->
-      <rect class="bx" x="30" y="248" width="700" height="40" fill="#161b28" stroke="#39425a"/>
-      <text class="s" x="380" y="266" style="fill:#c9d3e6">SmartForm uses:  STRUCTURE (SOP)  +  the DETERMINISTIC engine.  The probabilistic one is OFF;</text>
-      <text class="s" x="380" y="280" style="fill:#c9d3e6">form-SOP edges are `both` (inert); the LLM only PHRASES — it decides zero transitions.</text>
-    </svg>
-    <figcaption><b>Two layers, one live engine.</b> The SOP is structure; the transition engine is pluggable. A form is
-      deterministic → the deterministic engine drives; a conversation isn’t → the LLM engine drives. Never both at once.</figcaption>
-  </div></figure>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Mechanism</th><th>Kind</th><th>Decides “what’s next” by</th><th>Live in SmartForm?</th></tr></thead>
-    <tbody>
-      <tr><td>SOP stage/edge transitions <span class="small">(the ordering mechanism)</span></td><td>probabilistic (LLM + predictor)</td><td>an LLM reading the conversation; edges carry <b>no</b> conditions</td><td><b style="color:#e0574f">No</b> — this <i>ordering</i> mechanism is off; the <b>stages themselves are still used</b> (context + authoring)</td></tr>
-      <tr><td>pt-forms field rules</td><td>deterministic</td><td>evaluating FieldConditions</td><td>Yes (pt-forms runtime)</td></tr>
-      <tr><td>SOPilot <span class="mono">constraints.py</span></td><td>deterministic (superset)</td><td>same rules + requires/conflicts/enum</td><td><b style="color:#19b89a">Yes</b> — the sole transition authority</td></tr>
-    </tbody>
-  </table></div>
-
-  <div class="callout info"><div class="clabel">◆ “So are SOP stages used at all in the form flow?”</div>
-    <b>Yes — heavily, just not for transitions.</b> Stages do three jobs: <b>(1) grouping</b> (269 fields → 20 groups),
-    <b>(2) bounded context</b> — the supervisor loads only the <i>current</i> stage’s playbook (~550 tokens) to phrase a turn,
-    not the whole form (~4.7k); the stage <i>is</i> that window, and <b>(3) authoring</b> — the unit edited in the Studio. What
-    stages do <b>not</b> do is decide the next step: <span class="mono">constraints.py</span> picks the next field (crossing a
-    stage boundary when needed, then loading that stage’s playbook), and the SOP edges are inert. Delete the stages and
-    transitions still work — you’d just lose the bounded context and the authoring structure. So stages are load-bearing for
-    <b>context &amp; authoring</b>, not control flow.</div>
-
-  <div class="callout key"><div class="clabel">◆ The one-liner for PolarTie</div>
-    <b>SOP = structure</b> (stages + playbooks). <b>Transitions are pluggable</b>: probabilistic (LLM) for conversations,
-    deterministic (<span class="mono">constraints.py</span>, equivalent to pt-forms’ FieldConditions) for forms. <b>SmartForm
-    runs the deterministic engine and keeps the LLM off the transition decision entirely</b> — the SOP edges are inert,
-    <span class="mono">constraints.py</span> drives, the model only phrases. That’s why the mechanisms compose instead of
-    competing — and it’s exactly what the A/B forced (LLM-decided transitions ≈ 56%, deterministic = 100%).</div>
-</section>
-
-<!-- navigation -->
-<section id="navigation">
-  <div class="kicker">For the pt-forms developer — is SOP/playbook right for navigation?</div>
-  <h2>Navigation: which mechanism handles each task</h2>
-  <p class="lead-p">Short answer to the developer’s question: <b>a playbook/SOP is the wrong tool for navigation</b> — it’s an
-  LLM prompt for <i>phrasing one turn</i>, not control flow, and it fits <b>none</b> of the list. Navigation splits across four
-  mechanisms, none of them a playbook:</p>
-
+<!-- 3 · PIPELINE -->
+<section id="pipeline">
+  <div class="kicker">Build once, offline</div>
+  <h2>Turning a form into a SOP</h2>
+  <p>A one-time pipeline (<span class="filepath">scripts/form_to_sop.py</span>) ingests a pt-forms
+  <span class="mono">fields.json</span> and produces three stored artifacts in SOPilot:</p>
   <div class="grid g3" style="margin:14px 0">
-    <div class="card"><span class="pill win">DET</span><p class="small" style="margin:8px 0 0">Deterministic engine — <span class="mono">constraints.py</span> + the driver + relative stepping. Most of the list.</p></div>
-    <div class="card"><span class="pill b">RES</span><p class="small" style="margin:8px 0 0">Semantic resolver — a GPT/embedding matcher for “by meaning”. pt-forms already has this (<span class="mono">_gpt_pick_field</span>).</p></div>
-    <div class="card"><span class="pill a">HIST / DERIVE</span><p class="small" style="margin:8px 0 0"><b>HIST</b>: an answer-history/trace store. <b>DERIVE</b>: the interpret step (parse + compute) or a form formula.</p></div>
+    <div class="card"><span class="pill ctrl">SOP (stages)</span><p class="small" style="margin:8px 0 0">Fields grouped into
+      <b>dependency-cohesive stages</b> (269 → 20). Versioned, editable in the Studio.</p></div>
+    <div class="card"><span class="pill ctrl">Playbook blocks</span><p class="small" style="margin:8px 0 0">One prompt block per
+      stage (its questions + how to phrase/coerce) + a global flow block. The supervisor’s bounded context.</p></div>
+    <div class="card"><span class="pill ctrl">Map block</span><p class="small" style="margin:8px 0 0">A JSON index: each field’s
+      stage, condition, and <b>pt-forms id</b> — the deterministic driver’s lookup table.</p></div>
   </div>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>#</th><th>Task</th><th>Mechanism</th><th>Playbook?</th><th>Notes</th></tr></thead>
-    <tbody>
-      <tr><td>1.1</td><td>Next unanswered question</td><td><span class="pill win">DET</span></td><td>✗</td><td>our <span class="mono">_visible_unanswered</span></td></tr>
-      <tr><td>1.1</td><td>Skip fields whose FieldCondition is false</td><td><span class="pill win">DET</span></td><td>✗</td><td>exactly <span class="mono">constraints.py</span></td></tr>
-      <tr><td>1.1</td><td>Store “not applicable” for skipped</td><td><span class="pill win">DET</span></td><td>✗</td><td>skip ⇒ persist sentinel</td></tr>
-      <tr><td>1.1</td><td>After repeater, loop to block start if under limit</td><td><span class="pill win">DET</span></td><td>✗</td><td>our <span class="mono">_repeat_next</span> (honors a max-instances)</td></tr>
-      <tr><td>1.2</td><td>Back to a prior <i>answered</i> question, skip empty/NA</td><td><span class="pill win">DET</span></td><td>✗</td><td>relative stepping (pt-forms <span class="mono">_step_relative</span>)</td></tr>
-      <tr><td>1.2</td><td>(better) Back through <b>answer history</b></td><td><span class="pill a">HIST</span></td><td>✗</td><td>needs an ordered history/trace store (new)</td></tr>
-      <tr><td>1.3</td><td>First unanswered on resume</td><td><span class="pill win">DET</span></td><td>✗</td><td><span class="mono">_visible_unanswered</span> from the start</td></tr>
-      <tr><td>1.4</td><td>“Appointment = injury date + 1 day”</td><td><span class="pill ctrl">DERIVE</span></td><td>✗</td><td><b>not navigation</b> — a derived answer: resolve <span class="mono">{injury date}</span> + date math; interpret step or a form formula</td></tr>
-      <tr><td>2.1</td><td>Go to question by number (TOC)</td><td><span class="pill win">DET</span></td><td>✗</td><td>direct id/index jump</td></tr>
-      <tr><td>2.2</td><td>Go to question by content (“correct my age”)</td><td><span class="pill b">RES</span></td><td>✗</td><td>the one fuzzy case; pt-forms’ GPT resolver already does it</td></tr>
-      <tr><td>3.1</td><td>Absolute section (“family history”)</td><td><span class="pill b">RES</span></td><td>✗</td><td>match section name (or DET if exact)</td></tr>
-      <tr><td>3.2</td><td>Relative section (“start of section”, “next section”)</td><td><span class="pill win">DET</span></td><td>✗</td><td>section/stage structure + stepping</td></tr>
-      <tr><td>4.1</td><td>Next question needing revision</td><td><span class="pill win">DET</span></td><td>✗</td><td>filter the revision flag (pt-forms <span class="mono">_compute_requested_change_field</span>)</td></tr>
-    </tbody>
-  </table></div>
-
-  <div class="callout info"><div class="clabel">◆ Two things to tell him</div>
-    <b>(1) This isn’t SOPilot replacing your navigation.</b> We measured navigation at <b>parity</b> — pt-forms already does the
-    deterministic parts and the GPT “by content” resolver well. The table just says <i>which tool each task needs</i>, and it’s
-    DET/RES/HIST/DERIVE — never a playbook. <b>(2) Where the SOP world adds something next to 1.2:</b> when the user goes back
-    and <b>changes</b> an earlier answer, the hard part isn’t the jump — it’s the <b>propagation</b> afterward (downstream answers
-    now hidden). That’s <span class="mono">reconcile</span> (our one measured win, 61 stale → 0). So 1.2 + reconcile compose:
-    DET does the jump, <span class="mono">constraints.py</span> cleans up the consequences.</div>
+  <div class="callout ok"><div class="clabel">◆ Adding a form is data, not code</div>
+    The engine is generic. Onboarding a new form = run the pipeline on its <span class="mono">fields.json</span> — no changes to
+    <span class="mono">constraints.py</span> (it already covers the full condition grammar: <span class="mono">isYes/isNo/values[…]</span>,
+    comparisons, compound <span class="mono">and/or/not</span>). You’d touch engine code only for a genuinely new construct.</div>
 </section>
 
-<!-- status -->
-<section id="status">
-  <div class="kicker">Built &amp; proven — spike</div>
-  <h2>Where the implementation stands</h2>
-  <p class="lead-p">This is no longer just a diagram — the <b>full loop runs end-to-end on the real 269-question form</b>,
-  on an isolated branch, with tests.</p>
+<!-- 4 · RUNTIME -->
+<section id="runtime">
+  <div class="kicker">Per turn, at each Next/Prev</div>
+  <h2>Runtime — one prepared turn</h2>
+  <p>The realtime voice agent calls one endpoint per turn (<span class="mono">POST /formflow/prepare</span>). Because the person
+  clicks <b>Next/Prev</b> to advance, this call is off the latency-critical path.</p>
 
-  <div class="tablewrap"><table>
-    <thead><tr><th>Piece</th><th>What shipped (branch <span class="mono">feature/smartform-engine</span>)</th><th>tests</th></tr></thead>
-    <tbody>
-      <tr><td><span class="pill a">constraints.py</span></td><td>Canonical <b>server-side constraint engine</b> — conditional visibility, value predicates, deterministic evaluation (the value-condition primitive both forms and config lacked).</td><td>9 ✓</td></tr>
-      <tr><td><span class="pill win">form → SOP pipeline</span></td><td>Grouped the form into <b>20 stages</b>; emitted <b>20 playbook prompt blocks</b> + a main-flow block + a stage↔field <b>map</b> block; published as the <b>“Injured Worker Questionnaire” SOP</b> under <span class="mono">polartie/smartform</span> — visible &amp; editable in the Studio (SOPs + Prompt blocks).</td><td>—</td></tr>
-      <tr><td><span class="pill b">/formflow/prepare</span></td><td>The <b>supervisor loop</b>: current field → stage (deterministic, via the map) → next visible field (<span class="mono">constraints.py</span> gating, crossing stages) → the strong model phrases one compact instruction. <b>Now wired to live pt-forms</b> — reads the answer snapshot from <span class="mono">get-fields</span> (id-keyed → FieldName via the map block).</td><td>14 ✓</td></tr>
-    </tbody>
-  </table></div>
-  <p class="small">Backend suite: <b>132 passing</b> (incl. reconcile + repeater support). Nothing on <span class="mono">main</span> — isolated on the feature branch until verified.</p>
-
-  <h3>Live spike results (real strong model, real form)</h3>
-  <div class="tablewrap"><table>
-    <thead><tr><th>Situation</th><th>What the supervisor returned</th></tr></thead>
-    <tbody>
-      <tr><td>Start (no answers)</td><td>stage <b>Employee Information</b> → Q1, phrased <i>“What is your name?”</i></td></tr>
-      <tr><td>“No” to hospital (Q39)</td><td><b>skipped Q40–Q43</b> (all gated on the hospital answer) and crossed into <b>History of Treatment (part 2)</b></td></tr>
-      <tr><td>Admitted = Yes</td><td><b>opened Q43</b> → <i>“For how long were you admitted to the hospital?”</i></td></tr>
-      <tr><td>Admitted = No</td><td><b>skipped Q43</b> → Q45 <i>“Describe the treatment…”</i></td></tr>
-    </tbody>
-  </table></div>
-  <div class="callout ok"><div class="clabel">◆ What this proves</div>
-    Deterministic stage detection + deterministic skip-logic (including a cross-stage jump) + a strong model phrasing one
-    compact line — exactly the design, on the real form. The realtime model would only ever receive that one prepared line;
-    the SOP model itself is untouched.</div>
-</section>
-
-<!-- measurement -->
-<section id="measurement">
-  <div class="kicker">Why deterministic gating — and an honest correction</div>
-  <h2>Why the “next question” decision must not be model-inferred</h2>
-
-  <div class="callout caveat"><div class="clabel">◆ Correction — read this first</div>
-    An earlier draft framed this as <i>“SOP vs what pt-forms does today.”</i> That was wrong, and reading pt-forms’ source
-    proved it: <b>pt-forms already decides the next field deterministically server-side</b>
-    (<span class="mono">_compute_next_field → _should_skip_field → _evaluate_field_condition</span>, plus a deterministic
-    <span class="mono">.md</span>-rule layer), and its agent only relays the server’s question. So this experiment is
-    <b>not</b> a win over pt-forms — <b>both</b> pt-forms and our SOP flow gate deterministically. What it actually shows is
-    the shared principle underneath both designs: <b>if you let a model <i>infer</i> skip-logic instead of <i>evaluating</i>
-    it, it gets ~1-in-3 gating decisions wrong.</b> pt-forms and SOPilot independently arrived at the same answer — don’t.</div>
-
-  <p class="lead-p">The decision under test: <b>“which question is next?”</b> — ask the right one, skip the ones the form’s
-  rules hide. Ground truth is the form’s own show-if rules (<span class="mono">isYes/isNo/values[…]</span>), evaluated exactly.</p>
-
-  <div class="grid g3" style="margin:16px 0">
-    <div class="card"><span class="pill a">Inference (the anti-pattern)</span>
-      <p class="small" style="margin:8px 0 0">A model <b>infers</b> the next field from the whole form + answers — what
-      happens if navigation is left to the realtime model with <b>no</b> deterministic backing. Two tiers:
-      <b>weak</b> = <span class="mono">gpt-4o-mini</span>, <b>strong</b> = <span class="mono">gpt-4o</span>.
-      <b>Neither production system does this</b> — it’s the strawman that quantifies the risk.</p></div>
-    <div class="card"><span class="pill b">Evaluation (both systems)</span>
-      <p class="small" style="margin:8px 0 0">The next field is <b>evaluated</b> from the FieldConditions. pt-forms does it
-      in <span class="mono">_compute_next_field</span>; our SOP flow does it in <span class="mono">constraints.py</span>.
-      Same principle, correct by construction.</p></div>
-    <div class="card"><span class="pill win">Setup</span>
-      <p class="small" style="margin:8px 0 0">Real <b>269-question</b> Injured Worker Questionnaire · <b>120 decision points</b>
-      (34 at skip/gating boundaries) generated by walking the form under yes/no/alternating answer policies · answers read
-      live from a <b>faithful mock of pt-forms <span class="mono">get-fields</span></b> (contract verified against the Laravel source).</p></div>
-  </div>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 210" role="img" aria-label="Skip-logic accuracy by arm">
-      <style>
-        .gl{stroke:#2b3140;stroke-width:1;stroke-dasharray:3 4}
-        .lbl{fill:#c9d3e6;font:700 12px "Segoe UI",sans-serif}.val{font:800 13px "Segoe UI",sans-serif}
-        .cap{fill:#8a93a8;font:10px "Segoe UI",sans-serif}.tk{fill:#7b8499;font:9px var(--mono),monospace;text-anchor:middle}
-      </style>
-      <text class="lbl" x="16" y="20">Skip-logic decisions answered correctly (vs the form’s own rules)</text>
-      <!-- gridlines 0/25/50/75/100 -->
-      <g>
-        <line class="gl" x1="250" y1="40" x2="250" y2="180"/><text class="tk" x="250" y="196">0%</text>
-        <line class="gl" x1="370" y1="40" x2="370" y2="180"/><text class="tk" x="370" y="196">25</text>
-        <line class="gl" x1="490" y1="40" x2="490" y2="180"/><text class="tk" x="490" y="196">50</text>
-        <line class="gl" x1="610" y1="40" x2="610" y2="180"/><text class="tk" x="610" y="196">75</text>
-        <line class="gl" x1="730" y1="40" x2="730" y2="180"/><text class="tk" x="730" y="196">100</text>
-      </g>
-      <!-- bars: 250 = 0%, 4.8px per % -->
-      <g>
-        <text class="lbl" x="16" y="62">Infer · weak</text><text class="cap" x="16" y="76">gpt-4o-mini</text>
-        <rect x="250" y="48" width="268.3" height="26" rx="4" fill="#e0574f"/><text class="val" x="530" y="66" fill="#e0574f">55.9%</text>
-        <text class="lbl" x="16" y="106">Infer · strong</text><text class="cap" x="16" y="120">gpt-4o</text>
-        <rect x="250" y="92" width="324.5" height="26" rx="4" fill="#f0a73c"/><text class="val" x="586" y="110" fill="#f0a73c">67.6%</text>
-        <text class="lbl" x="16" y="150">Evaluate</text><text class="cap" x="16" y="164">pt-forms &amp; SOP</text>
-        <rect x="250" y="136" width="480" height="26" rx="4" fill="#19b89a"/><text class="val" x="700" y="154" fill="#0f1420">100%</text>
-      </g>
+  <figure><div class="fig svgwrap">
+    <svg viewBox="0 0 760 150" role="img" aria-label="prepare() one turn">
+      <defs><marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker></defs>
+      <style>.bx{rx:9;stroke-width:1.6}.t{fill:#fff;font:700 10.5px "Segoe UI",sans-serif;text-anchor:middle}.s{fill:#e7ebf3;font:8px var(--mono),monospace;text-anchor:middle}</style>
+      <rect class="bx" x="10" y="46" width="120" height="46" fill="rgba(240,167,60,.12)" stroke="#f0a73c"/><text class="t" x="70" y="66">get-fields</text><text class="s" x="70" y="80">answers (pt-forms)</text>
+      <rect class="bx" x="160" y="46" width="120" height="46" fill="rgba(91,141,239,.14)" stroke="#5b8def"/><text class="t" x="220" y="66">map lookup</text><text class="s" x="220" y="80">field → stage</text>
+      <rect class="bx" x="310" y="46" width="130" height="46" fill="rgba(25,184,154,.16)" stroke="#19b89a"/><text class="t" x="375" y="66">constraints.py</text><text class="s" x="375" y="80">next visible field</text>
+      <rect class="bx" x="470" y="46" width="130" height="46" fill="rgba(169,116,240,.16)" stroke="#a974f0"/><text class="t" x="535" y="66">strong model</text><text class="s" x="535" y="80">phrases 1 line</text>
+      <rect class="bx" x="630" y="46" width="120" height="46" fill="rgba(240,167,60,.12)" stroke="#f0a73c"/><text class="t" x="690" y="66">agent speaks</text><text class="s" x="690" y="80">writes answer back</text>
+      <line x1="130" y1="69" x2="159" y2="69" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#pa)"/>
+      <line x1="280" y1="69" x2="309" y2="69" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#pa)"/>
+      <line x1="440" y1="69" x2="469" y2="69" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#pa)"/>
+      <line x1="600" y1="69" x2="629" y2="69" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#pa)"/>
+      <text class="s" x="375" y="30" fill="#7ee3b4">the decision — deterministic, ~ms</text>
+      <text class="s" x="535" y="112" fill="#cdb1f7">the wording — strong model, ~1s, bounded to the stage playbook (~550 tok)</text>
     </svg>
-    <figcaption><b>Left to <i>infer</i> skip-logic, even a strong model is wrong ~1 turn in 3.</b> <i>Evaluating</i> the real
-    conditions is right every time — the principle <b>both pt-forms and SOPilot</b> follow (this is not a difference between them).</figcaption>
+    <figcaption><b>Decision then wording.</b> The next field is chosen deterministically (crossing stages when needed); the
+      strong model only phrases it, seeing just the current stage’s playbook. Answers never leave pt-forms.</figcaption>
   </div></figure>
+  <p class="small">Measured live end-to-end: the deterministic decision (incl. the get-fields read) is <b>~19 ms</b>; the optional
+  strong-model phrasing is <b>~1 s</b>, at the tolerant Next/Prev boundary.</p>
+</section>
 
-  <div class="tablewrap"><table>
-    <thead><tr><th>Approach</th><th>Accuracy<br>(all 120)</th><th>Accuracy<br>(skip/gating)</th><th>Dangerous errors¹</th><th>Decision latency<br>p50 / p95</th><th>Decision context<br>per turn</th></tr></thead>
-    <tbody>
-      <tr><td><span class="pill a">Infer · gpt-4o-mini</span></td><td>83.3%</td><td>55.9%</td><td>15 <span class="small">(14 asked a hidden field)</span></td><td>933 / 2259 ms</td><td>~4.7k tokens</td></tr>
-      <tr><td><span class="pill a">Infer · gpt-4o</span></td><td>86.7%</td><td>67.6%</td><td>11 <span class="small">(11 asked a hidden field)</span></td><td>819 / 1419 ms</td><td>~4.7k tokens</td></tr>
-      <tr><td><span class="pill win">Evaluate · deterministic</span></td><td><b>100%</b></td><td><b>100%</b></td><td><b>0</b></td><td><b>~0 / 0.3 ms</b></td><td><b>0 tokens</b></td></tr>
-    </tbody>
-  </table></div>
-  <p class="small">¹ <b>Dangerous error</b> = surfaced a field the rules HIDE (asked an inapplicable medical question) or re-asked an
-  answered one — the clinically meaningful failures. Token counts: chars/4 approximation (labeled in the harness output).
-  <b>“Evaluate”</b> is how <b>both</b> pt-forms and our SOP flow work; the two “Infer” rows are the anti-pattern neither uses.</p>
+<!-- 5 · RECONCILE -->
+<section id="reconcile">
+  <div class="kicker">The proven win</div>
+  <h2>Edit-propagation — correcting an earlier answer</h2>
+  <p>On “which question is next?” pt-forms and SOPilot are identical (both evaluate the rules). They diverge in one place that
+  matters clinically: when a patient <b>changes an earlier answer</b> so a question they already answered no longer applies.</p>
 
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 150" role="img" aria-label="Cost per turn: latency and context">
-      <style>.h{fill:#c9d3e6;font:700 12px "Segoe UI",sans-serif}.n{font:800 15px "Segoe UI",sans-serif}
-        .u{fill:#8a93a8;font:10px "Segoe UI",sans-serif}.arm{fill:#7b8499;font:10px "Segoe UI",sans-serif;text-anchor:middle}</style>
-      <text class="h" x="16" y="22">Cost per turn — the decision, not the phrasing</text>
-      <!-- latency panel -->
-      <rect x="16" y="36" width="360" height="98" rx="10" fill="rgba(224,87,79,.06)" stroke="rgba(224,87,79,.3)"/>
-      <text class="u" x="34" y="58">Decision latency (p50)</text>
-      <text class="n" x="34" y="92" fill="#e0574f">933 ms</text><text class="arm" x="70" y="112">A-weak</text>
-      <text class="n" x="150" y="92" fill="#f0a73c">819 ms</text><text class="arm" x="185" y="112">A-strong</text>
-      <text class="n" x="286" y="92" fill="#19b89a">~0 ms</text><text class="arm" x="312" y="112">B</text>
-      <!-- context panel -->
-      <rect x="392" y="36" width="352" height="98" rx="10" fill="rgba(91,141,239,.06)" stroke="rgba(91,141,239,.3)"/>
-      <text class="u" x="410" y="58">Model context to DECIDE</text>
-      <text class="n" x="410" y="92" fill="#f0a73c">~4,700 tok</text><text class="arm" x="452" y="112">A (whole form, every turn)</text>
-      <text class="n" x="620" y="92" fill="#19b89a">0 tok</text><text class="arm" x="648" y="112">B (no model)</text>
+  <div class="callout caveat"><div class="clabel">◆ The defect</div>
+    “Were you admitted to hospital?” → <b>Yes</b>. “For how long?” → <b>5 days</b>. The patient corrects the first answer to
+    <b>No</b>. The “how long?” field is now hidden — but its value <b>“5 days” stays in the record and prints on the PDF</b>.
+    pt-forms recomputes visibility forward but does not clear stale answers behind an edit.</div>
+
+  <p><b>The fix</b> — <span class="mono">POST /formflow/reconcile</span>: after an edit, recompute visibility with
+  <span class="mono">constraints.py</span> and <b>void every answered-but-hidden field</b> (iterating to a fixpoint, so
+  cascades resolve), writing “not applicable” back to pt-forms.</p>
+
+  <figure><div class="fig svgwrap">
+    <svg viewBox="0 0 760 180" role="img" aria-label="Stale answers reaching the PDF: pt-forms vs SOPilot">
+      <style>.lb{fill:#c9d3e6;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}.big{font:800 30px "Segoe UI",sans-serif;text-anchor:middle}.sub{fill:#8a93a8;font:10px "Segoe UI",sans-serif;text-anchor:middle}.t{fill:#c9d3e6;font:700 12px "Segoe UI",sans-serif}</style>
+      <text class="t" x="20" y="22">Stale answers leaking to the PDF — 60 backward-edit scenarios on the real form</text>
+      <line x1="120" y1="150" x2="700" y2="150" stroke="#3a4152"/>
+      <rect x="210" y="40" width="120" height="110" rx="5" fill="#e0574f"/><text class="big" x="270" y="30" fill="#e0574f">61</text>
+      <text class="lb" x="270" y="168">Original pt-forms</text>
+      <rect x="480" y="144" width="120" height="6" rx="3" fill="#19b89a"/><text class="big" x="540" y="132" fill="#19b89a">0</text>
+      <text class="lb" x="540" y="168">SOPilot + reconcile</text>
     </svg>
-    <figcaption><b>B decides with no model at all.</b> Its strong model is used only to <i>phrase</i> a pre-decided, correct
-    question — ~550 tokens (the current stage’s playbook), at the tolerant Next/Prev boundary. Live end-to-end through the
-    real endpoint: deterministic decision incl. the live <span class="mono">get-fields</span> fetch <b>p50 18.7 ms / p95 23.9 ms</b>;
-    with phrasing <b>p50 1.07 s / p95 1.74 s</b> — same order as Arm A, but never on the correctness path.</figcaption>
+    <figcaption><b>61 → 0.</b> Across 60 realistic corrections, pt-forms left 61 stale answers on hidden fields; SOPilot + reconcile
+      left none, at ~30 ms per reconcile. This is the one measured correctness win.</figcaption>
   </div></figure>
-
-  <div class="callout ok"><div class="clabel">◆ What this shows (and doesn’t)</div>
-    <b>Does show:</b> the decision of <i>which</i> field is next must be <i>evaluated</i>, not <i>inferred</i> — inference costs
-    ~1-in-3 skip errors, ~0.8–0.9 s, and ~4.7k tokens <i>every turn</i>; evaluation is exact at ~0 ms and 0 tokens.
-    <b>Does NOT show:</b> a SOP advantage over pt-forms — pt-forms already evaluates deterministically. The strong model still
-    runs each turn in our design, but only to <i>phrase</i> the pre-decided question (~1.07 s, ~550 tokens), off the correctness
-    path. Reproduce: <span class="mono">scripts/smartform_bench/</span> (README + harness + mock).</div>
+  <p class="small">Honest note: this isn’t exclusive technology — pt-forms could add the same reconcile to its own MCP. What the
+  experiment proves is that the gap is <b>real and sized</b>, and that SOPilot’s constraint engine closes it cleanly.</p>
 </section>
 
-<!-- instage -->
-<section id="instage">
-  <div class="kicker">The design variant we’d skipped — and the authoring trade-off</div>
-  <h2>“Let the LLM navigate within a stage” — tested</h2>
-  <p class="lead-p">The original idea was a hybrid: constraints handle stage-to-stage; an <b>LLM handles in-stage
-  navigation</b> (from the playbook). We had only tested the strawman (LLM over the <i>whole</i> form). So we tested the real
-  variant — an LLM given <b>only the current stage’s self-contained fields</b> — against the deterministic engine.</p>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Navigation approach</th><th>Accuracy (all)</th><th>Accuracy (conditional)</th><th>Per-turn</th><th>Failure mode</th></tr></thead>
-    <tbody>
-      <tr><td>LLM · whole form (gpt-4o-mini)</td><td>83%</td><td><b style="color:#e0574f">56%</b></td><td>~0.9 s</td><td>wrong-skip</td></tr>
-      <tr><td>LLM · <b>in-stage</b> (gpt-4o-mini)</td><td>87%</td><td><b style="color:#f0a73c">88.5%</b></td><td>~0.7 s</td><td>wrong-skip</td></tr>
-      <tr><td>LLM · <b>in-stage</b> (gpt-4o)</td><td>90%</td><td>100%*</td><td>~0.7 s</td><td>wrong-skip</td></tr>
-      <tr><td><b>Deterministic</b> (constraints.py)</td><td><b style="color:#19b89a">100%</b></td><td><b style="color:#19b89a">100%</b></td><td><b>~0 ms</b></td><td>—</td></tr>
-    </tbody>
-  </table></div>
-  <p class="small">*gpt-4o got the conditional decisions in-sample but still made ordering/“done” errors → 90% overall.
-  Restricting to one self-contained stage lifts the weak model 56%→88.5% — the original instinct had merit — but it’s still
-  short of 100%, at a per-turn model call. Reproduce: <span class="mono">scripts/smartform_bench/instage_ab.py</span>.</p>
-
-  <div class="callout info"><div class="clabel">◆ Can a better playbook + the STRONG supervisor close the gap? (we searched)</div>
-    We swept playbook formats with the real supervisor model (gpt-4o) on two stages — an easy one (30 <span class="mono">isYes</span>
-    chains) and the <b>hardest</b> (20 conditional, 16 value-comparisons, 17 compound <span class="mono">and/or</span>).
-    <b>A clean playbook ties deterministic on the easy stage (100%)</b>; on the hardest, the best format hits 100% but most land
-    <b>97–99%</b> (a few compound-condition slips). Three lessons: <b>(1) format matters non-monotonically</b> —
-    <b>chain-of-thought actively <i>hurts</i></b> (76–81%); more words ≠ better. <b>(2) the best format isn’t stable</b> — terse
-    won the easy stage, <span class="mono">rules-json</span> won the hard one — so tuning playbooks to beat deterministic is
-    fragile. <b>(3) for gating the playbook isn’t under-informative</b> — the conditions <i>are</i> the info. Across all stages
-    it’s ~<b>90% overall / ~100% conditional</b>, a <b>probabilistic tie on a sample</b>, not exact-by-construction, at ~0.8 s +
-    tokens/turn. So the supervisor <i>can</i> navigate, but there’s no accuracy reason to spend it there. <b>Richer playbooks pay
-    off on the non-navigation work</b> — coercion, judgment, the fuzzy <span class="mono">.md</span> rules, phrasing — where an
-    LLM is needed at all (the deterministic gate can’t). <b>Honest correction:</b> on 16 such SmartForm judgment cases (derived
-    dates, former-smoker, colloquial→diagnosis, unit conversion, red-flag &amp; critical <b>alerts</b>, <b>contradiction</b>
-    detection, N/A logic) the strong model did <b>not</b> beat the weak one — <b>15/16 both</b>. So the split is <b>“LLM vs
-    deterministic,” not “strong vs weak.”</b> The strong-supervisor advantage is unproven against our capable weak proxy
-    (gpt-4o-mini); it may still hold against the <i>actual</i> realtime voice model (gpt-realtime), which we haven’t tested.
-    Labs: <span class="mono">playbook_lab.py</span>, <span class="mono">judgment_ab.py</span>.</div>
-
-  <div class="callout key"><div class="clabel">◆ The real prize is authoring cost — here’s the safe way to win it</div>
-    The strongest argument for the hybrid isn’t runtime — it’s that <b>authoring 269 conditions is hard</b>, while “stages +
-    let the LLM handle in-stage” is light. True. But two facts reframe it: <b>(1)</b> all deps are intra-stage, so “LLM in-stage”
-    means the LLM owns <b>all 182 gates</b> (≈88%, weak); <b>(2)</b> the failure modes differ —
-    <b>under-authored + deterministic = over-ask</b> (a maybe-irrelevant question; <b>safe</b>), whereas
-    <b>under-authored + LLM = wrong-skip</b> (a missed required question; <b>unsafe</b> for medical intake). So get the authoring
-    win in the <b>authoring layer</b>, not the runtime: author only the safety-critical gates (the rest are asked in order), and
-    make full authoring cheap with the <b>constraint-graph Studio</b> (visualize + AI-assisted edit + contradiction-check).
-    <b>Make authoring easy and keep execution deterministic — don’t move navigation to the LLM.</b></div>
-</section>
-
-<!-- completion -->
-<section id="completion">
-  <div class="kicker">Robot accuracy — end-to-end, with a real weak voice model</div>
-  <h2>Does the robot fill the whole form correctly?</h2>
-  <p class="lead-p">We put an actual weak model — <b>gpt-4o-mini, context capped at 32k</b> (the realtime voice model’s
-  budget) — in the loop as the voice agent, and ran the <b>full 269-question form to completion</b> under both setups.
-  Ground truth is the form’s own show-if rules: did the robot ask <b>all-and-only</b> the visible fields, honor every skip,
-  and reach the end?</p>
-
-  <div class="callout key"><div class="clabel">◆ The one thing that decides this</div>
-    <b>Who chooses the next question?</b> If the <b>weak voice model</b> chooses (the naive approach), it misreads skip-logic
-    ~1 turn in 3 (see previous section). If the <b>support system</b> chooses and the weak model just relays — which is how
-    <b>both</b> 🅐 Original pt-forms (its server) and 🅑 SOPilot (its supervisor) work — the weak model can’t steer the form
-    wrong. That’s why both complete accurately.</div>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 190" role="img" aria-label="End-to-end completion accuracy by who decides navigation">
-      <style>
-        .gl{stroke:#2b3140;stroke-width:1;stroke-dasharray:3 4}.lbl{fill:#c9d3e6;font:700 12px "Segoe UI",sans-serif}
-        .cap{fill:#8a93a8;font:10px "Segoe UI",sans-serif}.val{font:800 13px "Segoe UI",sans-serif}
-        .tk{fill:#7b8499;font:9px var(--mono),monospace;text-anchor:middle}
-      </style>
-      <text class="lbl" x="16" y="20">End-to-end completion accuracy — full 269-question form, gpt-4o-mini voice model</text>
-      <line class="gl" x1="250" y1="34" x2="250" y2="150"/><text class="tk" x="250" y="166">0%</text>
-      <line class="gl" x1="490" y1="34" x2="490" y2="150"/><text class="tk" x="490" y="166">50</text>
-      <line class="gl" x1="730" y1="34" x2="730" y2="150"/><text class="tk" x="730" y="166">100</text>
-      <text class="lbl" x="16" y="54">Weak model decides</text><text class="cap" x="16" y="68">naive — no support</text>
-      <rect x="250" y="42" width="268" height="22" rx="4" fill="#e0574f"/><text class="val" x="528" y="58" fill="#e0574f">~56%</text>
-      <text class="lbl" x="16" y="92">🅐 Original pt-forms</text><text class="cap" x="16" y="106">server decides, weak relays</text>
-      <rect x="250" y="80" width="480" height="22" rx="4" fill="#19b89a"/><text class="val" x="700" y="96" fill="#0f1420">100%</text>
-      <text class="lbl" x="16" y="130">🅑 SOPilot</text><text class="cap" x="16" y="144">supervisor decides, weak relays</text>
-      <rect x="250" y="118" width="480" height="22" rx="4" fill="#19b89a"/><text class="val" x="700" y="134" fill="#0f1420">100%</text>
-    </svg>
-    <figcaption><b>Both real systems: 100%.</b> Identical walks — <b>126 fields asked, 143 skipped, 0 skip violations, reached
-    “done”.</b> The SOPilot run went through the live <span class="mono">/formflow/prepare</span> endpoint end-to-end in ~2.8 s.
-    The ~56% bar is the naive case where the weak model itself decides (from the previous section) — neither production system does this.</figcaption>
-  </div></figure>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Setup</th><th>Who decides the next question</th><th>End-to-end completion accuracy</th><th>Decision latency / turn</th><th>Reached “done”</th><th>Skip violations</th></tr></thead>
-    <tbody>
-      <tr><td>Weak model decides <span class="small">(naive)</span></td><td>gpt-4o-mini</td><td><b style="color:#e0574f">~56%</b> <span class="small">(skip-logic)</span></td><td>~0.9 s <span class="small">(model)</span></td><td>—</td><td>many</td></tr>
-      <tr><td>🅐 Original pt-forms</td><td>server (<span class="mono">_compute_next_field</span>)</td><td><b style="color:#19b89a">100%</b></td><td>&lt;1 ms <span class="small">(deterministic)</span></td><td>✓</td><td>0</td></tr>
-      <tr><td>🅑 SOPilot (live)</td><td>supervisor (<span class="mono">constraints.py</span>)</td><td><b style="color:#19b89a">100%</b></td><td><b>~19 ms</b> <span class="small">(incl. live get-fields)</span></td><td>✓</td><td>0</td></tr>
-    </tbody>
-  </table></div>
-  <p class="small">Latency is the per-turn <b>decision</b> cost. Full 126-turn walkthrough wall-clock through the live SOPilot
-  endpoint: <b>~2.8 s</b> total. (Neither real system puts the model on the navigation decision, so both are ms-scale.)</p>
-  <p class="small">The 32k cap never binds here — the whole-form catalog is only ~4.7k tokens — so the naive model’s errors are
-  <b>reasoning</b>, not context overflow. The lesson holds regardless: keep the weak model off the navigation decision.
-  Reproduce: <span class="mono">scripts/smartform_bench/completion_ab.py</span>.</p>
-</section>
-
-<!-- answercapture -->
-<section id="answercapture">
-  <div class="kicker">Robot accuracy — capturing the answer</div>
-  <h2>Turning what the patient <i>says</i> into the value to <i>store</i></h2>
-
-  <div class="callout key"><div class="clabel">◆ Two new terms, in plain words</div>
-    <b>Answer-capture</b> = converting what the patient <i>says</i> (messy, spoken, any language) into the exact
-    <b>value to store</b> in the field. <b>Coercion rules</b> = the rules for that conversion — spoken numbers → digits
-    (<i>“forty-five”</i> → <span class="mono">45</span>), any date phrasing → <span class="mono">YYYY-MM-DD</span>, yes/no
-    wording → <span class="mono">Yes/No</span>, a <i>described</i> choice → exactly one listed option, and
-    <i>“don’t know”</i> / a refusal → <span class="mono">unknown</span>.</div>
-
-  <p class="lead-p">This is the robot’s core language job. We built it as a SOPilot step
-  (<span class="mono">POST /formflow/interpret</span>, the strong supervisor applying the SOP flow block’s coercion rules)
-  and A/B’d it against how pt-forms does it today.</p>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>&nbsp;</th><th>🅐 Original pt-forms</th><th>🅑 SOPilot (interpret step)</th></tr></thead>
-    <tbody>
-      <tr><td><b>Who interprets the utterance</b></td>
-        <td>The <b>weak realtime model</b> (gpt-4o-mini) produces the value, then pt-forms’ <b>rule-based</b>
-          <span class="mono">_validate_and_normalize_answer</span> finalizes the format (option-key map, yes/no dictionary, number strip).</td>
-        <td>The <b>strong supervisor</b> (gpt-4o) normalizes the utterance using the SOP flow block’s coercion rules.</td></tr>
-    </tbody>
-  </table></div>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Patient said</th><th>Field</th><th>Value stored (both arms)</th></tr></thead>
-    <tbody>
-      <tr><td><i>“I’m forty-five”</i></td><td>Age (number)</td><td><span class="mono">45</span></td></tr>
-      <tr><td><i>“claro que sí”</i></td><td>Have an attorney? (yes/no)</td><td><span class="mono">Yes</span></td></tr>
-      <tr><td><i>“five foot ten”</i></td><td>Height in inches</td><td><span class="mono">70</span></td></tr>
-      <tr><td><i>“about a pack”</i></td><td>Cigarettes per day</td><td><span class="mono">20</span></td></tr>
-      <tr><td><i>“I got laid off last month”</i></td><td>Employment status (choice)</td><td><span class="mono">Unemployed</span></td></tr>
-      <tr><td><i>“the day after Christmas last year”</i></td><td>Date of injury</td><td><span class="mono">2025-12-26</span></td></tr>
-      <tr><td><i>“no idea”</i></td><td>Last tetanus shot</td><td><span class="mono">unknown</span></td></tr>
-    </tbody>
-  </table></div>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Setup</th><th>Interpreter</th><th>Answer-capture accuracy</th><th>Latency p50</th></tr></thead>
-    <tbody>
-      <tr><td>🅐 Original pt-forms <span class="small">(weak + rules)</span></td><td>gpt-4o-mini → pt-forms normalize</td><td><b style="color:#19b89a">100%</b> <span class="small">(31/31)</span></td><td>~0.99 s</td></tr>
-      <tr><td>🅑 SOPilot <span class="small">(interpret)</span></td><td>gpt-4o (strong supervisor)</td><td><b style="color:#19b89a">100%</b> <span class="small">(31/31)</span></td><td>~0.95 s</td></tr>
-    </tbody>
-  </table></div>
-
-  <div class="callout ok"><div class="clabel">◆ Result — parity (an honest null result)</div>
-    Over <b>31 realistic cases</b> (colloquial, multilingual, slang, unit conversion, world-knowledge, relative dates), <b>both
-    scored 100%</b> — <b>🅐 Original 31/31, 🅑 SOPilot 31/31</b> — at ~0.95–0.99 s each (see table). <b>gpt-4o-mini is already good enough
-    at this narrow task</b>; the strong supervisor <b>matches but does not beat it</b> (and isn’t faster). So answer-capture is
-    <b>not</b> a differentiator either. We built the step (it’s useful for keeping the coercion rules editable in the Studio and
-    for a compliant model choice), but it doesn’t buy accuracy over what pt-forms already gets.
-    Reproduce: <span class="mono">scripts/smartform_bench/interpret_ab.py</span>.</div>
-</section>
-
-<!-- headtohead -->
-<section id="headtohead">
-  <div class="kicker">The real head-to-head — Original vs SOPilot</div>
-  <h2>Where the two flows genuinely differ: a corrected answer that hides a question</h2>
-  <p class="lead-p">On “which question is next?” the two systems are <b>identical</b> (both evaluate the rules deterministically).
-  The one place they diverge — and it’s a real medical-data-integrity issue — is what happens when a patient <b>corrects an
-  earlier answer</b> so a question they already answered no longer applies.</p>
-
-  <div class="callout key"><div class="clabel">◆ What “reconcile” means (new term)</div>
-    <b>Reconcile</b> = a quick cleanup pass that re-checks the form’s show-if rules against the current answers and
-    <b>removes any answer that no longer applies</b>. When a correction hides a question that was already answered, reconcile
-    marks that stale answer “not applicable” so it cannot reach the PDF. It is a single server call
-    (<span class="mono">POST /formflow/reconcile</span>) run after an edit — think of it as <i>“tidy up the answers after a change.”</i></div>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>&nbsp;</th><th>🅐 &nbsp;Original pt-forms</th><th>🅑 &nbsp;SOPilot (SOP&nbsp;+&nbsp;reconcile)</th></tr></thead>
-    <tbody>
-      <tr><td><b>What it is</b></td>
-        <td>The current production flow: the pt-forms <b>MCP server + Laravel backend</b> + the voice agent.</td>
-        <td>The SOP flow (this project) <b>plus one new step</b>: <span class="mono">POST /formflow/reconcile</span>.</td></tr>
-      <tr><td><b>Skip logic</b></td>
-        <td>Deterministic, server-side (<span class="mono">_compute_next_field</span>).</td>
-        <td>Deterministic (<span class="mono">constraints.py</span>) — <b>identical behaviour</b>.</td></tr>
-      <tr><td><b>When a patient corrects an earlier answer</b></td>
-        <td>The now-hidden question <b>keeps its old answer</b> — nothing clears it (<span class="mono">_get_next_empty_field_id</span> skips already-valued fields; the PDF drops only blank / “not applicable”, never re-checking conditions).</td>
-        <td>Reconcile recomputes visibility and <b>voids every answered-but-hidden field</b> (to a fixpoint, so cascades are handled), writing “not applicable” back to pt-forms.</td></tr>
-    </tbody>
-  </table></div>
-
-  <div class="callout caveat"><div class="clabel">◆ The defect, in one example</div>
-    “Were you admitted to hospital?” → <b>Yes</b>. “For how long?” → <b>5 days</b>. The patient then corrects the first answer
-    to <b>No</b>. The “how long?” question is now hidden — but in <b>🅐 Original pt-forms</b> the value <b>“5 days” stays in the
-    record and prints on the PDF</b>. In <b>🅑 SOPilot</b>, reconcile voids it.</div>
-
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 210" role="img" aria-label="Stale answers reaching the PDF: Original vs SOPilot">
-      <style>
-        .ax{stroke:#3a4152;stroke-width:1.2}.lb{fill:#c9d3e6;font:700 12px "Segoe UI",sans-serif;text-anchor:middle}
-        .big{font:800 30px "Segoe UI",sans-serif;text-anchor:middle}.sub{fill:#8a93a8;font:10px "Segoe UI",sans-serif;text-anchor:middle}
-        .t{fill:#c9d3e6;font:700 12px "Segoe UI",sans-serif}
-      </style>
-      <text class="t" x="20" y="22">Stale answers that leak to the PDF — 60 backward-edit scenarios on the real form</text>
-      <line class="ax" x1="120" y1="170" x2="700" y2="170"/>
-      <!-- Original: 61 (tall red) -->
-      <rect x="200" y="46" width="130" height="124" rx="5" fill="#e0574f"/>
-      <text class="big" x="265" y="34" fill="#e0574f">61</text>
-      <text class="lb" x="265" y="188">🅐 Original pt-forms</text>
-      <text class="sub" x="265" y="202">stale answers printed</text>
-      <!-- SOPilot: 0 (flat green) -->
-      <rect x="490" y="164" width="130" height="6" rx="3" fill="#19b89a"/>
-      <text class="big" x="555" y="152" fill="#19b89a">0</text>
-      <text class="lb" x="555" y="188">🅑 SOPilot (+reconcile)</text>
-      <text class="sub" x="555" y="202">stale answers printed</text>
-    </svg>
-    <figcaption><b>Accuracy (data integrity):</b> Original pt-forms left <b>61</b> stale answers on hidden fields across 60
-    realistic corrections; SOPilot + reconcile left <b>0</b>. <b>Latency:</b> reconcile runs <b>p50 30 ms / p95 37 ms</b> live
-    (incl. reading pt-forms + writing the voids back).</figcaption>
-  </div></figure>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Setup</th><th>Stale answers leaking to PDF<br>(60 scenarios)</th><th>Reconcile latency<br>p50 / p95</th><th>Next-field accuracy¹</th></tr></thead>
-    <tbody>
-      <tr><td>🅐 Original pt-forms</td><td><b style="color:#e0574f">61</b></td><td>— <span class="small">(no such step)</span></td><td>100%</td></tr>
-      <tr><td>🅑 SOPilot (SOP + reconcile)</td><td><b style="color:#19b89a">0</b></td><td><b>30 / 37 ms</b></td><td>100%</td></tr>
-    </tbody>
-  </table></div>
-  <p class="small">¹ Next-field / skip-logic accuracy is <b>100% for both</b> — that decision is deterministic in each system, so it is
-  <b>not</b> a differentiator. The difference is entirely in edit-propagation. Reproduce: <span class="mono">scripts/smartform_bench/reconcile_ab.py</span>.</p>
-
-  <div class="callout ok"><div class="clabel">◆ Honest read for PolarTie</div>
-    This is the <b>one measurable place</b> the SOP flow adds correctness today: it closes a real edit-propagation gap
-    (<b>61 leaked answers → 0</b>) at ~30 ms. It is <b>not</b> exclusive technology — pt-forms could add the same reconcile to
-    its own MCP. What the experiment proves is that the gap is <b>real and sized</b>, and that SOPilot’s constraint graph
-    (<span class="mono">constraints.py</span>) closes it cleanly. Everything else (next-field, navigation) is parity.</div>
-</section>
-
-<!-- repeaters -->
+<!-- 6 · REPEATERS -->
 <section id="repeaters">
-  <div class="kicker">Completeness — repeating groups</div>
-  <h2>Repeaters: “list each medication…”, done right</h2>
-  <p class="lead-p">Some form sections <b>repeat</b> — one medication, then another; each prior injury; each dependent. pt-forms
-  models this with a <b>Repeater</b> field whose <span class="mono">RepeatFrom</span> marks the group start; every instance is
-  stored as <span class="mono">&lt;field&gt;[i]</span>. This was the one construct the spike didn’t handle — now it does, across
-  all three layers.</p>
+  <div class="kicker">Completeness</div>
+  <h2>Repeating groups</h2>
+  <p>Some sections repeat — one medication, then another; each prior injury. pt-forms models this with a <b>Repeater</b> field
+  whose <span class="mono">RepeatFrom</span> marks the group; each instance is stored as <span class="mono">&lt;field&gt;[i]</span>.
+  SOPilot handles them across all three layers.</p>
 
-  <figure><div class="fig">
-    <svg viewBox="0 0 760 190" role="img" aria-label="How a repeat group iterates">
+  <figure><div class="fig svgwrap">
+    <svg viewBox="0 0 760 150" role="img" aria-label="repeat group loop">
       <defs><marker id="rp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8a93a8"/></marker>
         <marker id="rpy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#19b89a"/></marker></defs>
       <style>.rb{rx:8;stroke-width:1.6}.rt{fill:#fff;font:700 11px "Segoe UI",sans-serif;text-anchor:middle}.rs{fill:#e7ebf3;font:8.5px var(--mono),monospace;text-anchor:middle}.rl{font:700 9px "Segoe UI",sans-serif;text-anchor:middle}</style>
-      <text class="rl" x="150" y="20" fill="#8a93a8">instance i — serve each visible member in order</text>
-      <rect class="rb" x="30" y="30" width="110" height="40" fill="rgba(91,141,239,.18)" stroke="#5b8def"/><text class="rt" x="85" y="50">med_name[i]</text><text class="rs" x="85" y="63">Medication</text>
-      <rect class="rb" x="160" y="30" width="110" height="40" fill="rgba(91,141,239,.18)" stroke="#5b8def"/><text class="rt" x="215" y="50">med_dose[i]</text><text class="rs" x="215" y="63">Dose</text>
-      <line x1="140" y1="50" x2="159" y2="50" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#rp)"/>
-      <rect class="rb" x="320" y="26" width="150" height="48" fill="#2a2114" stroke="#f0a73c"/><text class="rt" x="395" y="46">add another? 🔁</text><text class="rs" x="395" y="61">the Repeater control</text>
-      <line x1="270" y1="50" x2="319" y2="50" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#rp)"/>
-      <!-- yes loop -->
-      <path d="M395,74 C395,120 150,120 85,74" fill="none" stroke="#19b89a" stroke-width="1.8" marker-end="url(#rpy)"/>
-      <text class="rl" x="240" y="118" fill="#7ee0cd">Yes → instance i+1</text>
-      <!-- no exit -->
-      <rect class="rb" x="560" y="30" width="170" height="40" fill="rgba(25,184,154,.14)" stroke="#39425a"/><text class="rt" x="645" y="50">next field after group</text>
-      <line x1="470" y1="50" x2="559" y2="50" stroke="#8a93a8" stroke-width="1.6" marker-end="url(#rp)"/><text class="rl" x="515" y="42" fill="#8a93a8">No</text>
-      <text class="rs" x="395" y="150" fill="#8a93a8">each member gated per-instance · answers keyed med_name[0], med_name[1], …</text>
+      <rect class="rb" x="30" y="30" width="110" height="40" fill="rgba(91,141,239,.16)" stroke="#5b8def"/><text class="rt" x="85" y="48">member[i]</text><text class="rs" x="85" y="62">e.g. med name</text>
+      <rect class="rb" x="160" y="30" width="110" height="40" fill="rgba(91,141,239,.16)" stroke="#5b8def"/><text class="rt" x="215" y="48">member[i]</text><text class="rs" x="215" y="62">e.g. dose</text>
+      <line x1="140" y1="50" x2="159" y2="50" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#rp)"/>
+      <rect class="rb" x="310" y="26" width="150" height="48" fill="#2a2114" stroke="#f0a73c"/><text class="rt" x="385" y="46">add another? 🔁</text><text class="rs" x="385" y="61">the Repeater control</text>
+      <line x1="270" y1="50" x2="309" y2="50" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#rp)"/>
+      <path d="M385,74 C385,118 150,118 85,74" fill="none" stroke="#19b89a" stroke-width="1.7" marker-end="url(#rpy)"/>
+      <text class="rl" x="235" y="116" fill="#7ee0cd">Yes → instance i+1</text>
+      <rect class="rb" x="540" y="30" width="180" height="40" fill="rgba(25,184,154,.14)" stroke="#2c3346"/><text class="rt" x="630" y="54">next field after group</text>
+      <line x1="460" y1="50" x2="539" y2="50" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#rp)"/><text class="rl" x="500" y="42" fill="#8a93a8">No</text>
     </svg>
-    <figcaption>The driver serves each visible member of instance <span class="mono">i</span>, then the “add another?”
-      control; <b>Yes</b> opens instance <span class="mono">i+1</span>, <b>No</b> moves on.</figcaption>
+    <figcaption>prepare serves each visible member of instance <span class="mono">i</span>, then the “add another?” control;
+      reconcile is instance-aware (voids <span class="mono">&lt;member&gt;[i]</span>, or all instances if the group is hidden).</figcaption>
+  </div></figure>
+</section>
+
+<!-- 7 · INTEGRATION -->
+<section id="integration">
+  <div class="kicker">The boundary</div>
+  <h2>Integration with pt-forms</h2>
+  <p>SOPilot and pt-forms meet at exactly two points: <b>once offline</b> (ingest the form) and <b>once per turn / per edit</b>
+  (read answers, write voids). No shared database, no duplicated answer store.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Reused from pt-forms</th><th>Reused from SOPilot</th><th>Newly added</th></tr></thead>
+    <tbody><tr>
+      <td>form definitions · answer store · browser UI · voice agent · the <span class="mono">get/set-fields</span> seam</td>
+      <td>SOP model (stages/versioning/Studio) · prompt blocks · the strong-supervisor pattern · tenancy</td>
+      <td><span class="mono">constraints.py</span> · the form→SOP pipeline · the map index · <span class="mono">/formflow/{prepare,reconcile,graph}</span></td>
+    </tr></tbody>
+  </table></div>
+  <div class="callout key"><div class="clabel">◆ In one line</div>
+    <b>pt-forms owns</b> the form, the answers, the UI and the voice; <b>SOPilot owns</b> the grouped playbooks, the
+    deterministic gating, and the supervisor. Ingest is offline; per turn SOPilot reads answers and returns one prepared line;
+    per edit it returns the fields to void.</div>
+</section>
+
+<!-- 8 · EVIDENCE -->
+<section id="evidence">
+  <div class="kicker">What we measured</div>
+  <h2>Evidence</h2>
+  <p>All on the real 269-question form. Two findings shape the architecture; one is the win.</p>
+
+  <h3>1 · Navigation must be evaluated, not inferred</h3>
+  <p>If a language model <i>decides</i> the next field (instead of evaluating the conditions), it mis-handles skip-logic. This is
+  why both pt-forms and SOPilot keep gating deterministic.</p>
+  <figure><div class="fig svgwrap">
+    <svg viewBox="0 0 760 130" role="img" aria-label="skip-logic accuracy">
+      <style>.gl{stroke:#2b3140;stroke-width:1;stroke-dasharray:3 4}.lb{fill:#c9d3e6;font:700 11px "Segoe UI",sans-serif}.val{font:800 12px "Segoe UI",sans-serif}.tk{fill:#7b8499;font:9px var(--mono),monospace;text-anchor:middle}</style>
+      <text class="lb" x="12" y="16">Skip-logic decisions correct (vs the form’s own rules)</text>
+      <line class="gl" x1="230" y1="26" x2="230" y2="112"/><text class="tk" x="230" y="126">0%</text>
+      <line class="gl" x1="480" y1="26" x2="480" y2="112"/><text class="tk" x="480" y="126">50</text>
+      <line class="gl" x1="730" y1="26" x2="730" y2="112"/><text class="tk" x="730" y="126">100</text>
+      <text class="lb" x="12" y="46">model infers</text><rect x="230" y="34" width="280" height="18" rx="3" fill="#e0574f"/><text class="val" x="520" y="48" fill="#e0574f">~56%</text>
+      <text class="lb" x="12" y="76">deterministic</text><rect x="230" y="64" width="500" height="18" rx="3" fill="#19b89a"/><text class="val" x="700" y="78" fill="#0f1420">100%</text>
+    </svg>
+    <figcaption><b>Left to infer, a model mis-handles ~1 skip in 2–3; evaluating the conditions is exact.</b> Both systems
+      evaluate — so this is a shared principle, not a difference between them.</figcaption>
   </div></figure>
 
+  <h3>2 · Robot accuracy — parity, end-to-end</h3>
+  <p>With a real weak voice model in the loop (context-capped), both flows fill the whole 269-field form correctly, because in
+  both the model only relays and the support system decides.</p>
   <div class="tablewrap"><table>
-    <thead><tr><th>Layer</th><th>What it does for repeaters</th></tr></thead>
+    <thead><tr><th>Dimension</th><th>Original pt-forms</th><th>SOPilot</th><th>Verdict</th></tr></thead>
     <tbody>
-      <tr><td><b>Pipeline</b> (<span class="mono">form_to_sop.py</span>)</td><td>Detects the Repeater + its members (from <span class="mono">RepeatFrom</span> up to the repeater, mirroring pt-forms) and writes <span class="mono">repeat_group</span>/<span class="mono">members</span> into the map block; keeps the whole group in <b>one stage</b>.</td></tr>
-      <tr><td><b>prepare</b></td><td>Serves each visible unanswered member at the current instance, then the “add another?” control; per-instance gating (a member’s show-if is evaluated on <i>that</i> instance’s values). Yes → next instance, No → past the group.</td></tr>
-      <tr><td><b>reconcile</b></td><td>Instance-aware: voids <span class="mono">&lt;member&gt;[i]</span> hidden at that instance, and voids <b>all instances</b> + the now-moot “add another?” answer when the whole group is hidden — so a removed or hidden repeating item can’t leak stale answers into the PDF.</td></tr>
+      <tr><td>End-to-end completion (right field, honor skips)</td><td>100%</td><td>100%</td><td>parity</td></tr>
+      <tr><td>Answer capture (colloquial, units, dates, alerts)</td><td>works</td><td>works</td><td>parity</td></tr>
+      <tr style="background:rgba(62,207,142,.08)"><td><b>Edit-propagation (stale answers on the PDF)</b></td><td><b style="color:var(--danger)">61</b></td><td><b style="color:var(--ok)">0</b></td><td><b>SOPilot</b></td></tr>
     </tbody>
   </table></div>
-
-  <div class="callout key"><div class="clabel">◆ Role &amp; how to use</div>
-    <b>Role:</b> completeness — forms with repeating sections work end-to-end, and the <b>proven reconcile win extends to
-    repeating data</b> (the highest-risk place for stale answers). <b>How to use:</b> author it in pt-forms as a Repeater field
-    with <span class="mono">RepeatFrom</span> — the pipeline picks it up automatically, <b>no engine code</b> (adding a form,
-    repeaters and all, stays a data operation). Instances are addressed <span class="mono">&lt;name&gt;[i]</span> in the answer
-    snapshot. <span class="small">Covered by 13 tests against a synthetic repeater fixture — no pt-forms sample form uses
-    repeaters, so we built one to validate all three layers.</span></div>
+  <p class="small">Reproducible harnesses live in <span class="filepath">scripts/smartform_bench/</span>. Backend engine covered by
+  <b>140 automated tests</b>.</p>
 </section>
 
-<!-- candidate -->
-<section id="candidate">
-  <div class="kicker">A candidate added value — not yet proven</div>
-  <h2>Config-driven authoring &amp; governance</h2>
-  <p class="lead-p">Distinct from the <b>proven</b> value (reconcile). This one is about <b>who can change the form’s behaviour,
-  and how it’s governed</b> — an authoring/ops benefit, <b>not</b> a runtime-accuracy one (accuracy is parity, as measured).</p>
-
-  <div class="callout caveat"><div class="clabel">◆ One honest correction to the premise</div>
-    pt-forms’ state machine is <b>not</b> code-based at the rule level — its FieldConditions are already <b>config</b>, authored in
-    pt-forms’ own visual condition builder. Both systems are “generic <b>engine</b> (code) + per-form <b>rules</b> (config)”. So SOP
-    doesn’t move a code machine to config; it moves a <b>wider slice</b> of behaviour into versioned, Studio-editable config.</div>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Aspect</th><th>🅐 pt-forms today</th><th>🅑 SOP flow</th></tr></thead>
-    <tbody>
-      <tr><td>Field conditions (show-if)</td><td>config (visual builder)</td><td>config (map block) — <b>parity</b></td></tr>
-      <tr><td>Evaluation engine</td><td>code (<span class="mono">_compute_next_field</span>)</td><td>code (<span class="mono">constraints.py</span>) — <b>parity</b></td></tr>
-      <tr><td><b>Question grouping / stages</b></td><td>none (field-by-field)</td><td><b>explicit config (SOP stages)</b></td></tr>
-      <tr><td><b>Per-group playbooks &amp; instructions</b></td><td>one global <span class="mono">agent_prompt.md</span> + code</td><td><b>versioned prompt blocks per stage</b></td></tr>
-      <tr><td><b>Coercion rules</b></td><td>in code / the agent prompt</td><td><b>the flow block (editable)</b></td></tr>
-      <tr><td><b>Versioning · audit · RBAC of all the above</b></td><td>split across schema DB + code + files</td><td><b>one Studio, versioned</b></td></tr>
-    </tbody>
-  </table></div>
-
-  <div class="callout ok"><div class="clabel">◆ Adding another form = data, not code</div>
-    The engine is <b>generic</b>. To onboard a new form you run the ingest pipeline (<span class="mono">form_to_sop.py</span>) on
-    its <span class="mono">fields.json</span> — no changes to <span class="mono">constraints.py</span>. It already covers the full
-    FieldCondition grammar (<span class="mono">isYes/isNo/values[…]</span>, comparisons, and compound <span class="mono">AND/OR/NOT</span>
-    — the real form uses 40 <span class="mono">AND</span> conditions). You’d touch engine code <b>only</b> for something new: an
-    unseen operator, pt-forms’ fuzzy <span class="mono">.md</span> rule layer, repeaters, or a new field type. (Same is true of
-    pt-forms’ own generic engine.)</div>
-
-  <div class="callout key"><div class="clabel">◆ Honest status of this value</div>
-    Real for <b>medical governance</b> — non-engineers editing grouping, instructions &amp; coercion in one <b>versioned, auditable</b>
-    place instead of touching server code + <span class="mono">agent_prompt.md</span> + <span class="mono">.md</span> files. But it’s a
-    <b>product/ops</b> benefit to be <b>validated against pt-forms’ existing builder</b>, not a measured accuracy win. <b>Candidate,
-    not proven.</b></div>
-
-  <div class="callout info"><div class="clabel">◆ Maintenance cost — the honest split</div>
-    Maintenance = <b>editing effort + validation/regression safety</b>. <b>LLM-in-stage (prose playbooks)</b> is cheaper to
-    <i>type</i>, but <b>unvalidatable</b> — no contradiction-check, no dead-end/cycle detection, no precise diff; every tweak
-    risks a <b>silent ~10–12% navigation regression</b> (a maintenance liability for medical). <b>Deterministic conditions +
-    the constraint-graph Studio</b> give NL edit → <b>validated</b> condition + diff, plus graph <b>impact analysis</b>
-    (“changing Q39 affects these 10 fields”) and <b>reconcile</b> for the consequences — cheap to edit <i>and</i> safe. So
-    “SOP navigation is simpler to maintain” holds when it means <b>deterministic + the Studio</b>; as LLM-prose it’s cheaper to
-    type but riskier to own. The maintenance win is in the <b>tooling</b> (graph · validation · reconcile), not the SOP
-    structure (which is <i>more</i> artifacts than a single <span class="mono">fields.json</span>).</div>
-
-  <div class="callout ok"><div class="clabel">◆ First slice prototyped — the constraint graph</div>
-    We’ve built the first step of a <b>constraint-graph Studio</b>: <span class="mono">GET /formflow/graph</span> turns the form’s
-    show-if rules into a live dependency graph (backed by <span class="mono">constraints.py</span>), rendered house-style. On the
-    real form: <b>269 fields · 143 conditional · 182 edges · 0 cross-stage · 0 dangling refs</b>, with hub controllers like one
-    question gating <b>30</b> fields. Dangling-reference detection is the first contradiction check. Next: <b>AI-assisted editing</b>
-    (the copilot proposes → validates → applies) and a <b>live execution trace</b> lighting the graph as answers flow.
-    <br><span class="small">Prototype render (separate page): the SmartForm Constraint Graph artifact.</span></div>
-</section>
-
-<!-- next -->
-<section id="next">
-  <div class="kicker">Status &amp; next steps</div>
-  <h2>Done, and what remains</h2>
-  <p><b>Decided &amp; built:</b> the hybrid — <b>pt-forms keeps the deterministic form engine + answers + UI</b>; <b>SOPilot
-  is the strong supervisor</b> (grouped playbooks, per-turn preparation, guaranteed gating via
-  <span class="mono">constraints.py</span>). SOP is reused for structure; its runtime is <b>not</b> extended.</p>
-  <div class="tablewrap"><table>
-    <thead><tr><th>✓ Done</th><th>Remaining</th></tr></thead>
-    <tbody>
-      <tr>
-        <td>
-          ✓ Group the form (20 stages)<br>
-          ✓ Emit the form SOP + playbook/flow/map blocks<br>
-          ✓ Supervisor loop spike (deterministic driver + strong-model prep)<br>
-          ✓ constraints.py engine + tests (132 pass)<br>
-          ✓ <b>Wired to live pt-forms</b> get-fields (id↔FieldName bridge)<br>
-          ✓ <b>Edit-propagation</b>: <span class="mono">/formflow/reconcile</span> + head-to-head (61 leaks → 0)<br>
-          ✓ <b>Robot accuracy</b>: end-to-end completion + answer-capture — both <b>parity</b> vs pt-forms<br>
-          ✓ <b>Repeaters</b>: pipeline metadata + prepare (instances + “add another?”) + reconcile (per-instance &amp; whole-group)<br>
-          ✓ Honest comparison vs pt-forms (reconcile is the only measured diff)
-        </td>
-        <td>
-          ▸ <b>Constraint-graph Studio</b> (in progress): unified graph view + AI editing with contradiction-checking + live execution trace<br>
-          ▫ Feed the instruction into the <b>realtime loop</b> via the MCP supervisor seam<br>
-          ▫ Generalize the pipeline + let admins refine playbooks in the Studio
-        </td>
-      </tr>
-    </tbody>
-  </table></div>
-  <div class="callout caveat"><div class="clabel">◆ Still to confirm with PolarTie</div>
-    <b>(1)</b> The strong-model endpoint must be a <b>compliant/BAA</b> one — medical answers are sent to it.
-    <b>(2)</b> Access to the <span class="mono">pt_ai_agent_mcp</span> submodule (the outer voice loop).
-    <b>(3)</b> That the prepared instruction feeds their realtime loop via the existing MCP supervisor seam.
+<!-- 9 · STUDIO -->
+<section id="studio">
+  <div class="kicker">The candidate value — built</div>
+  <h2>Constraint-graph Studio</h2>
+  <p>The rules that drive a 269-field form are the hard part to author and maintain. The Studio (in the SOPilot UI) makes them
+  <b>visible, editable, safe, and observable</b> — three capabilities pt-forms’ builder doesn’t combine:</p>
+  <div class="grid g3" style="margin:14px 0">
+    <div class="card"><span class="pill a">1 · Visualize</span><p class="small" style="margin:8px 0 0">The whole dependency graph
+      from the live rules: <b>269 fields · 143 conditional · 182 edges · 0 cross-stage · 0 dangling</b>, with hub controllers
+      (one question can gate 30 fields).</p></div>
+    <div class="card"><span class="pill b">2 · AI-edit, checked</span><p class="small" style="margin:8px 0 0">Change a rule in plain
+      English → the model proposes a condition → it’s <b>contradiction-checked</b> (dangling refs, self-reference, cycles,
+      always-true/false) → you see a diff → apply only if valid.</p></div>
+    <div class="card"><span class="pill win">3 · Live trace</span><p class="small" style="margin:8px 0 0">Set answers and watch the
+      graph light up: <b>answered · to-ask · hidden · stale</b> (a stale field is one reconcile would void) — gating and
+      edit-propagation, visible in real time.</p></div>
   </div>
-  <p class="small">Supersedes the earlier config/SOP explorations: a form is neither a config (static settings) nor an
-  SOP (probabilistic conversation) — it's a deterministic state machine pt-forms already runs, best served by SOPilot as
-  the strong supervisor above it. Every “today” claim is read from the repo as it stands.</p>
+  <div class="callout info"><div class="clabel">◆ Why this is the maintenance story</div>
+    Authoring rules as prose for a model to interpret is cheap to type but <b>unvalidatable</b> (silent regressions). The Studio
+    keeps rules <b>explicit and deterministic</b> yet cheap to edit — AI-assisted, contradiction-checked, diffable, with impact
+    analysis and reconcile for the consequences. Cheap <i>and</i> safe — the right trade for medical forms.</div>
+</section>
+
+<!-- 10 · NEXT -->
+<section id="next">
+  <div class="kicker">For PolarTie</div>
+  <h2>What to adopt &amp; next steps</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Item</th><th>Status</th><th>Recommendation</th></tr></thead>
+    <tbody>
+      <tr><td><b>Reconcile</b> (edit-propagation fix)</td><td><span class="pill win">proven</span></td><td>Adopt as a thin add-on: call <span class="mono">/formflow/reconcile</span> after an edit / before PDF. No engine rebuild.</td></tr>
+      <tr><td><b>Constraint-graph Studio</b></td><td><span class="pill a">built · candidate</span></td><td>Evaluate against pt-forms’ builder for authoring &amp; governance value.</td></tr>
+      <tr><td>Full SOP runtime (prepare loop)</td><td><span class="pill b">works, parity</span></td><td>Optional — adopt only if you want the SOP structure/Studio wholesale; no accuracy gain over pt-forms.</td></tr>
+      <tr><td>Repeaters, pipeline, tests</td><td><span class="pill b">done</span></td><td>Ready; validated on a synthetic repeater fixture.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout caveat"><div class="clabel">◆ To confirm with PolarTie before a live wire-up</div>
+    <b>(1)</b> A <b>compliant/BAA</b> endpoint for any model that sees medical answers. <b>(2)</b> Access to the
+    <span class="mono">pt_ai_agent_mcp</span> supervisor seam to feed the prepared instruction into the realtime loop.
+    <b>(3)</b> Which form construct beyond FieldConditions matters (the fuzzy <span class="mono">.md</span> rule layer, computed fields).</div>
+  <p class="small">All SOPilot work is on branch <span class="mono">feature/smartform-engine</span> (nothing merged to main). The
+  form engine, reconcile, repeaters, and the Studio are implemented and tested; the remaining work is the live pt-forms wire-up
+  above.</p>
 </section>
 
 </article>
@@ -1400,14 +421,10 @@ b.hl{color:#8fd9c9}
 </div>
 
 <footer class="footer">
-  PolarTie SmartForm — problem analysis for the SOPilot engagement. Sources: <span class="mono">pt-forms-management</span>
-  (<span class="mono">mcp/forms_mcp_server.py</span>, <span class="mono">mcp/agent_prompt.md</span>,
-  <span class="mono">FORM_FIELDS.md</span>) and the QME “Injured Worker Questionnaire”. Companion register:
-  <span class="mono">docs/POLARTIE_SMARTFORM_PROBLEMS.md</span>. No patient data appears in this document.
+  PolarTie SmartForm × SOPilot — architecture &amp; findings. Prepared for PolarTie review.
+  Source: <a href="https://github.com/PolarTie/pt-forms-management" target="_blank" rel="noopener">pt-forms-management</a> ·
+  SOPilot branch <span class="mono">feature/smartform-engine</span>.
 </footer>
-<a href="#" class="backtotop" id="btt">↑ Top</a>
-<script>
-(function(){var links=[].slice.call(document.querySelectorAll('nav.toc a')),map={};links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px',threshold:0});Object.keys(map).forEach(function(id){obs.observe(document.getElementById(id));});var btt=document.getElementById('btt');window.addEventListener('scroll',function(){btt.classList.toggle('show',window.scrollY>700);});})();
-</script>
+
 </body>
 </html>
