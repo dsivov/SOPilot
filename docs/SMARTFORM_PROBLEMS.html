@@ -762,11 +762,20 @@ b.hl{color:#8fd9c9}
   <div class="tablewrap"><table>
     <thead><tr><th>Mechanism</th><th>Kind</th><th>Decides “what’s next” by</th><th>Live in SmartForm?</th></tr></thead>
     <tbody>
-      <tr><td>SOP stage/edge transitions</td><td>probabilistic (LLM + predictor)</td><td>an LLM reading the conversation; edges carry <b>no</b> conditions</td><td><b style="color:#e0574f">No</b> — reserved for conversational SOPs</td></tr>
+      <tr><td>SOP stage/edge transitions <span class="small">(the ordering mechanism)</span></td><td>probabilistic (LLM + predictor)</td><td>an LLM reading the conversation; edges carry <b>no</b> conditions</td><td><b style="color:#e0574f">No</b> — this <i>ordering</i> mechanism is off; the <b>stages themselves are still used</b> (context + authoring)</td></tr>
       <tr><td>pt-forms field rules</td><td>deterministic</td><td>evaluating FieldConditions</td><td>Yes (pt-forms runtime)</td></tr>
       <tr><td>SOPilot <span class="mono">constraints.py</span></td><td>deterministic (superset)</td><td>same rules + requires/conflicts/enum</td><td><b style="color:#19b89a">Yes</b> — the sole transition authority</td></tr>
     </tbody>
   </table></div>
+
+  <div class="callout info"><div class="clabel">◆ “So are SOP stages used at all in the form flow?”</div>
+    <b>Yes — heavily, just not for transitions.</b> Stages do three jobs: <b>(1) grouping</b> (269 fields → 20 groups),
+    <b>(2) bounded context</b> — the supervisor loads only the <i>current</i> stage’s playbook (~550 tokens) to phrase a turn,
+    not the whole form (~4.7k); the stage <i>is</i> that window, and <b>(3) authoring</b> — the unit edited in the Studio. What
+    stages do <b>not</b> do is decide the next step: <span class="mono">constraints.py</span> picks the next field (crossing a
+    stage boundary when needed, then loading that stage’s playbook), and the SOP edges are inert. Delete the stages and
+    transitions still work — you’d just lose the bounded context and the authoring structure. So stages are load-bearing for
+    <b>context &amp; authoring</b>, not control flow.</div>
 
   <div class="callout key"><div class="clabel">◆ The one-liner for PolarTie</div>
     <b>SOP = structure</b> (stages + playbooks). <b>Transitions are pluggable</b>: probabilistic (LLM) for conversations,
