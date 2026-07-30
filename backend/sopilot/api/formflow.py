@@ -588,3 +588,159 @@ async def graph(scope: Scope = Depends(resolve_scope), db: AsyncSession = Depend
     stages = [{"id": sid, "title": stage_title.get(sid, sid)} for sid in manifest.get("order", [])]
     return {"form": manifest.get("form"), "nodes": nodes, "edges": edges,
             "stages": stages, "stats": stats, "health": {"dangling": dangling}}
+
+
+# ---------------------------------------------------------------------------
+# Constraint-graph Studio — step 2: AI-assisted rule editing with contradiction-checking.
+# A natural-language instruction → a proposed FieldCondition → validated by the same
+# grammar constraints.py evaluates, then returned as a diff (never applied unsafely).
+# ---------------------------------------------------------------------------
+import ast as _ast
+from ..constraints import _ALLOWED_NODES as _AN, _ALLOWED_NAMES as _ANM, _TOKEN_RE as _TR
+
+
+def _parse_ok(expr: str) -> tuple[bool, str]:
+    """True if expr is a well-formed FieldCondition in the sandboxed grammar."""
+    if not expr:
+        return True, ""
+    try:
+        prepared = _TR.sub(lambda m: repr(m.group(1)), expr)
+        tree = _ast.parse(prepared, mode="eval")
+        for node in _ast.walk(tree):
+            if not isinstance(node, _AN):
+                return False, f"disallowed syntax ({type(node).__name__})"
+            if isinstance(node, _ast.Name) and node.id not in _ANM:
+                return False, f"unknown function/name '{node.id}'"
+        return True, ""
+    except Exception as e:
+        return False, f"parse error: {e}"
+
+
+def _global_order(manifest: dict) -> dict:
+    idx, i = {}, 0
+    for sid in manifest.get("order", []):
+        for f in manifest.get("stages", {}).get(sid, {}).get("fields", []):
+            idx[f["name"]] = i
+            i += 1
+    return idx
+
+
+def _validate_condition(expr: str, field: str, manifest: dict) -> dict:
+    """Contradiction-check a proposed show-if for `field`: syntax, dangling refs,
+    self-reference, cycles, forward references, and always-true/false rules."""
+    fields = [f for s in manifest.get("stages", {}).values() for f in s.get("fields", [])]
+    cond_of = {f["name"]: (f.get("cond") or "") for f in fields}
+    names = set(cond_of)
+    order = _global_order(manifest)
+    warnings: list[str] = []
+
+    ok, err = _parse_ok(expr)
+    if not ok:
+        return {"valid": False, "errors": [err], "warnings": []}
+    if not expr:
+        return {"valid": True, "errors": [], "warnings": ["clears the condition (field always shown)"]}
+
+    refs = set(_TR.findall(expr))
+    errors: list[str] = []
+    dangling = sorted(refs - names)
+    if dangling:
+        errors.append(f"references unknown field(s): {', '.join(dangling)}")
+    if field in refs:
+        errors.append("references itself (a field cannot gate on its own value)")
+    # one-hop cycle: a referenced field's own condition references `field` back
+    for r in refs & names:
+        if field and field in set(_TR.findall(cond_of.get(r, ""))):
+            errors.append(f"cycle: '{r}' already gates on '{field}'")
+    # forward references — the controller is asked at/after this field
+    if field in order:
+        fwd = sorted(r for r in (refs & names) if order.get(r, 1 << 30) >= order[field])
+        if fwd:
+            warnings.append(f"forward reference(s) — asked at/after this field: {', '.join(fwd)}")
+    # always-true / always-false probe over sampled assignments of the referenced fields
+    if not errors:
+        rl = sorted(refs & names)[:6]
+        combos, opts = [], ["Yes", "No", "0", "18", "100"]
+        for k in range(min(32, 2 ** len(rl) if rl else 1)):
+            st_ = {}
+            for j, r in enumerate(rl):
+                st_[r] = opts[(k >> j) % len(opts)] if len(rl) <= 5 else opts[(k + j) % len(opts)]
+            combos.append(st_)
+        res = {evaluate_condition(expr, c) for c in combos} if combos else {evaluate_condition(expr, {})}
+        if res == {True}:
+            warnings.append("always TRUE on sampled inputs — this rule may never hide the field")
+        elif res == {False}:
+            warnings.append("always FALSE on sampled inputs — this field may never be shown")
+    return {"valid": not errors, "errors": errors, "warnings": warnings}
+
+
+class GraphEditRequest(BaseModel):
+    instruction: str                    # natural-language rule change, e.g. "only ask Rx number if prescribed"
+    field: str | None = None            # optional explicit target; else the model infers it
+    apply: bool = False                 # if valid + apply, write the new condition into the __map__ block
+
+
+@router.post("/graph/edit")
+async def graph_edit(req: GraphEditRequest, scope: Scope = Depends(resolve_scope),
+                     db: AsyncSession = Depends(get_db)) -> dict:
+    """AI-assisted rule edit: propose a new show-if from a natural-language instruction,
+    contradiction-check it, and return a diff. Applies only when valid AND apply=True."""
+    from .prompt_blocks import resolve_published_blocks
+    from ..bench.llm import client
+    from ..config import get_settings
+
+    manifest = await _load_manifest(db, scope)
+    if not manifest:
+        return {"error": "no form published for this project (missing __map__ block)"}
+    fields = [f for s in manifest.get("stages", {}).values() for f in s.get("fields", [])]
+    cond_of = {f["name"]: (f.get("cond") or "") for f in fields}
+
+    catalog = "\n".join(f'{f["name"]} | {f.get("cond") or "-"} | {f.get("label") or ""}' for f in fields)
+    sysp = (
+        "You edit a form's show-if rules. Given the fields (name | current show-if | label) and an instruction, "
+        "return the ONE field to change and its NEW show-if condition. Grammar: {FieldName} tokens, isYes({X}), "
+        "isNo({X}), values[{X}] <op> value (== != >= <= > <), combined with and/or/not. Reference only existing "
+        "fields; never the field itself. Empty string clears the condition. "
+        'Reply ONLY JSON: {"field":"<name>","new_condition":"<expr or empty>","rationale":"<short>"}.\n\n' + catalog)
+    user = f"INSTRUCTION: {req.instruction}" + (f"\nTARGET FIELD: {req.field}" if req.field else "")
+    try:
+        r = await client().chat.completions.create(
+            model=get_settings().builder_model, temperature=0, response_format={"type": "json_object"},
+            messages=[{"role": "system", "content": sysp}, {"role": "user", "content": user}], max_tokens=200)
+        prop = json.loads(r.choices[0].message.content or "{}")
+    except Exception as e:
+        return {"error": f"supervisor model unavailable ({type(e).__name__})"}
+
+    field = prop.get("field") or req.field
+    new_cond = (prop.get("new_condition") or "").strip()
+    if field not in cond_of:
+        return {"error": f"proposed target '{field}' is not a field in this form", "proposal": prop}
+
+    check = _validate_condition(new_cond, field, manifest)
+    old_cond = cond_of[field]
+    applied = False
+    if req.apply and check["valid"] and new_cond != old_cond:
+        # write the new condition into the __map__ block and re-publish
+        from sqlalchemy import select
+        from ..models import PromptBlock
+        names = (await db.execute(select(PromptBlock.name).where(
+            PromptBlock.tenant_id == scope.tenant_id, PromptBlock.project_id == scope.project_id))).scalars().all()
+        mapname = next((n for n in names if n.endswith(".__map__")), None)
+        if mapname:
+            resolved, _ = await resolve_published_blocks(db, scope, {mapname})
+            m = json.loads(resolved.get(mapname, {}).get("content") or "{}")
+            for s in m.get("stages", {}).values():
+                for f in s.get("fields", []):
+                    if f["name"] == field:
+                        f["cond"] = new_cond
+            from .prompt_blocks import save_block, publish_block, BlockSaveRequest
+            try:
+                await save_block(BlockSaveRequest(name=mapname, content=json.dumps(m, indent=1), kind="stage"), scope, db)
+                await publish_block(mapname, scope, db)
+                applied = True
+            except Exception:
+                applied = False
+
+    return {"field": field, "old_condition": old_cond, "new_condition": new_cond,
+            "rationale": prop.get("rationale", ""), "validation": check,
+            "diff": {"from": old_cond or "(always shown)", "to": new_cond or "(always shown)"},
+            "applied": applied}
